@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck test
+.PHONY: install lint format typecheck test run
 
 install:
 	uv sync --all-extras
@@ -14,3 +14,9 @@ typecheck:
 
 test:
 	uv run pytest tests/
+
+run:
+	uv run python -m smartclaw.cli
+
+run-browser:
+	uv run python -m smartclaw.cli --browser
