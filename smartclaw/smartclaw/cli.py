@@ -25,6 +25,17 @@ async def _run_agent_loop(settings: SmartClawSettings, use_browser: bool) -> Non
 
     logger = get_logger("cli")
 
+    SYSTEM_PROMPT = """You are SmartClaw, a helpful AI assistant with access to tools.
+
+Tool usage guidelines:
+- Use `web_fetch` to fetch content from a specific URL (e.g., weather APIs, documentation pages).
+  For weather queries, try: https://wttr.in/{city}?format=3
+- Use `web_search` to search the web (requires TAVILY_API_KEY). If it fails, fall back to `web_fetch`.
+- Use `exec_command` to run shell commands on the local system.
+- Use `read_file`, `write_file`, `edit_file`, `append_file`, `list_directory` for file operations.
+- When a tool returns an error, try an alternative approach instead of giving up.
+- Always respond in the same language as the user's input."""
+
     # Build system tools
     workspace = settings.agent_defaults.workspace
     system_registry = create_system_tools(workspace)
@@ -62,7 +73,12 @@ async def _run_agent_loop(settings: SmartClawSettings, use_browser: bool) -> Non
             break
 
         try:
-            result = await invoke(graph, user_input, max_iterations=settings.agent_defaults.max_tool_iterations)
+            result = await invoke(
+                graph,
+                user_input,
+                max_iterations=settings.agent_defaults.max_tool_iterations,
+                system_prompt=SYSTEM_PROMPT,
+            )
 
             # Display result
             if result.get("error"):

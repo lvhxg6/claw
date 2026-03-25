@@ -158,6 +158,7 @@ async def invoke(
     user_message: str,
     *,
     max_iterations: int | None = None,
+    system_prompt: str | None = None,
 ) -> AgentState:
     """Run the agent graph and return the final AgentState.
 
@@ -165,14 +166,22 @@ async def invoke(
         graph: Compiled LangGraph StateGraph.
         user_message: The user's input message.
         max_iterations: Optional override for max iterations (default 50).
+        system_prompt: Optional system prompt prepended to messages.
 
     Returns:
         The final AgentState after the graph completes.
     """
+    from langchain_core.messages import SystemMessage
+
     _max = max_iterations if max_iterations is not None else 50
 
+    messages: list[BaseMessage] = []
+    if system_prompt:
+        messages.append(SystemMessage(content=system_prompt))
+    messages.append(HumanMessage(content=user_message))
+
     initial_state: AgentState = {
-        "messages": [HumanMessage(content=user_message)],
+        "messages": messages,
         "iteration": 0,
         "max_iterations": _max,
         "final_answer": None,
