@@ -55,7 +55,7 @@
 |---|------|------|------|---------|
 | 1 | Agent 编排 | LangGraph StateGraph | >= 0.4 | PicoClaw `pkg/agent/loop.go` |
 | 2 | LLM 接入 | LangChain ChatModel | >= 0.3 | PicoClaw `pkg/providers/` |
-| 3 | 默认模型 | GPT-4o（多模态 Vision） | 备选 Claude Sonnet 4 | - |
+| 3 | 默认模型 | Kimi 2.5（多模态 Vision） | 备选 GPT-4o / Claude Sonnet 4 | - |
 | 4 | 浏览器引擎 | Playwright + CDP 双模式 | 最新版 | Browser Use 架构 + OpenClaw `src/browser/` |
 | 5 | 页面理解 | Accessibility Tree 为主 + 截图为辅 | - | OpenClaw `pw-role-snapshot.ts` |
 | 6 | 工具系统 | LangChain Tools + 自定义 | - | PicoClaw `pkg/tools/` |
@@ -225,7 +225,7 @@ dev = [
 | 任务 | 实现方案 | 参考来源 |
 |------|---------|---------|
 | 项目初始化 | uv + pyproject.toml + 目录结构 | - |
-| LLM 接入 | LangChain ChatModel（OpenAI + Anthropic） | PicoClaw `pkg/providers/` |
+| LLM 接入 | LangChain ChatModel（Kimi 2.5 + OpenAI + Anthropic） | PicoClaw `pkg/providers/` |
 | Agent 主循环 | LangGraph ReAct StateGraph | PicoClaw `pkg/agent/loop.go` |
 | 浏览器引擎 | Playwright 初始化、导航、基础操作 | Browser Use + OpenClaw `src/browser/` |
 | 页面理解 | Accessibility Tree 解析 → LLM 可理解文本 | OpenClaw `pw-role-snapshot.ts` |
