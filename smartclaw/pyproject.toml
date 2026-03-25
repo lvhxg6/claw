@@ -52,6 +52,10 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "network: tests that require real network access (web_search, web_fetch)",
+    "e2e: agent-level E2E tests requiring LLM API keys (skip with: -m 'not e2e')",
+]
 
 [dependency-groups]
 dev = [
