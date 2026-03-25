@@ -186,6 +186,12 @@ Browser Use 和 Playwright MCP 都以 A11y Tree 为主。
 | 插件体系 | pluggy / entry_points | 第二阶段，参考 OpenClaw Plugin SDK |
 | Hook 系统 | asyncio 事件模式 | 生命周期 Hook，参考 OpenClaw |
 | 安全体系 | 分层安全（路径策略 + 工具策略 + 审计） | 参考 OpenClaw Security |
+| Web 搜索 | tavily-python | 默认搜索引擎，备选 Brave/DuckDuckGo |
+| 凭证管理 | python-dotenv + keyring | 环境变量 + 系统凭证 |
+| 测试框架 | pytest + pytest-playwright | 单元测试 + 浏览器测试 |
+| 类型检查 | mypy | 严格类型标注 |
+| Linter | ruff | Astral 出品，替代 flake8 + black |
+| Skills 定义 | YAML + importlib 动态加载 | 参考 PicoClaw loader.go |
 
 ---
 
@@ -400,6 +406,26 @@ httpx = "*"                          # 异步 HTTP 客户端
 
 # 定时任务
 apscheduler = "*"                    # 定时任务调度
+
+# 凭证管理
+python-dotenv = "*"                  # 环境变量管理
+keyring = "*"                        # 系统凭证存储
+
+# Web 搜索
+tavily-python = "*"                  # Tavily 搜索 API（默认搜索引擎）
+
+# 插件体系（第二阶段）
+pluggy = "*"                         # Python 插件框架（参考 OpenClaw Plugin SDK）
+
+[project.optional-dependencies]
+# 开发和测试
+dev = [
+    "pytest",                        # 测试框架
+    "pytest-asyncio",                # 异步测试支持
+    "pytest-playwright",             # Playwright 测试集成
+    "mypy",                          # 类型检查
+    "ruff",                          # Linter + Formatter
+]
 ```
 
 ---
@@ -430,7 +456,7 @@ apscheduler = "*"                    # 定时任务调度
 | 工具注册框架 | pkg/tools/registry.go | 统一工具注册和发现 |
 | 文件系统工具 | pkg/tools/filesystem.go | 文件读写操作 |
 | Shell 工具 | pkg/tools/shell.go | 命令执行 |
-| Web 搜索工具 | pkg/tools/search_tool.go | Brave/Tavily/DuckDuckGo 集成 |
+| Web 搜索工具 | pkg/tools/search_tool.go | Tavily（默认）/ Brave / DuckDuckGo 集成 |
 | MCP 管理器 | pkg/mcp/manager.go | MCP Server 连接和工具调用 |
 | 配置管理 | pkg/config/ | Pydantic Settings，YAML 配置 |
 | 基础安全 | 工具层 | 路径限制、敏感数据过滤 |
