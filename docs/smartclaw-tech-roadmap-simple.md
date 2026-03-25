@@ -12,6 +12,41 @@
 
 ---
 
+## 技术选型依据
+
+### 为什么选 Python？
+
+| 维度 | Go | Python | 结论 |
+|------|-----|--------|------|
+| 浏览器操作（核心需求） | 4/10 | 10/10 | Python 碾压 |
+| Agent 框架生态 | 5/10 | 9/10 | Python 成熟 |
+| LLM 接入 | 7/10 | 9/10 | Python 更便捷 |
+| MCP 协议 | 8/10 | 8/10 | 持平 |
+| 记忆/RAG | 5/10 | 9/10 | Python 开箱即用 |
+| 工程生产级 | 9/10 | 6/10 | Go 更优 |
+| 自动化测试场景 | 4/10 | 9/10 | Python 生态成熟 |
+| 开发效率 | 5/10 | 9/10 | Python 快 2-3 倍 |
+
+核心需求（浏览器操作、自动化测试）是 Go 生态最薄弱的地方，Python 有压倒性优势。
+
+### 浏览器 Agent 赛道现状
+
+| 项目 | 语言 | GitHub Stars | 浏览器引擎 | 特点 |
+|------|------|-------------|-----------|------|
+| Browser Use | Python | 78,000+ | Playwright | 最主流，LangChain 集成 |
+| Stagehand | TypeScript | 21,000+ | Playwright | TS 开发者友好 |
+| Skyvern | Python | 20,000+ | Playwright | 无代码工作流 |
+| Agent Browser | Python | 14,000+ | Playwright | CLI 优先 |
+| Steel Browser | TypeScript | 6,400+ | Playwright | 浏览器沙箱基础设施 |
+| Go 方案 | Go | 几乎没有 | Rod/chromedp | 无成熟 AI Browser Agent |
+
+所有主流 Browser Agent 都使用 Playwright，核心原因：
+- 支持多浏览器（Chrome/Firefox/WebKit）
+- 原生 Accessibility Tree 支持（LLM 理解页面的关键）
+- 社区活跃，生态成熟
+
+---
+
 ## 技术选型
 
 ### 选型总表
@@ -260,6 +295,39 @@ dev = [
 | Playwright 镜像体积大（500MB+） | 低 | 多阶段构建，只装 Chromium |
 | Skills 系统无现成 Python 方案 | 低 | 参考 PicoClaw 设计，YAML + importlib |
 | 动态语言长期维护 | 中 | mypy 严格类型标注 + ruff + 测试覆盖 |
+
+---
+
+## OpenClaw 对比分析与选型验证
+
+基于对 OpenClaw（TypeScript/Node.js）源码的深入分析，验证和调整了以下技术选型：
+
+| 维度 | OpenClaw 实际实现 | SmartClaw 选型 |
+|------|-----------------|---------------|
+| 语言 | TypeScript/Node.js | Python |
+| Agent 框架 | 完全自研（src/agents/ 400+ 文件） | LangGraph StateGraph |
+| 浏览器引擎 | Playwright + CDP 双模式（120+ 文件） | Playwright + CDP 双模式 |
+| 页面理解 | Accessibility Tree（pw-role-snapshot.ts） | A11y Tree 为主 + 截图为辅 |
+| LLM 接入 | 自研 Provider + extensions/ 80+ 提供商 | LangChain ChatModel |
+| MCP | 自研集成（mcp-stdio.ts、chrome-mcp.ts） | 官方 mcp Python SDK |
+| Skills | 完整系统（skills/ 50+ 技能） | 自研，参考 PicoClaw |
+| Sub-Agent | 完整系统（subagent-*.ts 20+ 文件） | LangGraph SubGraph |
+| 记忆系统 | sqlite-vec + 多 Embedding 提供商（100+ 文件） | SQLite + sqlite-vec |
+| 配置管理 | YAML + Zod Schema（200+ 文件） | YAML + Pydantic Settings |
+| 安全 | 分层安全（src/security/ 35+ 文件） | 分层安全（路径 + 工具 + 审计） |
+| Hook 系统 | 生命周期 Hook（src/hooks/ 40+ 文件） | 生命周期 Hook |
+| 插件体系 | Plugin SDK（src/plugins/ 150+ 文件） | pluggy / entry_points |
+| 可观测性 | OTEL 扩展（diagnostics-otel） | structlog + OpenTelemetry |
+
+### 基于 OpenClaw 的选型调整
+
+| 调整项 | 调整前 | 调整后 | OpenClaw 验证 |
+|--------|--------|--------|-------------|
+| 向量数据库 | ChromaDB | sqlite-vec | OpenClaw 用 sqlite-vec，更轻量，统一 SQLite |
+| 浏览器引擎 | 纯 Playwright | Playwright + CDP 预留 | OpenClaw 双模式，某些场景需要 CDP 直接操作 |
+| 插件体系 | 无 | 第二阶段增加 | OpenClaw 扩展性完全依赖插件体系 |
+| Hook 系统 | 简单审批 | 生命周期 Hook | OpenClaw 支持多个生命周期节点 |
+| 安全体系 | 基础路径限制 | 分层安全 | OpenClaw 有 tool-policy + audit 完整体系 |
 
 ---
 
