@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/mcp/manager.py
+# hypothesis_version: 6.151.9
+
+['http', 'mcp.manager', 'mcp_call_tool_error', 'mcp_server_connected', 'sse', 'stdio', 'text']

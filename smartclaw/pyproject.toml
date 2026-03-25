@@ -17,6 +17,7 @@ dependencies = [
     "langchain-anthropic",
     "playwright>=1.40.0",
     "tavily-python>=0.3.0",
+    "mcp>=1.9",
 ]
 
 [project.optional-dependencies]

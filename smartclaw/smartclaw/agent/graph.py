@@ -258,13 +258,15 @@ def create_all_tools(
     workspace: str,
     *,
     path_policy: PathPolicy | None = None,
+    mcp_manager: Any | None = None,
 ) -> list[BaseTool]:
-    """Merge browser tools with system tools into a single list for build_graph.
+    """Merge browser tools with system tools (and optionally MCP tools) into a single list for build_graph.
 
     Args:
         browser_tools: List of browser BaseTool instances.
         workspace: Workspace directory path for system tools.
         path_policy: Optional PathPolicy for filesystem access control.
+        mcp_manager: Optional MCPManager instance for MCP tool integration.
 
     Returns:
         Combined list of all BaseTool instances.
@@ -277,5 +279,15 @@ def create_all_tools(
     browser_registry = ToolRegistry()
     browser_registry.register_many(browser_tools)
     system_registry.merge(browser_registry)
+
+    # Merge MCP tools if manager is provided
+    if mcp_manager is not None:
+        from smartclaw.tools.mcp_tool import create_mcp_tools
+
+        mcp_tools = create_mcp_tools(mcp_manager)
+        if mcp_tools:
+            mcp_registry = ToolRegistry()
+            mcp_registry.register_many(mcp_tools)
+            system_registry.merge(mcp_registry)
 
     return system_registry.get_all()
