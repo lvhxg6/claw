@@ -222,14 +222,15 @@ dev = [
 
 目标：LLM + 浏览器操作基本流程跑通
 
-| 任务 | 实现方案 | 参考来源 |
-|------|---------|---------|
-| 项目初始化 | uv + pyproject.toml + 目录结构 | - |
-| LLM 接入 | LangChain ChatModel（Kimi 2.5 + OpenAI + Anthropic） | PicoClaw `pkg/providers/` |
-| Agent 主循环 | LangGraph ReAct StateGraph | PicoClaw `pkg/agent/loop.go` |
-| 浏览器引擎 | Playwright 初始化、导航、基础操作 | Browser Use + OpenClaw `src/browser/` |
-| 页面理解 | Accessibility Tree 解析 → LLM 可理解文本 | OpenClaw `pw-role-snapshot.ts` |
-| 浏览器工具集 | navigate/click/type/scroll/screenshot | Browser Use 工具设计 |
+| 任务 | 涉及选型 | 实现方案 | 参考来源 |
+|------|---------|---------|---------|
+| 项目初始化 | #28 包管理、#30 类型检查、#31 Linter | uv + pyproject.toml + mypy + ruff | - |
+| 日志系统 | #15 日志 | structlog 结构化日志 | PicoClaw `pkg/logger/` |
+| LLM 接入 | #2 LLM 接入、#3 默认模型、#17 HTTP | LangChain ChatModel（Kimi 2.5），httpx | PicoClaw `pkg/providers/` |
+| Agent 主循环 | #1 Agent 编排 | LangGraph ReAct StateGraph | PicoClaw `pkg/agent/loop.go` |
+| 浏览器引擎 | #4 浏览器引擎 | Playwright 初始化、导航、基础操作 | Browser Use + OpenClaw `src/browser/` |
+| 页面理解 | #5 页面理解 | Accessibility Tree 解析 → LLM 可理解文本 | OpenClaw `pw-role-snapshot.ts` |
+| 浏览器工具集 | #6 工具系统 | navigate/click/type/scroll/screenshot | Browser Use 工具设计 |
 
 里程碑：输入"帮我搜索 xxx 并总结结果"，Agent 能自动打开浏览器完成。
 
@@ -237,15 +238,16 @@ dev = [
 
 目标：完善工具体系，接入 MCP 生态
 
-| 任务 | 实现方案 | 参考来源 |
-|------|---------|---------|
-| 工具注册框架 | LangChain Tools 注册机制 | PicoClaw `pkg/tools/registry.go` |
-| 文件系统工具 | pathlib 封装 | PicoClaw `pkg/tools/filesystem.go` |
-| Shell 工具 | asyncio.subprocess | PicoClaw `pkg/tools/shell.go` |
-| Web 搜索工具 | tavily-python | PicoClaw `pkg/tools/search_tool.go` |
-| MCP 管理器 | mcp Python SDK，stdio 传输 | PicoClaw `pkg/mcp/manager.go` |
-| 配置管理 | Pydantic Settings + YAML | OpenClaw YAML + Zod Schema |
-| 基础安全 | pathlib 路径白名单 + 敏感数据过滤 | PicoClaw 工具层路径验证 |
+| 任务 | 涉及选型 | 实现方案 | 参考来源 |
+|------|---------|---------|---------|
+| 工具注册框架 | #7 工具注册 | LangChain Tools 注册机制 | PicoClaw `pkg/tools/registry.go` |
+| 文件系统工具 | #6 工具系统 | pathlib 封装 | PicoClaw `pkg/tools/filesystem.go` |
+| Shell 工具 | #6 工具系统 | asyncio.subprocess | PicoClaw `pkg/tools/shell.go` |
+| Web 搜索工具 | #8 Web 搜索 | tavily-python | PicoClaw `pkg/tools/search_tool.go` |
+| MCP 管理器 | #9 MCP 协议、#10 MCP 传输 | mcp Python SDK，stdio + Streamable HTTP | PicoClaw `pkg/mcp/manager.go` |
+| 配置管理 | #13 配置格式 | Pydantic Settings + YAML | OpenClaw YAML + Zod Schema |
+| 凭证管理 | #19 凭证管理 | python-dotenv + keyring | PicoClaw `pkg/credential/` |
+| 基础安全 | #25 路径策略 | pathlib 路径白名单 + 敏感数据过滤 | PicoClaw 工具层路径验证 |
 
 里程碑：能通过 MCP 调用外部工具，YAML 配置文件驱动。
 
@@ -253,14 +255,14 @@ dev = [
 
 目标：Skills、Sub-Agent、记忆系统
 
-| 任务 | 实现方案 | 参考来源 |
-|------|---------|---------|
-| Skills 加载器 | YAML 定义 + importlib 动态加载 | PicoClaw `pkg/skills/loader.go` |
-| Skills 注册表 | 技能发现和管理 | PicoClaw `pkg/skills/registry.go` |
-| Sub-Agent | LangGraph SubGraph 任务委托 | PicoClaw `subturn.go` + OpenClaw `subagent-*.ts` |
-| 记忆存储 | SQLite 持久化（SqliteSaver） | PicoClaw `pkg/memory/` |
-| 自动摘要 | LLM 长对话摘要压缩 | PicoClaw Agent 配置 |
-| 多 Agent 协同 | LangGraph Multi-Agent 编排 | PicoClaw Agent 绑定机制 |
+| 任务 | 涉及选型 | 实现方案 | 参考来源 |
+|------|---------|---------|---------|
+| Skills 加载器 | #20 Skills 系统 | YAML 定义 + importlib 动态加载 | PicoClaw `pkg/skills/loader.go` |
+| Skills 注册表 | #20 Skills 系统 | 技能发现和管理 | PicoClaw `pkg/skills/registry.go` |
+| Sub-Agent | #21 Sub-Agent | LangGraph SubGraph 任务委托 | PicoClaw `subturn.go` + OpenClaw `subagent-*.ts` |
+| 记忆存储 | #11 记忆存储 | SQLite 持久化（SqliteSaver） | PicoClaw `pkg/memory/` |
+| 自动摘要 | #11 记忆存储 | LLM 长对话摘要压缩 | PicoClaw Agent 配置 |
+| 多 Agent 协同 | #22 多 Agent | LangGraph Multi-Agent 编排 | PicoClaw Agent 绑定机制 |
 
 里程碑：能分解复杂任务给 Sub-Agent，跨会话记忆保持。
 
@@ -268,17 +270,18 @@ dev = [
 
 目标：RAG、安全、可观测性、插件化
 
-| 任务 | 实现方案 | 参考来源 |
-|------|---------|---------|
-| RAG 系统 | sqlite-vec + LangChain 文档索引检索 | OpenClaw `src/memory/sqlite-vec.ts` |
-| 生命周期 Hook | asyncio 事件（before/after tool call） | OpenClaw `src/hooks/` |
-| 分层安全 | 路径策略 + 工具策略 + 审计日志 | OpenClaw `src/security/` |
-| 插件体系 | pluggy/entry_points，Provider 插件化 | OpenClaw `src/plugins/` |
-| 可观测性 | structlog + OpenTelemetry | OpenClaw `diagnostics-otel` |
-| 评估优化 | LangGraph 条件路由 + 成本追踪 | PicoClaw `pkg/routing/` |
-| CDP 增强 | CDPSession 超时控制、代理绕过 | OpenClaw `cdp-timeouts.ts` |
-| API 网关 | FastAPI REST API | PicoClaw `pkg/gateway/` |
-| 自动化测试 | pytest + pytest-playwright 测试报告 | - |
+| 任务 | 涉及选型 | 实现方案 | 参考来源 |
+|------|---------|---------|---------|
+| RAG 系统 | #12 向量数据库 | sqlite-vec + LangChain 文档索引检索 | OpenClaw `src/memory/sqlite-vec.ts` |
+| 生命周期 Hook | #23 Hook 系统 | asyncio 事件（before/after tool call） | OpenClaw `src/hooks/` |
+| 分层安全 | #26 工具策略、#27 审计日志 | tool_policy + structlog 审计 | OpenClaw `src/security/` |
+| 插件体系 | #24 插件体系 | pluggy/entry_points，Provider 插件化 | OpenClaw `src/plugins/` |
+| 可观测性 | #16 可观测性 | OpenTelemetry 分布式追踪 | OpenClaw `diagnostics-otel` |
+| 评估优化 | - | LangGraph 条件路由 + 成本追踪 | PicoClaw `pkg/routing/` |
+| CDP 增强 | #4 浏览器引擎 | CDPSession 超时控制、代理绕过 | OpenClaw `cdp-timeouts.ts` |
+| API 网关 | #14 API 网关 | FastAPI REST API | PicoClaw `pkg/gateway/` |
+| 定时任务 | #18 定时任务 | APScheduler | PicoClaw `pkg/cron/` |
+| 自动化测试 | #29 测试 | pytest + pytest-playwright 测试报告 | - |
 
 里程碑：生产可用，完整的安全、可观测性和插件体系。
 
