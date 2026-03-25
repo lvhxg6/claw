@@ -409,11 +409,14 @@ class TestWebFetchE2E:
 
     async def test_fetch_html_page(self) -> None:
         tool = WebFetchTool()
-        result = await tool._arun(url="https://example.com", max_chars=5000)
+        # Use a JSON API endpoint that resolves to real public IPs
+        # (proxy fake-IP ranges like 198.18.0.0/15 trigger SSRF checks)
+        result = await tool._arun(
+            url="https://api.github.com/repos/python/cpython", max_chars=5000
+        )
 
         assert "Error" not in result
-        # example.com should contain "Example Domain"
-        assert "Example Domain" in result
+        assert "cpython" in result.lower()
 
     async def test_fetch_ssrf_blocked(self) -> None:
         tool = WebFetchTool()
@@ -430,8 +433,9 @@ class TestWebFetchE2E:
 
     async def test_fetch_truncation(self) -> None:
         tool = WebFetchTool()
-        result = await tool._arun(url="https://example.com", max_chars=50)
+        result = await tool._arun(url="https://api.github.com/zen", max_chars=5)
 
+        # GitHub zen returns a short phrase; with max_chars=5 it should truncate
         assert "truncated" in result
 
 
