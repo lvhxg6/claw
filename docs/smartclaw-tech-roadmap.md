@@ -47,6 +47,141 @@
 
 ---
 
+## 具体技术选型
+
+### 1. Agent 框架：LangGraph StateGraph
+
+| 选项 | 状态 | 结论 |
+|------|------|------|
+| LangChain AgentExecutor | ❌ 已废弃，维护到 2026.12 | 不选 |
+| LangGraph StateGraph | ✅ 官方推荐替代方案 | **选定** |
+| 自研 ReAct 循环 | 无必要造轮子 | 不选 |
+
+LangChain 官方已明确 AgentExecutor 进入维护模式，新项目应使用 LangGraph 的 `StateGraph`。
+LangGraph 支持循环、重试、条件分支、人机协同，匹配 SmartClaw 全部需求。
+
+选型：`langgraph >= 0.4`，使用 `StateGraph` 自定义编排。
+
+### 2. 浏览器能力：Playwright + 参考 Browser Use 架构自研
+
+| 选项 | 优势 | 劣势 | 结论 |
+|------|------|------|------|
+| 直接依赖 Browser Use 库 | 开箱即用 | 正在从 Playwright 迁移到原生 CDP，API 不稳定 | 不选 |
+| 参考 Browser Use 架构自研 | 可控、稳定 | 工作量稍大 | **选定** |
+| 原生 CDP | 性能最好 | 太底层，开发成本高 | 不选 |
+
+关键发现：Browser Use 官方博客宣布正在从 Playwright 迁移到原生 CDP，API 会有大变动，直接依赖有风险。
+选型：参考 Browser Use 架构思路自研浏览器模块，底层用 Playwright。
+
+#### 页面理解方式：DOM/A11y Tree 为主 + 截图为辅
+
+| 方式 | 速度 | 成本 | 准确度 | Token 消耗 |
+|------|------|------|--------|-----------|
+| DOM/Accessibility Tree | 快（2-5KB） | 低 | 高（精确定位元素） | 少 |
+| 截图 + Vision | 慢（500KB-2MB） | 高（~$0.01/步） | 中（坐标可能偏移） | 多（10-100x） |
+| 两者结合 | 中 | 中 | 最高 | 中 |
+
+调研结论：DOM/A11y Tree 方式比截图快 10-100 倍，Token 消耗少 10-100 倍。
+Browser Use 和 Playwright MCP 都以 A11y Tree 为主。
+
+选型：Accessibility Tree 为主，截图为辅（复杂页面或调试时使用）。
+
+### 3. LLM 接入
+
+| 决策点 | 选型 | 理由 |
+|--------|------|------|
+| 默认模型 | GPT-4o | 性价比最高，多模态支持好，Browser Use 默认用它 |
+| 备选模型 | Claude Sonnet 4 | 推理能力强，适合复杂任务 |
+| 本地模型（Ollama） | 第一阶段不支持 | Ollama 的 Vision 能力弱，浏览器场景不适合 |
+| 多模态（Vision） | 第一阶段就支持 | 浏览器截图理解需要 Vision 能力 |
+| 接入方式 | LangChain ChatModel | 统一接口，切换模型零成本 |
+
+### 4. 存储
+
+#### 记忆存储
+
+| 选项 | 适合场景 | 结论 |
+|------|---------|------|
+| SQLite | 单机部署，结构化查询 | **选定** |
+| JSON 文件 | 最简单 | ❌ 查询能力弱 |
+| Redis | 分布式，高并发 | ❌ 第一阶段过重 |
+
+选型：SQLite，通过 LangGraph 的 `SqliteSaver` 集成。
+
+#### RAG 向量数据库
+
+| 选项 | 特点 | 结论 |
+|------|------|------|
+| ChromaDB | 最简单，嵌入式，适合原型和中小规模 | **选定** |
+| FAISS | 库不是数据库，无持久化/API | ❌ 不适合生产 |
+| Milvus | 重量级，适合大规模 | ❌ 第一阶段过重 |
+| Qdrant | 性能好，需独立部署 | 备选（后期可升级） |
+
+选型：ChromaDB 嵌入式模式，后期可升级到 Qdrant。
+
+### 5. MCP 协议
+
+| 决策点 | 选型 | 理由 |
+|--------|------|------|
+| SDK | 官方 mcp Python SDK | 官方维护，97M+ 下载量 |
+| SDK 版本 | >= 2.1（对应 MCP spec 1.3） | 最新稳定版，支持 Streamable HTTP |
+| Python 版本要求 | >= 3.12 | MCP SDK 2.1 要求 |
+| 传输方式 | stdio 优先 | 本地工具最简单；远程服务用 Streamable HTTP |
+
+### 6. 配置格式：YAML
+
+| 选项 | 优势 | 劣势 | 结论 |
+|------|------|------|------|
+| JSON | PicoClaw 用的，严格 | 不支持注释，可读性差 | 不选 |
+| YAML | 支持注释，可读性好，Python 生态主流 | 缩进敏感 | **选定** |
+| TOML | 简洁，Rust/Python 新项目偏好 | 嵌套结构表达不如 YAML | 不选 |
+
+选型：YAML + Pydantic Settings 做校验。Python 生态主流（Docker Compose、Ansible、K8s 都用 YAML）。
+
+### 7. 项目管理
+
+#### 包管理器
+
+| 选项 | 速度 | 成熟度 | 结论 |
+|------|------|--------|------|
+| pip | 慢 | 最成熟 | ❌ 无 lock 文件，不适合生产 |
+| poetry | 中 | 成熟（5 年） | 备选 |
+| uv | 极快（100x pip） | Astral 团队（Ruff）出品，Rust 实现 | **选定** |
+
+调研结论：uv 安装速度比 pip 快 10-100 倍，CI/CD 时间减少 50-80%，2026 年已是 Python 社区推荐标准。
+
+选型：`uv`，使用 `pyproject.toml` + `uv.lock`。
+
+#### Python 版本
+
+| 版本 | 结论 |
+|------|------|
+| 3.11 | ❌ MCP SDK 2.1 要求 3.12+ |
+| 3.12 | **选定**，MCP SDK 最低要求，稳定 |
+| 3.13 | 备选，较新 |
+
+### 技术选型汇总
+
+| 决策项 | 选型 | 版本/备注 |
+|--------|------|----------|
+| Agent 框架 | LangGraph StateGraph | >= 0.4 |
+| 浏览器引擎 | Playwright（参考 Browser Use 架构自研） | 最新版 |
+| 页面理解 | Accessibility Tree 为主 + 截图为辅 | - |
+| 默认 LLM | GPT-4o（LangChain 接入） | 备选 Claude Sonnet 4 |
+| 多模态 | 第一阶段支持 | Vision 能力 |
+| 记忆存储 | SQLite | LangGraph SqliteSaver |
+| 向量数据库 | ChromaDB | 嵌入式模式 |
+| MCP SDK | 官方 mcp Python SDK | >= 2.1 |
+| MCP 传输 | stdio 为主，Streamable HTTP 为辅 | - |
+| 配置格式 | YAML | Pydantic Settings 校验 |
+| 包管理器 | uv | pyproject.toml + uv.lock |
+| Python 版本 | 3.12+ | MCP SDK 要求 |
+| API 框架 | FastAPI | - |
+| 日志 | structlog | 结构化日志 |
+| HTTP 客户端 | httpx | 异步支持 |
+
+---
+
 ## PicoClaw 模块 → Python 技术选型映射
 
 ### 模块对标表
@@ -205,40 +340,41 @@ smartclaw/
 ```toml
 [project]
 name = "smartclaw"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 [project.dependencies]
 # Agent 框架
-langgraph = ">=0.4"
-langchain = ">=0.3"
-langchain-openai = "*"
-langchain-anthropic = "*"
+langgraph = ">=0.4"                  # Agent 编排（StateGraph）
+langchain = ">=0.3"                  # LLM 抽象层
+langchain-openai = "*"               # OpenAI / GPT-4o
+langchain-anthropic = "*"            # Anthropic / Claude Sonnet 4
 
 # 浏览器引擎
-playwright = "*"
+playwright = "*"                     # 浏览器自动化（参考 Browser Use 架构自研）
 
 # MCP
-mcp = "*"                            # 官方 Python SDK
+mcp = ">=2.1"                        # 官方 Python SDK（MCP spec 1.3）
 
 # API
-fastapi = "*"
-uvicorn = "*"
+fastapi = "*"                        # REST API 网关
+uvicorn = "*"                        # ASGI 服务器
 
 # 配置
-pydantic-settings = "*"
+pydantic-settings = "*"              # 配置管理 + YAML 校验
+pyyaml = "*"                         # YAML 解析
 
 # 记忆/RAG
-chromadb = "*"                       # 向量数据库
-langchain-chroma = "*"
+chromadb = "*"                       # 向量数据库（嵌入式模式）
+langchain-chroma = "*"               # LangChain ChromaDB 集成
 
 # 日志
-structlog = "*"
+structlog = "*"                      # 结构化日志
 
 # HTTP 客户端
-httpx = "*"
+httpx = "*"                          # 异步 HTTP 客户端
 
 # 定时任务
-apscheduler = "*"
+apscheduler = "*"                    # 定时任务调度
 ```
 
 ---
