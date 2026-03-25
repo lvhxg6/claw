@@ -182,6 +182,7 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
             break
 
         try:
+            print("  ⏳ thinking...", end="", flush=True)
             result = await invoke(
                 graph, user_input,
                 max_iterations=settings.agent_defaults.max_tool_iterations,
@@ -191,9 +192,10 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
                 summarizer=summarizer,
             )
             if result.get("error"):
-                print(f"\n❌ Error: {result['error']}")
+                print(f"\r❌ Error: {result['error']}                    ")
             elif result.get("final_answer"):
-                print(f"\nAgent > {result['final_answer']}")
+                print(f"\r                                              ")
+                print(f"Agent > {result['final_answer']}")
             else:
                 print("\n⚠️  No response")
             print(f"  (iterations: {result.get('iteration', 0)})\n")

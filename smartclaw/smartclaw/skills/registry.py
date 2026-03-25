@@ -104,14 +104,44 @@ class SkillsRegistry:
                 result_or_body, definition = self._loader.load_skill(info.name)
 
                 # Pure SKILL.md skill (no definition) — register as prompt skill
+                # Also discover scripts/ subdirectory for auto-registered tools
                 if definition is None:
                     self._skills[info.name] = result_or_body
-                    self._skill_tools[info.name] = []
+                    script_tool_names: list[str] = []
+
+                    # Resolve skill_dir from info.path (SKILL.md path)
+                    import pathlib as _pathlib
+                    md_skill_dir = str(_pathlib.Path(info.path).parent.resolve())
+
+                    try:
+                        script_defs = self._loader.discover_scripts(info.name)
+                        for script_def in script_defs:
+                            try:
+                                bt = NativeCommandTool.from_tool_def(
+                                    script_def, skill_dir=md_skill_dir
+                                )
+                                self._tool_registry.register(bt)
+                                script_tool_names.append(bt.name)
+                            except Exception as exc:
+                                logger.error(
+                                    "script_tool_registration_failed",
+                                    skill=info.name,
+                                    tool=script_def.name,
+                                    error=str(exc),
+                                )
+                    except Exception as exc:
+                        logger.error(
+                            "script_discovery_failed",
+                            skill=info.name,
+                            error=str(exc),
+                        )
+
+                    self._skill_tools[info.name] = script_tool_names
                     logger.info(
                         "skill_registered",
                         name=info.name,
-                        tool_count=0,
-                        tools=[],
+                        tool_count=len(script_tool_names),
+                        tools=script_tool_names,
                         skill_type="markdown",
                     )
                     continue
