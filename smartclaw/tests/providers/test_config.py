@@ -11,7 +11,7 @@ class TestModelConfigDefaults:
 
     def test_default_primary(self) -> None:
         cfg = ModelConfig()
-        assert cfg.primary == "kimi/moonshot-v1-auto"
+        assert cfg.primary == "kimi/kimi-k2.5"
 
     def test_default_fallbacks(self) -> None:
         cfg = ModelConfig()
@@ -36,7 +36,7 @@ class TestModelConfigNested:
 
     def test_settings_model_defaults(self) -> None:
         settings = SmartClawSettings()
-        assert settings.model.primary == "kimi/moonshot-v1-auto"
+        assert settings.model.primary == "kimi/kimi-k2.5"
         assert settings.model.temperature == 0.0
         assert settings.model.max_tokens == 32768
 

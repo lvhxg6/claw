@@ -39,7 +39,7 @@ logging:
 model:
   # Primary model in "provider/model" format
   # Supported providers: openai, anthropic, kimi
-  primary: "kimi/moonshot-v1-auto"
+  primary: "kimi/kimi-k2.5"
 
   # Fallback models tried in order when the primary model fails
   fallbacks:

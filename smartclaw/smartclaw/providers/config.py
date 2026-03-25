@@ -22,7 +22,7 @@ class ModelConfig(BaseSettings):
     """
 
     primary: str = Field(
-        default="kimi/moonshot-v1-auto",
+        default="kimi/kimi-k2.5",
         description="Default model in 'provider/model' format",
     )
     fallbacks: list[str] = Field(
