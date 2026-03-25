@@ -54,7 +54,7 @@ def test_mcp_disabled_skips_registration() -> None:
     with patch("smartclaw.tools.registry.create_system_tools", return_value=system_registry):
         from smartclaw.agent.graph import create_all_tools
 
-        result = create_all_tools(
+        result, _ = create_all_tools(
             [_DummyTool(name="browser_tool")],
             "/tmp/workspace",
             mcp_manager=None,
@@ -88,7 +88,7 @@ def test_duplicate_tool_name_replacement() -> None:
     with patch("smartclaw.tools.registry.create_system_tools", return_value=system_registry):
         from smartclaw.agent.graph import create_all_tools
 
-        result = create_all_tools(
+        result, _ = create_all_tools(
             [],
             "/tmp/workspace",
             mcp_manager=manager,
@@ -124,7 +124,7 @@ def test_combined_tools_valid_list() -> None:
     with patch("smartclaw.tools.registry.create_system_tools", return_value=system_registry):
         from smartclaw.agent.graph import create_all_tools
 
-        result = create_all_tools(
+        result, _ = create_all_tools(
             browser_tools,
             "/tmp/workspace",
             mcp_manager=manager,

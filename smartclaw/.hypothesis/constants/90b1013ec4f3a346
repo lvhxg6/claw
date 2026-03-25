@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/config/settings.py
+# hypothesis_version: 6.148.8
+
+[100, 300, 32768, 128000, 'INFO', 'Keyring service name', 'Maximum token count', 'SMARTCLAW_', '__', 'console', 'env_nested_delimiter', 'env_prefix', 'smartclaw', '{workspace}/skills', '~/.smartclaw/skills']

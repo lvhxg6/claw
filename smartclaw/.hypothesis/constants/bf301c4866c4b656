@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/skills/registry.py
+# hypothesis_version: 6.148.8
+
+['skill_load_failed', 'skill_registered', 'skill_unregistered', 'skills.registry', 'tools']

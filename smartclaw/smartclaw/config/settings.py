@@ -30,6 +30,58 @@ class CredentialSettings(BaseSettings):
     keyring_service: str = Field(default="smartclaw", description="Keyring service name")
 
 
+# ---------------------------------------------------------------------------
+# P1 Settings models
+# ---------------------------------------------------------------------------
+
+
+class MemorySettings(BaseSettings):
+    """Memory module configuration."""
+
+    enabled: bool = True
+    db_path: str = "~/.smartclaw/memory.db"
+    summary_threshold: int = 20
+    keep_recent: int = 5
+    summarize_token_percent: int = 70
+    context_window: int = 128_000
+
+
+class SkillsSettings(BaseSettings):
+    """Skills module configuration."""
+
+    enabled: bool = True
+    workspace_dir: str = "{workspace}/skills"
+    global_dir: str = "~/.smartclaw/skills"
+
+
+class SubAgentSettings(BaseSettings):
+    """Sub-agent configuration."""
+
+    enabled: bool = True
+    max_depth: int = 3
+    max_concurrent: int = 5
+    default_timeout_seconds: int = 300
+    concurrency_timeout_seconds: int = 30
+
+
+class AgentRoleConfig(BaseSettings):
+    """Agent role configuration for multi-agent coordination."""
+
+    name: str = ""
+    description: str = ""
+    model: str = ""
+    system_prompt: str | None = None
+    tools: list[str] = Field(default_factory=list)
+
+
+class MultiAgentSettings(BaseSettings):
+    """Multi-agent coordination configuration."""
+
+    enabled: bool = False
+    max_total_iterations: int = 100
+    roles: list[AgentRoleConfig] = Field(default_factory=list)
+
+
 class SmartClawSettings(BaseSettings):
     """SmartClaw root configuration schema.
 
@@ -43,9 +95,16 @@ class SmartClawSettings(BaseSettings):
 
     model_config = {"env_prefix": "SMARTCLAW_", "env_nested_delimiter": "__"}
 
+    # P0 fields
     agent_defaults: AgentDefaultsSettings = Field(default_factory=AgentDefaultsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     credentials: CredentialSettings = Field(default_factory=CredentialSettings)
     model: ModelConfig = Field(default_factory=ModelConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
+
+    # P1 fields
+    memory: MemorySettings = Field(default_factory=MemorySettings)
+    skills: SkillsSettings = Field(default_factory=SkillsSettings)
+    sub_agent: SubAgentSettings = Field(default_factory=SubAgentSettings)
+    multi_agent: MultiAgentSettings = Field(default_factory=MultiAgentSettings)

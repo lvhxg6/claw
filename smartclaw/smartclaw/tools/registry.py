@@ -34,6 +34,13 @@ class ToolRegistry:
         for tool in tools:
             self.register(tool)
 
+    def unregister(self, name: str) -> bool:
+        """Remove a tool by name. Returns True if removed, False if not found."""
+        if name in self._tools:
+            del self._tools[name]
+            return True
+        return False
+
     def get(self, name: str) -> BaseTool | None:
         """Return a tool by name, or None if not found."""
         return self._tools.get(name)

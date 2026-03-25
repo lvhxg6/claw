@@ -18,6 +18,7 @@ dependencies = [
     "playwright>=1.40.0",
     "tavily-python>=0.3.0",
     "mcp>=1.9",
+    "aiosqlite>=0.20.0",
 ]
 
 [project.optional-dependencies]

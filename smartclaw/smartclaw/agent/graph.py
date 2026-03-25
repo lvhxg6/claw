@@ -159,6 +159,9 @@ async def invoke(
     *,
     max_iterations: int | None = None,
     system_prompt: str | None = None,
+    session_key: str | None = None,
+    memory_store: Any | None = None,
+    summarizer: Any | None = None,
 ) -> AgentState:
     """Run the agent graph and return the final AgentState.
 
@@ -167,6 +170,11 @@ async def invoke(
         user_message: The user's input message.
         max_iterations: Optional override for max iterations (default 50).
         system_prompt: Optional system prompt prepended to messages.
+        session_key: Optional session identifier for memory persistence.
+            When provided with memory_store, enables cross-session memory.
+        memory_store: Optional MemoryStore instance for loading/persisting history.
+        summarizer: Optional AutoSummarizer instance for context building and
+            summarization checks.
 
     Returns:
         The final AgentState after the graph completes.
@@ -178,6 +186,19 @@ async def invoke(
     messages: list[BaseMessage] = []
     if system_prompt:
         messages.append(SystemMessage(content=system_prompt))
+
+    # P1: Load history and summary when memory is enabled
+    if session_key is not None and memory_store is not None:
+        history = await memory_store.get_history(session_key)
+        if history:
+            messages.extend(history)
+
+        # Build context with summary prepended (if summarizer available)
+        if summarizer is not None:
+            messages = await summarizer.build_context(
+                session_key, messages, system_prompt=system_prompt
+            )
+
     messages.append(HumanMessage(content=user_message))
 
     initial_state: AgentState = {
@@ -186,11 +207,25 @@ async def invoke(
         "max_iterations": _max,
         "final_answer": None,
         "error": None,
+        "session_key": session_key,
+        "summary": None,
+        "sub_agent_depth": None,
     }
 
-    logger.info("invoke start", user_message=user_message[:100], max_iterations=_max)
+    logger.info("invoke start", user_message=user_message[:100], max_iterations=_max, session_key=session_key)
     result = await graph.ainvoke(initial_state)
     logger.info("invoke done", iteration=result.get("iteration", 0))
+
+    # P1: Persist new messages and check summarization when memory is enabled
+    if session_key is not None and memory_store is not None:
+        result_messages = result.get("messages", [])
+        for msg in result_messages:
+            await memory_store.add_full_message(session_key, msg)
+
+        if summarizer is not None:
+            updated_history = await memory_store.get_history(session_key)
+            await summarizer.maybe_summarize(session_key, updated_history)
+
     return result  # type: ignore[return-value]
 
 
@@ -268,17 +303,21 @@ def create_all_tools(
     *,
     path_policy: PathPolicy | None = None,
     mcp_manager: Any | None = None,
-) -> list[BaseTool]:
-    """Merge browser tools with system tools (and optionally MCP tools) into a single list for build_graph.
+    skills_settings: Any | None = None,
+    sub_agent_settings: Any | None = None,
+) -> tuple[list[BaseTool], str]:
+    """Merge browser, system, skill, and sub-agent tools into a single list for build_graph.
 
     Args:
         browser_tools: List of browser BaseTool instances.
         workspace: Workspace directory path for system tools.
         path_policy: Optional PathPolicy for filesystem access control.
         mcp_manager: Optional MCPManager instance for MCP tool integration.
+        skills_settings: Optional SkillsSettings for skill loading integration.
+        sub_agent_settings: Optional SubAgentSettings for sub-agent tool registration.
 
     Returns:
-        Combined list of all BaseTool instances.
+        Tuple of (combined tool list, skills summary string for system prompt injection).
     """
     from smartclaw.tools.registry import ToolRegistry, create_system_tools
 
@@ -299,4 +338,47 @@ def create_all_tools(
             mcp_registry.register_many(mcp_tools)
             system_registry.merge(mcp_registry)
 
-    return system_registry.get_all()
+    # P1: Skills integration — load and register skill-provided tools
+    skills_summary = ""
+    if skills_settings is not None and getattr(skills_settings, "enabled", False):
+        try:
+            from smartclaw.skills.loader import SkillsLoader
+            from smartclaw.skills.registry import SkillsRegistry
+
+            skills_workspace = getattr(skills_settings, "workspace_dir", "").replace(
+                "{workspace}", workspace
+            )
+            skills_global = getattr(skills_settings, "global_dir", "~/.smartclaw/skills")
+
+            loader = SkillsLoader(
+                workspace_dir=skills_workspace,
+                global_dir=skills_global,
+            )
+            skills_registry = SkillsRegistry(loader=loader, tool_registry=system_registry)
+            skills_registry.load_and_register_all()
+            skills_summary = loader.build_skills_summary()
+        except Exception:
+            logger.warning("skills_integration_failed", exc_info=True)
+
+    # P1: SubAgent tool integration — register spawn_sub_agent tool
+    if sub_agent_settings is not None and getattr(sub_agent_settings, "enabled", False):
+        try:
+            import asyncio
+
+            from smartclaw.agent.sub_agent import SpawnSubAgentTool
+
+            tool = SpawnSubAgentTool(
+                max_depth=getattr(sub_agent_settings, "max_depth", 3),
+                timeout_seconds=getattr(sub_agent_settings, "default_timeout_seconds", 300),
+                concurrency_timeout=float(
+                    getattr(sub_agent_settings, "concurrency_timeout_seconds", 30)
+                ),
+                semaphore=asyncio.Semaphore(
+                    getattr(sub_agent_settings, "max_concurrent", 5)
+                ),
+            )
+            system_registry.register(tool)
+        except Exception:
+            logger.warning("sub_agent_integration_failed", exc_info=True)
+
+    return system_registry.get_all(), skills_summary

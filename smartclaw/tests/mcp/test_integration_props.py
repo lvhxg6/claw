@@ -97,7 +97,7 @@ def test_registry_merge_includes_all_sources(
     with patch("smartclaw.tools.registry.create_system_tools", return_value=system_registry):
         from smartclaw.agent.graph import create_all_tools
 
-        result = create_all_tools(browser_tools, "/tmp/workspace", mcp_manager=manager)
+        result, _skills_summary = create_all_tools(browser_tools, "/tmp/workspace", mcp_manager=manager)
 
     result_names = {t.name for t in result}
 

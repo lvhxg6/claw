@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/sub_agent.py
+# hypothesis_version: 6.148.8
+
+[0.0, 30.0, 100, 300, 'Use async _arun', 'agent.sub_agent', 'error', 'final_answer', 'openai/gpt-4o', 'spawn_sub_agent', 'sub_agent_complete', 'sub_agent_error', 'sub_agent_exception', 'sub_agent_timeout']
