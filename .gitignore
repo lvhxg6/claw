@@ -1,4 +1,5 @@
 # 排除子项目
+openclaw/
 picoclaw/
 zeroclaw/
 
