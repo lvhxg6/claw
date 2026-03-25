@@ -218,9 +218,9 @@ dev = [
 
 ## 开发路线图
 
-### P0：核心 MVP（第 1-2 周）
+### P0：核心 MVP（第 1-4 周）
 
-目标：LLM + 浏览器操作基本流程跑通
+目标：完整可用的浏览器 Agent，能通过 LLM 驱动浏览器完成任务，支持 MCP 工具生态
 
 | 任务 | 涉及选型 | 实现方案 | 参考来源 |
 |------|---------|---------|---------|
@@ -231,15 +231,6 @@ dev = [
 | 浏览器引擎 | #4 浏览器引擎 | Playwright 初始化、导航、基础操作 | Browser Use + OpenClaw `src/browser/` |
 | 页面理解 | #5 页面理解 | Accessibility Tree 解析 → LLM 可理解文本 | OpenClaw `pw-role-snapshot.ts` |
 | 浏览器工具集 | #6 工具系统 | navigate/click/type/scroll/screenshot | Browser Use 工具设计 |
-
-里程碑：输入"帮我搜索 xxx 并总结结果"，Agent 能自动打开浏览器完成。
-
-### P1：工具和协议（第 3-4 周）
-
-目标：完善工具体系，接入 MCP 生态
-
-| 任务 | 涉及选型 | 实现方案 | 参考来源 |
-|------|---------|---------|---------|
 | 工具注册框架 | #7 工具注册 | LangChain Tools 注册机制 | PicoClaw `pkg/tools/registry.go` |
 | 文件系统工具 | #6 工具系统 | pathlib 封装 | PicoClaw `pkg/tools/filesystem.go` |
 | Shell 工具 | #6 工具系统 | asyncio.subprocess | PicoClaw `pkg/tools/shell.go` |
@@ -249,11 +240,11 @@ dev = [
 | 凭证管理 | #19 凭证管理 | python-dotenv + keyring | PicoClaw `pkg/credential/` |
 | 基础安全 | #25 路径策略 | pathlib 路径白名单 + 敏感数据过滤 | PicoClaw 工具层路径验证 |
 
-里程碑：能通过 MCP 调用外部工具，YAML 配置文件驱动。
+里程碑：输入自然语言任务，Agent 能自动打开浏览器完成，支持 MCP 调用外部工具，YAML 配置驱动。
 
-### P2：增强能力（第 5-6 周）
+### P1：增强能力（第 5-6 周）
 
-目标：Skills、Sub-Agent、记忆系统
+目标：Skills 技能体系、Sub-Agent 任务分解、跨会话记忆
 
 | 任务 | 涉及选型 | 实现方案 | 参考来源 |
 |------|---------|---------|---------|
@@ -264,26 +255,31 @@ dev = [
 | 自动摘要 | #11 记忆存储 | LLM 长对话摘要压缩 | PicoClaw Agent 配置 |
 | 多 Agent 协同 | #22 多 Agent | LangGraph Multi-Agent 编排 | PicoClaw Agent 绑定机制 |
 
-里程碑：能分解复杂任务给 Sub-Agent，跨会话记忆保持。
+里程碑：能分解复杂任务给 Sub-Agent，跨会话记忆保持，Skills 技能可复用。
 
-### P3：生产级增强（第 7-9 周）
+### P2：生产级增强（第 7-9 周）
 
-目标：RAG、安全、可观测性、插件化
+目标：RAG 知识增强、完整安全体系、可观测性、插件化
 
 | 任务 | 涉及选型 | 实现方案 | 参考来源 |
 |------|---------|---------|---------|
 | RAG 系统 | #12 向量数据库 | sqlite-vec + LangChain 文档索引检索 | OpenClaw `src/memory/sqlite-vec.ts` |
 | 生命周期 Hook | #23 Hook 系统 | asyncio 事件（before/after tool call） | OpenClaw `src/hooks/` |
-| 分层安全 | #26 工具策略、#27 审计日志 | tool_policy + structlog 审计 | OpenClaw `src/security/` |
+| 安全-工具策略 | #26 工具策略 | 自研 tool_policy | OpenClaw `tool-policy.ts` |
+| 安全-审计日志 | #27 审计日志 | structlog 结构化审计 | OpenClaw `src/security/audit.ts` |
 | 插件体系 | #24 插件体系 | pluggy/entry_points，Provider 插件化 | OpenClaw `src/plugins/` |
 | 可观测性 | #16 可观测性 | OpenTelemetry 分布式追踪 | OpenClaw `diagnostics-otel` |
-| 评估优化 | - | LangGraph 条件路由 + 成本追踪 | PicoClaw `pkg/routing/` |
 | CDP 增强 | #4 浏览器引擎 | CDPSession 超时控制、代理绕过 | OpenClaw `cdp-timeouts.ts` |
 | API 网关 | #14 API 网关 | FastAPI REST API | PicoClaw `pkg/gateway/` |
 | 定时任务 | #18 定时任务 | APScheduler | PicoClaw `pkg/cron/` |
-| 自动化测试 | #29 测试 | pytest + pytest-playwright 测试报告 | - |
 
 里程碑：生产可用，完整的安全、可观测性和插件体系。
+
+### 贯穿全阶段
+
+| 涉及选型 | 实现方案 | 说明 |
+|---------|---------|------|
+| #29 测试 | pytest + pytest-asyncio + pytest-playwright | 每个阶段同步编写单元测试和集成测试 |
 
 ---
 
