@@ -24,9 +24,12 @@ class TestCreateSystemTools:
         assert "read_file" in names
         assert "write_file" in names
         assert "list_directory" in names
+        assert "edit_file" in names
+        assert "append_file" in names
         assert "exec_command" in names
         assert "web_search" in names
-        assert registry.count == 5
+        assert "web_fetch" in names
+        assert registry.count == 8
 
     def test_all_tools_are_base_tool(self, tmp_path: pathlib.Path) -> None:
         registry = create_system_tools(workspace=str(tmp_path))
@@ -55,4 +58,4 @@ class TestCombinedToolList:
 
         all_tools = system_reg.get_all()
         assert all(isinstance(t, BaseTool) for t in all_tools)
-        assert len(all_tools) >= 5  # At least the 5 system tools
+        assert len(all_tools) >= 8  # At least the 8 system tools
