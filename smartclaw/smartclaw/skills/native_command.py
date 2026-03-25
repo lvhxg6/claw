@@ -43,20 +43,30 @@ def substitute_placeholders(
     template: str,
     params: dict[str, Any],
     param_defs: dict[str, ParameterDef],
+    *,
+    system_placeholders: dict[str, str] | None = None,
 ) -> str:
     """Replace ``{param_name}`` placeholders in *template*.
 
     Resolution order for each placeholder:
-    1. If the name exists in *params* → use ``str(params[name])``
-    2. Elif the name exists in *param_defs* and has a non-None default → use default
-    3. Else → raise ``ValueError("Missing required parameter: {name}")``
+    1. If the name exists in *system_placeholders* → use that value
+    2. Elif the name exists in *params* → use ``str(params[name])``
+    3. Elif the name exists in *param_defs* and has a non-None default → use default
+    4. Else → raise ``ValueError("Missing required parameter: {name}")``
+
+    System placeholders (e.g. ``{skill_dir}``, ``{workspace}``) are resolved
+    before user-supplied parameters so they cannot be overridden by user input.
     """
     placeholder_names = re.findall(r"\{(\w+)\}", template)
     if not placeholder_names:
         return template
 
+    sys_ph = system_placeholders or {}
+
     def _replacer(match: re.Match[str]) -> str:
         name = match.group(1)
+        if name in sys_ph:
+            return sys_ph[name]
         if name in params:
             return str(params[name])
         if name in param_defs and param_defs[name].default is not None:
@@ -70,9 +80,14 @@ def substitute_args(
     args: list[str],
     params: dict[str, Any],
     param_defs: dict[str, ParameterDef],
+    *,
+    system_placeholders: dict[str, str] | None = None,
 ) -> list[str]:
     """Apply :func:`substitute_placeholders` to each element in *args*."""
-    return [substitute_placeholders(a, params, param_defs) for a in args]
+    return [
+        substitute_placeholders(a, params, param_defs, system_placeholders=system_placeholders)
+        for a in args
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +146,7 @@ class NativeCommandTool(SmartClawTool):
     max_output_chars: int = 10_000
     deny_patterns: list[str] = Field(default_factory=list)
     param_defs: dict[str, ParameterDef] = Field(default_factory=dict)
+    skill_dir: str | None = None
 
     def _run(self, **kwargs: Any) -> str:  # type: ignore[override]
         raise NotImplementedError("Use async")
@@ -139,14 +155,19 @@ class NativeCommandTool(SmartClawTool):
         """Execute the command with placeholder substitution."""
 
         async def _do() -> str:
+            # 0. Build system placeholders (e.g. {skill_dir})
+            sys_ph: dict[str, str] = {}
+            if self.skill_dir is not None:
+                sys_ph["skill_dir"] = self.skill_dir
+
             # 1. Placeholder substitution
             try:
-                cmd = substitute_placeholders(self.command, kwargs, self.param_defs)
-                args = substitute_args(self.command_args, kwargs, self.param_defs)
+                cmd = substitute_placeholders(self.command, kwargs, self.param_defs, system_placeholders=sys_ph)
+                args = substitute_args(self.command_args, kwargs, self.param_defs, system_placeholders=sys_ph)
                 wd_template = self.working_dir
                 wd: str | None = None
                 if wd_template is not None:
-                    wd = substitute_placeholders(wd_template, kwargs, self.param_defs)
+                    wd = substitute_placeholders(wd_template, kwargs, self.param_defs, system_placeholders=sys_ph)
             except ValueError as e:
                 return f"Error: {e}"
 
@@ -233,11 +254,15 @@ class NativeCommandTool(SmartClawTool):
         return await self._safe_run(_do())
 
     @classmethod
-    def from_tool_def(cls, tool_def: ToolDef) -> NativeCommandTool:
+    def from_tool_def(cls, tool_def: ToolDef, *, skill_dir: str | None = None) -> NativeCommandTool:
         """Factory: create a NativeCommandTool from a ToolDef.
 
         Validates that ``tool_def.type`` is one of ``shell``, ``script``, ``exec``.
         Raises ``ValueError`` for unsupported types.
+
+        Args:
+            tool_def: The tool definition to create from.
+            skill_dir: Optional skill directory path for ``{skill_dir}`` placeholder.
         """
         if tool_def.type not in ("shell", "script", "exec"):
             raise ValueError(f"Unsupported tool type: {tool_def.type}")
@@ -256,4 +281,5 @@ class NativeCommandTool(SmartClawTool):
             max_output_chars=tool_def.max_output_chars,
             deny_patterns=tool_def.deny_patterns,
             param_defs=tool_def.parameters,
+            skill_dir=skill_dir,
         )

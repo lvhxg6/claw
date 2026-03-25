@@ -20,6 +20,12 @@ from smartclaw.skills.models import ParameterDef, SkillDefinition, SkillInfo, To
 logger = structlog.get_logger(component="skills.loader")
 
 
+def _is_executable(path: Path) -> bool:
+    """Check if a file has executable permission (Unix)."""
+    import os
+    return os.access(path, os.X_OK)
+
+
 class SkillsLoader:
     """YAML skill definition discovery and dynamic loading."""
 
@@ -234,6 +240,72 @@ class SkillsLoader:
         raise ImportError(f"Skill '{name}' not found in any skill directory")
 
     # ------------------------------------------------------------------
+    # Script auto-discovery
+    # ------------------------------------------------------------------
+
+    _SCRIPT_EXTENSIONS: set[str] = {".sh", ".py", ".js", ".mjs", ".ts", ".rb", ".pl", ".go"}
+
+    def discover_scripts(self, skill_name: str) -> list[ToolDef]:
+        """Scan the ``scripts/`` subdirectory of a skill for executable files.
+
+        Convention: files in ``{skill_dir}/scripts/`` are auto-registered as
+        script-type tools.
+
+        For each file in ``scripts/``:
+        - name: filename without extension (e.g. ``deploy.sh`` → ``deploy``)
+        - description: ``"Run {filename} script from {skill_name} skill"``
+        - type: ``"script"``
+        - command: absolute path to the script file
+        - working_dir: skill directory
+
+        Supported extensions: ``.sh``, ``.py``, ``.js``, ``.mjs``, ``.ts``,
+        ``.rb``, ``.pl``, ``.go``.
+        Files without extensions are also included if they have executable
+        permission.
+
+        Returns list of ToolDef for discovered scripts.
+        """
+        dirs: list[str | None] = [
+            self._workspace_dir,
+            self._global_dir,
+            self._builtin_dir,
+        ]
+
+        for skill_dir in dirs:
+            if skill_dir is None:
+                continue
+            skill_path = Path(skill_dir) / skill_name
+            scripts_path = skill_path / "scripts"
+            if not scripts_path.is_dir():
+                continue
+
+            tools: list[ToolDef] = []
+            for entry in sorted(scripts_path.iterdir()):
+                if not entry.is_file():
+                    continue
+
+                suffix = entry.suffix.lower()
+                # Include files with known extensions or executable files without extension
+                if suffix and suffix not in self._SCRIPT_EXTENSIONS:
+                    continue
+                if not suffix and not _is_executable(entry):
+                    continue
+
+                tool_name = entry.stem if suffix else entry.name
+                tools.append(
+                    ToolDef(
+                        name=tool_name,
+                        description=f"Run {entry.name} script from {skill_name} skill",
+                        type="script",
+                        command=str(entry.resolve()),
+                        working_dir=str(skill_path.resolve()),
+                    )
+                )
+            return tools
+
+        return []
+
+    # ------------------------------------------------------------------
     # Summary / context
     # ------------------------------------------------------------------
 
@@ -263,6 +335,7 @@ class SkillsLoader:
         """Load multiple skills and concatenate their content.
 
         For each skill name, attempts to load skill.yaml and/or SKILL.md content.
+        Replaces ``{skill_dir}`` in SKILL.md body with the actual skill directory path.
         Returns skill sections separated by ``---``.
         """
         if not skill_names:
@@ -289,6 +362,9 @@ class SkillsLoader:
                 if md_path.is_file():
                     md_content = md_path.read_text(encoding="utf-8")
                     _n, _d, body = parse_skill_md(md_content, name)
+                    # Replace {skill_dir} with actual skill directory path
+                    resolved_dir = str(skill_path.resolve())
+                    body = body.replace("{skill_dir}", resolved_dir)
                     content_parts.append(body)
 
                 if content_parts:
