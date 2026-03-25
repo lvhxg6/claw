@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/web_search.py
+# hypothesis_version: 6.151.9
+
+['\n\n---\n\n', 'No URL', 'No content', 'No results found.', 'No title', 'Search query', 'TAVILY_API_KEY', 'content', 'results', 'title', 'url', 'web_search']

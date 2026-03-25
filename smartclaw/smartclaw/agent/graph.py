@@ -32,6 +32,7 @@ from smartclaw.providers.fallback import (
     FallbackCandidate,
     FallbackChain,
 )
+from smartclaw.security.path_policy import PathPolicy
 from smartclaw.tools.browser_tools import get_all_browser_tools
 
 # Use Any-parameterized alias to satisfy mypy strict mode
@@ -245,3 +246,36 @@ def create_browser_tools(
     capturer = ScreenshotCapturer()
 
     return get_all_browser_tools(session, parser, actions, capturer)
+
+
+# ---------------------------------------------------------------------------
+# create_all_tools — merge browser + system tools
+# ---------------------------------------------------------------------------
+
+
+def create_all_tools(
+    browser_tools: list[BaseTool],
+    workspace: str,
+    *,
+    path_policy: PathPolicy | None = None,
+) -> list[BaseTool]:
+    """Merge browser tools with system tools into a single list for build_graph.
+
+    Args:
+        browser_tools: List of browser BaseTool instances.
+        workspace: Workspace directory path for system tools.
+        path_policy: Optional PathPolicy for filesystem access control.
+
+    Returns:
+        Combined list of all BaseTool instances.
+    """
+    from smartclaw.tools.registry import ToolRegistry, create_system_tools
+
+    system_registry = create_system_tools(workspace, path_policy)
+
+    # Merge browser tools into the system registry
+    browser_registry = ToolRegistry()
+    browser_registry.register_many(browser_tools)
+    system_registry.merge(browser_registry)
+
+    return system_registry.get_all()
