@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/browser_tools.py
+# hypothesis_version: 6.148.8
+
+['Capture full page', 'Close a browser tab.', 'Element reference', 'Navigated back', 'Navigated forward', 'No tabs open', 'Tab identifier', 'Text to type', 'Text to wait for', 'Time to wait in ms', 'URL for the new tab', 'URL to navigate to', 'Use async', 'Wait completed', 'about:blank', 'browser_tool_error', 'click', 'close_tab', 'get_page_snapshot', 'go_back', 'go_forward', 'hover', 'list_tabs', 'navigate', 'new_tab', 'press_key', 'screenshot', 'scroll', 'select_option', 'switch_tab', 'tools.browser', 'type_text', 'wait']

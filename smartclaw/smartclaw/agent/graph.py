@@ -20,6 +20,11 @@ from langgraph.graph.state import CompiledStateGraph as _CompiledStateGraph
 
 from smartclaw.agent.nodes import action_node, reasoning_node, should_continue
 from smartclaw.agent.state import AgentState
+from smartclaw.browser.actions import ActionExecutor
+from smartclaw.browser.engine import BrowserConfig, BrowserEngine
+from smartclaw.browser.page_parser import PageParser
+from smartclaw.browser.screenshot import ScreenshotCapturer
+from smartclaw.browser.session import SessionManager
 from smartclaw.observability.logging import get_logger
 from smartclaw.providers.config import ModelConfig, parse_model_ref
 from smartclaw.providers.factory import ProviderFactory
@@ -27,6 +32,7 @@ from smartclaw.providers.fallback import (
     FallbackCandidate,
     FallbackChain,
 )
+from smartclaw.tools.browser_tools import get_all_browser_tools
 
 # Use Any-parameterized alias to satisfy mypy strict mode
 type CompiledStateGraph = _CompiledStateGraph[Any, Any, Any, Any]
@@ -207,3 +213,35 @@ def create_vision_message(
             },
         ]
     )
+
+
+# ---------------------------------------------------------------------------
+# create_browser_tools
+# ---------------------------------------------------------------------------
+
+
+def create_browser_tools(
+    engine: BrowserEngine,
+    session: SessionManager,
+    *,
+    browser_config: BrowserConfig | None = None,
+) -> list[BaseTool]:
+    """Instantiate browser components and return all browser LangChain Tools.
+
+    This is the integration point for wiring browser tools into the Agent Graph.
+    Call this function to produce browser tools, then pass them (along with any
+    other tools) to ``build_graph``.
+
+    Args:
+        engine: An initialized BrowserEngine instance.
+        session: A SessionManager wrapping the engine.
+        browser_config: Optional BrowserConfig (uses engine's config if omitted).
+
+    Returns:
+        A list of BaseTool instances for browser automation.
+    """
+    parser = PageParser()
+    actions = ActionExecutor()
+    capturer = ScreenshotCapturer()
+
+    return get_all_browser_tools(session, parser, actions, capturer)

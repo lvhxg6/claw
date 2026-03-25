@@ -3,6 +3,7 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from smartclaw.browser.engine import BrowserConfig
 from smartclaw.providers.config import ModelConfig
 
 
@@ -45,3 +46,4 @@ class SmartClawSettings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     credentials: CredentialSettings = Field(default_factory=CredentialSettings)
     model: ModelConfig = Field(default_factory=ModelConfig)
+    browser: BrowserConfig = Field(default_factory=BrowserConfig)

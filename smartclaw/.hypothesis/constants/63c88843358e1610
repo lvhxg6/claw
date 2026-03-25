@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/browser/actions.py
+# hypothesis_version: 6.148.8
+
+[1000.0, 500, 8000, 20000, 30000, 60000, 'Enter', 'action_click', 'action_go_back', 'action_go_forward', 'action_hover', 'action_navigate', 'action_press_key', 'action_scroll', 'action_select', 'action_type_text', 'action_wait', 'article', 'browser.actions', 'cell', 'click', 'columnheader', 'exact', 'gridcell', 'heading', 'hidden', 'hover', 'listitem', 'load', 'main', 'name', 'navigation', 'region', 'rowheader', 'scroll', 'select', 'type_text', 'visible']
