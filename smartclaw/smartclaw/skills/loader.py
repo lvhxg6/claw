@@ -14,7 +14,8 @@ from typing import Any, Callable
 import structlog
 import yaml
 
-from smartclaw.skills.models import SkillDefinition, SkillInfo, ToolDef
+from smartclaw.skills.markdown_skill import parse_skill_md
+from smartclaw.skills.models import ParameterDef, SkillDefinition, SkillInfo, ToolDef
 
 logger = structlog.get_logger(component="skills.loader")
 
@@ -45,6 +46,7 @@ class SkillsLoader:
 
         Priority: workspace > global > builtin.
         Duplicate names from lower-priority sources are ignored.
+        A directory is a valid skill if it contains skill.yaml and/or SKILL.md.
         """
         skills: list[SkillInfo] = []
         seen: set[str] = set()
@@ -64,20 +66,45 @@ class SkillsLoader:
             for child in sorted(base.iterdir()):
                 if not child.is_dir():
                     continue
-                yaml_path = child / "skill.yaml"
-                if not yaml_path.is_file():
+                info = self._scan_skill_dir(child, source)
+                if info is None:
                     continue
-                try:
-                    raw = yaml_path.read_text(encoding="utf-8")
-                    definition = self.parse_skill_yaml(raw)
-                except Exception:
-                    logger.warning(
-                        "invalid_skill_yaml",
-                        path=str(yaml_path),
-                        source=source,
-                    )
+                if info.name in seen:
                     continue
+                seen.add(info.name)
+                skills.append(info)
 
+        return skills
+
+    def _scan_skill_dir(self, child: Path, source: str) -> SkillInfo | None:
+        """Scan a single skill directory for skill.yaml and/or SKILL.md.
+
+        Returns SkillInfo if valid, None otherwise.
+        """
+        yaml_path = child / "skill.yaml"
+        md_path = child / "SKILL.md"
+        has_yaml = yaml_path.is_file()
+        has_md = md_path.is_file()
+
+        if not has_yaml and not has_md:
+            return None
+
+        # Try skill.yaml first for metadata
+        if has_yaml:
+            try:
+                raw = yaml_path.read_text(encoding="utf-8")
+                definition = self.parse_skill_yaml(raw)
+            except Exception:
+                logger.warning(
+                    "invalid_skill_yaml",
+                    path=str(yaml_path),
+                    source=source,
+                )
+                # If YAML is invalid but SKILL.md exists, fall through to MD
+                if not has_md:
+                    return None
+                has_yaml = False
+            else:
                 errors = definition.validate()
                 if errors:
                     logger.warning(
@@ -86,22 +113,42 @@ class SkillsLoader:
                         path=str(yaml_path),
                         errors=errors,
                     )
-                    continue
-
-                if definition.name in seen:
-                    continue
-                seen.add(definition.name)
-
-                skills.append(
-                    SkillInfo(
+                    # If YAML validation fails but SKILL.md exists, fall through
+                    if not has_md:
+                        return None
+                    has_yaml = False
+                else:
+                    return SkillInfo(
                         name=definition.name,
                         path=str(yaml_path),
                         source=source,
                         description=definition.description,
                     )
-                )
 
-        return skills
+        # SKILL.md path
+        if has_md:
+            try:
+                md_content = md_path.read_text(encoding="utf-8")
+                name, description, _body = parse_skill_md(md_content, child.name)
+            except Exception:
+                logger.warning(
+                    "invalid_skill_md",
+                    path=str(md_path),
+                    source=source,
+                )
+                return None
+
+            if not name or not description:
+                return None
+
+            return SkillInfo(
+                name=name,
+                path=str(md_path),
+                source=source,
+                description=description,
+            )
+
+        return None
 
     # ------------------------------------------------------------------
     # Loading
@@ -109,12 +156,18 @@ class SkillsLoader:
 
     def load_skill(
         self, name: str
-    ) -> tuple[Callable[..., Any], SkillDefinition]:
-        """Load a skill by name: import entry_point, return (callable, definition).
+    ) -> tuple[Callable[..., Any], SkillDefinition] | tuple[str, None]:
+        """Load a skill by name.
 
-        Searches workspace > global > builtin for the skill's skill.yaml,
-        parses it, then uses importlib to import the entry_point module
-        and retrieve the function.
+        For YAML skills with entry_point: import entry_point, return
+        ``(callable, definition)``.
+
+        For pure SKILL.md skills (no skill.yaml): return
+        ``(body_content, None)``.
+
+        For hybrid skills (skill.yaml + SKILL.md): loads entry_point and
+        returns ``(callable, definition)`` — SKILL.md body is available
+        via :meth:`load_skills_for_context`.
 
         Raises ImportError with a descriptive message on import failure.
         """
@@ -127,37 +180,56 @@ class SkillsLoader:
         for skill_dir, source in dirs_with_source:
             if skill_dir is None:
                 continue
-            yaml_path = Path(skill_dir) / name / "skill.yaml"
-            if not yaml_path.is_file():
+            skill_path = Path(skill_dir) / name
+            yaml_path = skill_path / "skill.yaml"
+            md_path = skill_path / "SKILL.md"
+
+            has_yaml = yaml_path.is_file()
+            has_md = md_path.is_file()
+
+            if not has_yaml and not has_md:
                 continue
 
-            raw = yaml_path.read_text(encoding="utf-8")
-            definition = self.parse_skill_yaml(raw)
+            # If skill.yaml exists, load it
+            if has_yaml:
+                raw = yaml_path.read_text(encoding="utf-8")
+                definition = self.parse_skill_yaml(raw)
 
-            entry_point = definition.entry_point
-            if ":" not in entry_point:
-                raise ImportError(
-                    f"Invalid entry_point format '{entry_point}' for skill "
-                    f"'{name}': expected 'module.path:function_name'"
-                )
+                # If there's an entry_point, import it
+                if definition.entry_point:
+                    entry_point = definition.entry_point
+                    if ":" not in entry_point:
+                        raise ImportError(
+                            f"Invalid entry_point format '{entry_point}' for skill "
+                            f"'{name}': expected 'module.path:function_name'"
+                        )
 
-            module_path, func_name = entry_point.rsplit(":", 1)
-            try:
-                mod = importlib.import_module(module_path)
-            except ModuleNotFoundError as exc:
-                raise ImportError(
-                    f"Cannot import module '{module_path}' for skill "
-                    f"'{name}': {exc}"
-                ) from exc
+                    module_path, func_name = entry_point.rsplit(":", 1)
+                    try:
+                        mod = importlib.import_module(module_path)
+                    except ModuleNotFoundError as exc:
+                        raise ImportError(
+                            f"Cannot import module '{module_path}' for skill "
+                            f"'{name}': {exc}"
+                        ) from exc
 
-            func = getattr(mod, func_name, None)
-            if func is None:
-                raise ImportError(
-                    f"Module '{module_path}' has no attribute '{func_name}' "
-                    f"for skill '{name}'"
-                )
+                    func = getattr(mod, func_name, None)
+                    if func is None:
+                        raise ImportError(
+                            f"Module '{module_path}' has no attribute '{func_name}' "
+                            f"for skill '{name}'"
+                        )
 
-            return func, definition
+                    return func, definition
+
+                # No entry_point — pure YAML skill with native command tools
+                return definition, definition  # type: ignore[return-value]
+
+            # Pure SKILL.md skill (no skill.yaml)
+            if has_md:
+                md_content = md_path.read_text(encoding="utf-8")
+                _name, _desc, body = parse_skill_md(md_content, name)
+                return body, None  # type: ignore[return-value]
 
         raise ImportError(f"Skill '{name}' not found in any skill directory")
 
@@ -190,7 +262,7 @@ class SkillsLoader:
     ) -> str:
         """Load multiple skills and concatenate their content.
 
-        For each skill name, attempts to load the skill.yaml content.
+        For each skill name, attempts to load skill.yaml and/or SKILL.md content.
         Returns skill sections separated by ``---``.
         """
         if not skill_names:
@@ -198,19 +270,31 @@ class SkillsLoader:
 
         parts: list[str] = []
         for name in skill_names:
-            # Search for the skill.yaml across directories
             dirs: list[str | None] = [
                 self._workspace_dir,
                 self._global_dir,
                 self._builtin_dir,
             ]
+            found = False
             for skill_dir in dirs:
                 if skill_dir is None:
                     continue
-                yaml_path = Path(skill_dir) / name / "skill.yaml"
+                skill_path = Path(skill_dir) / name
+                yaml_path = skill_path / "skill.yaml"
+                md_path = skill_path / "SKILL.md"
+
+                content_parts: list[str] = []
                 if yaml_path.is_file():
-                    content = yaml_path.read_text(encoding="utf-8")
-                    parts.append(f"### Skill: {name}\n\n{content}")
+                    content_parts.append(yaml_path.read_text(encoding="utf-8"))
+                if md_path.is_file():
+                    md_content = md_path.read_text(encoding="utf-8")
+                    _n, _d, body = parse_skill_md(md_content, name)
+                    content_parts.append(body)
+
+                if content_parts:
+                    combined = "\n\n".join(content_parts)
+                    parts.append(f"### Skill: {name}\n\n{combined}")
+                    found = True
                     break
 
         return "\n\n---\n\n".join(parts)
@@ -231,11 +315,30 @@ class SkillsLoader:
         if isinstance(tools_raw, list):
             for t in tools_raw:
                 if isinstance(t, dict):
+                    # Parse parameters as dict[str, ParameterDef]
+                    raw_params = t.get("parameters", {})
+                    parsed_params: dict[str, ParameterDef] = {}
+                    if isinstance(raw_params, dict):
+                        for pname, pval in raw_params.items():
+                            if isinstance(pval, dict):
+                                parsed_params[pname] = ParameterDef(
+                                    type=pval.get("type", "string"),
+                                    description=pval.get("description", ""),
+                                    default=pval.get("default"),
+                                )
                     tools.append(
                         ToolDef(
                             name=t.get("name", ""),
                             description=t.get("description", ""),
                             function=t.get("function", ""),
+                            type=t.get("type"),
+                            command=t.get("command", ""),
+                            args=t.get("args", []),
+                            working_dir=t.get("working_dir"),
+                            timeout=t.get("timeout", 60),
+                            max_output_chars=t.get("max_output_chars", 10_000),
+                            deny_patterns=t.get("deny_patterns", []),
+                            parameters=parsed_params,
                         )
                     )
 
@@ -268,14 +371,40 @@ class SkillsLoader:
             data["author"] = definition.author
 
         if definition.tools:
-            data["tools"] = [
-                {
+            tools_data: list[dict[str, Any]] = []
+            for t in definition.tools:
+                td: dict[str, Any] = {
                     "name": t.name,
                     "description": t.description,
-                    "function": t.function,
                 }
-                for t in definition.tools
-            ]
+                if t.function:
+                    td["function"] = t.function
+                if t.type is not None:
+                    td["type"] = t.type
+                if t.command:
+                    td["command"] = t.command
+                if t.args:
+                    td["args"] = t.args
+                if t.working_dir is not None:
+                    td["working_dir"] = t.working_dir
+                if t.timeout != 60:
+                    td["timeout"] = t.timeout
+                if t.max_output_chars != 10_000:
+                    td["max_output_chars"] = t.max_output_chars
+                if t.deny_patterns:
+                    td["deny_patterns"] = t.deny_patterns
+                if t.parameters:
+                    params_data: dict[str, dict[str, Any]] = {}
+                    for pname, pdef in t.parameters.items():
+                        pd: dict[str, Any] = {"type": pdef.type}
+                        if pdef.description:
+                            pd["description"] = pdef.description
+                        if pdef.default is not None:
+                            pd["default"] = pdef.default
+                        params_data[pname] = pd
+                    td["parameters"] = params_data
+                tools_data.append(td)
+            data["tools"] = tools_data
 
         if definition.parameters:
             data["parameters"] = dict(definition.parameters)

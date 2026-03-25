@@ -12,6 +12,8 @@ import structlog
 from langchain_core.tools import BaseTool
 
 from smartclaw.skills.loader import SkillsLoader
+from smartclaw.skills.models import SkillDefinition
+from smartclaw.skills.native_command import NativeCommandTool
 from smartclaw.tools.registry import ToolRegistry
 
 logger = structlog.get_logger(component="skills.registry")
@@ -90,16 +92,82 @@ class SkillsRegistry:
     def load_and_register_all(self) -> None:
         """Discover all skills via loader, load and register each.
 
-        Logs errors and continues on individual skill failures.
+        For skills with native command tools (type=shell/script/exec),
+        creates NativeCommandTool instances via the factory.
+        For skills with Python entry_points, uses the existing import mechanism.
+        Logs errors and continues on individual skill/tool failures.
         """
         skill_infos = self._loader.list_skills()
 
         for info in skill_infos:
             try:
-                entry_fn, _definition = self._loader.load_skill(info.name)
-                # Call the entry point to get the module/tools
-                result = entry_fn()
-                self.register(info.name, result)
+                result_or_body, definition = self._loader.load_skill(info.name)
+
+                # Pure SKILL.md skill (no definition) — register as prompt skill
+                if definition is None:
+                    self._skills[info.name] = result_or_body
+                    self._skill_tools[info.name] = []
+                    logger.info(
+                        "skill_registered",
+                        name=info.name,
+                        tool_count=0,
+                        tools=[],
+                        skill_type="markdown",
+                    )
+                    continue
+
+                # Register native command tools from the definition
+                native_tool_names: list[str] = []
+                if isinstance(definition, SkillDefinition):
+                    for tool_def in definition.tools:
+                        if tool_def.type in ("shell", "script", "exec"):
+                            try:
+                                errors = tool_def.validate()
+                                if errors:
+                                    logger.error(
+                                        "tool_def_validation_failed",
+                                        skill=info.name,
+                                        tool=tool_def.name,
+                                        errors=errors,
+                                    )
+                                    continue
+                                bt = NativeCommandTool.from_tool_def(tool_def)
+                                self._tool_registry.register(bt)
+                                native_tool_names.append(bt.name)
+                            except Exception as exc:
+                                logger.error(
+                                    "native_tool_registration_failed",
+                                    skill=info.name,
+                                    tool=tool_def.name,
+                                    error=str(exc),
+                                )
+                                continue
+
+                # If there's a Python entry_point, call it and register
+                if isinstance(definition, SkillDefinition) and definition.entry_point:
+                    entry_fn = result_or_body
+                    result = entry_fn()
+                    self._skills[info.name] = result
+
+                    # Extract Python tools
+                    py_tool_names: list[str] = []
+                    py_tools = self._extract_tools(result)
+                    for tool in py_tools:
+                        self._tool_registry.register(tool)
+                        py_tool_names.append(tool.name)
+
+                    self._skill_tools[info.name] = py_tool_names + native_tool_names
+                else:
+                    # Pure YAML skill (native command tools only, no entry_point)
+                    self._skills[info.name] = definition
+                    self._skill_tools[info.name] = native_tool_names
+
+                logger.info(
+                    "skill_registered",
+                    name=info.name,
+                    tool_count=len(self._skill_tools.get(info.name, [])),
+                    tools=self._skill_tools.get(info.name, []),
+                )
             except Exception as exc:
                 logger.error(
                     "skill_load_failed",
