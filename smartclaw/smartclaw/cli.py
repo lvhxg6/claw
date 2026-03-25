@@ -191,14 +191,36 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
                 memory_store=memory_store,
                 summarizer=summarizer,
             )
+
+            # Show tool call trace
+            from langchain_core.messages import AIMessage as _AI, ToolMessage as _TM
+            msgs = result.get("messages", [])
+            tool_calls_shown = []
+            for m in msgs:
+                if isinstance(m, _AI) and m.tool_calls:
+                    for tc in m.tool_calls:
+                        name = tc.get("name", "?")
+                        args_str = str(tc.get("args", {}))
+                        if len(args_str) > 80:
+                            args_str = args_str[:77] + "..."
+                        tool_calls_shown.append(f"  🔧 {name}({args_str})")
+
+            if tool_calls_shown:
+                print(f"\r{'':50}")  # clear thinking line
+                for line in tool_calls_shown:
+                    print(line)
+
             if result.get("error"):
-                print(f"\r❌ Error: {result['error']}                    ")
+                if not tool_calls_shown:
+                    print(f"\r{'':50}")
+                print(f"  ❌ Error: {result['error']}")
             elif result.get("final_answer"):
-                print(f"\r                                              ")
-                print(f"Agent > {result['final_answer']}")
+                if not tool_calls_shown:
+                    print(f"\r{'':50}")
+                print(f"\nAgent > {result['final_answer']}")
             else:
-                print("\n⚠️  No response")
-            print(f"  (iterations: {result.get('iteration', 0)})\n")
+                print("\n  ⚠️  No response")
+            print(f"  ({result.get('iteration', 0)} iterations)\n")
         except Exception as e:
             print(f"\n❌ Exception: {e}\n")
 
