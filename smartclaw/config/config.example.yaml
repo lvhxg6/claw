@@ -1,0 +1,41 @@
+# =============================================================================
+# SmartClaw Configuration
+# =============================================================================
+# Copy this file to config.yaml and adjust values for your environment.
+# Environment variables with SMARTCLAW_ prefix override these values.
+# Nested keys use __ (double underscore) as delimiter in env vars.
+# Example: SMARTCLAW_LOGGING__LEVEL=DEBUG
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Agent Defaults — default parameters for agent execution
+# ---------------------------------------------------------------------------
+agent_defaults:
+  # Working directory for agent file operations
+  workspace: "~/.smartclaw/workspace"
+
+  # Maximum number of tokens per LLM request
+  max_tokens: 32768
+
+  # Maximum number of tool-call iterations per agent run
+  max_tool_iterations: 50
+
+# ---------------------------------------------------------------------------
+# Logging — structlog-based structured logging configuration
+# ---------------------------------------------------------------------------
+logging:
+  # Log level: DEBUG | INFO | WARNING | ERROR | CRITICAL
+  level: "INFO"
+
+  # Output format: "console" (colored, human-readable) | "json" (machine-parseable)
+  format: "console"
+
+  # Log file path. Set to a file path to enable file logging, or null to disable.
+  file: null
+
+# ---------------------------------------------------------------------------
+# Credentials — credential management settings
+# ---------------------------------------------------------------------------
+credentials:
+  # Service name used for system keyring storage
+  keyring_service: "smartclaw"
