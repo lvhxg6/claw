@@ -125,65 +125,65 @@ All new code lives under `smartclaw/smartclaw/browser/` and `smartclaw/smartclaw
 - [x] 6. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 7. Action Executor
-  - [ ] 7.1 Implement `_clamp_timeout` function and `ActionExecutor` class in `smartclaw/smartclaw/browser/actions.py`
+- [x] 7. Action Executor
+  - [x] 7.1 Implement `_clamp_timeout` function and `ActionExecutor` class in `smartclaw/smartclaw/browser/actions.py`
     - Implement `_clamp_timeout(timeout_ms, default)` clamping to [500, 60000]
     - Implement `ActionExecutor` with `set_ref_map`, `_resolve_locator` (ref → getByRole + nth), and all action methods: `navigate`, `click`, `type_text`, `scroll`, `select`, `go_back`, `go_forward`, `press_key`, `hover`, `wait` (time/text/text_gone/selector/url/load_state conditions)
     - Raise `ElementNotFoundError` with ref string on element not found, `ActionTimeoutError` on timeout
     - Log actions via structlog
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12_
 
-  - [ ] 7.2 Write property test for timeout clamping (Property 9)
+  - [x] 7.2 Write property test for timeout clamping (Property 9)
     - **Property 9: Timeout clamping bounds**
     - For any integer, `_clamp_timeout` returns value in [500, 60000]; below 500 → 500, above 60000 → 60000, within range → preserved
     - Use `st.integers(-100000, 200000)`
     - File: `smartclaw/tests/browser/test_actions_props.py`
     - **Validates: Requirements 4.12**
 
-  - [ ] 7.3 Write property test for action error messages (Property 8)
+  - [x] 7.3 Write property test for action error messages (Property 8)
     - **Property 8: Action error messages include element reference**
     - For any `eN` ref string used in a failed action, the error message contains the original ref string
     - Use `st.from_regex(r'e\d+', fullmatch=True)` for refs
     - File: `smartclaw/tests/browser/test_actions_props.py`
     - **Validates: Requirements 4.11**
 
-  - [ ] 7.4 Write unit tests for ActionExecutor
+  - [x] 7.4 Write unit tests for ActionExecutor
     - Test navigate (4.1), click (4.2), type_text (4.3), scroll (4.4), select (4.5), go_back (4.6), go_forward (4.7), wait conditions (4.8), press_key (4.9), hover (4.10), page unresponsive timeout (8.4)
     - Use AsyncMock for Playwright Page and Locator
     - File: `smartclaw/tests/browser/test_actions.py`
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 8.4_
 
-- [ ] 8. Screenshot Capturer
-  - [ ] 8.1 Implement `ScreenshotResult` dataclass and `ScreenshotCapturer` class in `smartclaw/smartclaw/browser/screenshot.py`
+- [x] 8. Screenshot Capturer
+  - [x] 8.1 Implement `ScreenshotResult` dataclass and `ScreenshotCapturer` class in `smartclaw/smartclaw/browser/screenshot.py`
     - Implement `capture_viewport`, `capture_full_page`, `capture_element` methods
     - Support PNG and JPEG formats with configurable JPEG quality [0, 100]
     - Implement progressive quality reduction when screenshot exceeds `max_bytes` (default 5MB)
     - Return `ScreenshotResult` with base64 data, MIME type, width, height
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-  - [ ] 8.2 Write property test for screenshot result completeness (Property 10)
+  - [x] 8.2 Write property test for screenshot result completeness (Property 10)
     - **Property 10: Screenshot result completeness**
     - For any successful capture: non-empty base64 data, mime_type is "image/png" or "image/jpeg", width and height are positive integers, JPEG quality clamped to [0, 100]
     - Use `st.sampled_from(["png", "jpeg"])`, `st.integers(0, 100)` for quality
     - File: `smartclaw/tests/browser/test_screenshot_props.py`
     - **Validates: Requirements 5.4, 5.6**
 
-  - [ ] 8.3 Write unit tests for ScreenshotCapturer
+  - [x] 8.3 Write unit tests for ScreenshotCapturer
     - Test viewport screenshot (5.1), full-page screenshot (5.2), element screenshot (5.3), progressive quality reduction (5.5)
     - Use AsyncMock for Playwright Page, return pre-made small PNG base64
     - File: `smartclaw/tests/browser/test_screenshot.py`
     - _Requirements: 5.1, 5.2, 5.3, 5.5_
 
-- [ ] 9. Checkpoint - Ensure all tests pass
+- [x] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Session Manager and Tab Management
-  - [ ] 10.1 Implement `TabInfo`, `TabState`, event entry dataclasses, and `TabNotFoundError` in `smartclaw/smartclaw/browser/session.py`
+- [x] 10. Session Manager and Tab Management
+  - [x] 10.1 Implement `TabInfo`, `TabState`, event entry dataclasses, and `TabNotFoundError` in `smartclaw/smartclaw/browser/session.py`
     - Implement `TabInfo`, `ConsoleEntry`, `ErrorEntry`, `NetworkEntry`, `TabState` dataclasses
     - `TabState` uses `deque` with configurable maxlen (500 console, 200 errors, 500 network)
     - _Requirements: 6.2, 6.7, 6.8_
 
-  - [ ] 10.2 Implement `SessionManager` class in `smartclaw/smartclaw/browser/session.py`
+  - [x] 10.2 Implement `SessionManager` class in `smartclaw/smartclaw/browser/session.py`
     - Implement `__init__(engine)`, `active_tab_id`, `active_page` properties
     - Implement `new_tab(url)` — create page, navigate, register tab, enforce max_pages limit, attach event listeners for console/errors/network
     - Implement `list_tabs()`, `switch_tab(tab_id)`, `close_tab(tab_id)`, `cleanup()`
@@ -191,79 +191,79 @@ All new code lives under `smartclaw/smartclaw/browser/` and `smartclaw/smartclaw
     - Raise `TabNotFoundError` for invalid tab_id, `MaxPagesExceededError` when limit reached
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 8.3, 8.6_
 
-  - [ ] 10.3 Write property test for tab registry consistency (Property 11)
+  - [x] 10.3 Write property test for tab registry consistency (Property 11)
     - **Property 11: Tab registry consistency**
     - For any sequence of new_tab/close_tab, list_tabs() returns exactly created-but-not-closed tabs; active_page corresponds to a tab in the list or is None
     - Use `st.lists(st.sampled_from(["new", "close"]))` for operation sequences
     - File: `smartclaw/tests/browser/test_session_props.py`
     - **Validates: Requirements 6.2, 6.4, 6.7**
 
-  - [ ] 10.4 Write property test for tab switching (Property 12)
+  - [x] 10.4 Write property test for tab switching (Property 12)
     - **Property 12: Tab switching sets active tab**
     - After switch_tab(tab_id), active_tab_id equals that tab_id
     - File: `smartclaw/tests/browser/test_session_props.py`
     - **Validates: Requirements 6.3**
 
-  - [ ] 10.5 Write property test for invalid tab identifier (Property 13)
+  - [x] 10.5 Write property test for invalid tab identifier (Property 13)
     - **Property 13: Invalid tab identifier raises TabNotFoundError**
     - Any string not in the registry raises TabNotFoundError with the identifier in the message
     - Use `st.text().filter(lambda s: not s.startswith("tab_"))` for invalid IDs
     - File: `smartclaw/tests/browser/test_session_props.py`
     - **Validates: Requirements 6.5**
 
-  - [ ] 10.6 Write property test for event buffer limits (Property 14)
+  - [x] 10.6 Write property test for event buffer limits (Property 14)
     - **Property 14: Event buffer respects size limits**
     - For N > 500 console messages, deque contains at most 500 (most recent); same for errors (200) and network (500)
     - Use `st.integers(1, 2000)` for message count
     - File: `smartclaw/tests/browser/test_session_props.py`
     - **Validates: Requirements 6.8**
 
-  - [ ] 10.7 Write property test for max concurrent pages (Property 16)
+  - [x] 10.7 Write property test for max concurrent pages (Property 16)
     - **Property 16: Max concurrent pages enforcement**
     - With max_pages=N, after creating N tabs, tab N+1 is rejected with error
     - Use `st.integers(1, 20)` for max_pages
     - File: `smartclaw/tests/browser/test_session_props.py`
     - **Validates: Requirements 8.6**
 
-  - [ ] 10.8 Write unit tests for SessionManager
+  - [x] 10.8 Write unit tests for SessionManager
     - Test new tab creation (6.1), session cleanup (6.6), context manager (8.3)
     - File: `smartclaw/tests/browser/test_session.py`
     - _Requirements: 6.1, 6.6, 8.3_
 
-- [ ] 11. Checkpoint - Ensure all tests pass
+- [x] 11. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Browser Tools LangChain integration
-  - [ ] 12.1 Implement `_safe_tool_call` helper and all 14 browser LangChain Tools in `smartclaw/smartclaw/tools/browser_tools.py`
+- [x] 12. Browser Tools LangChain integration
+  - [x] 12.1 Implement `_safe_tool_call` helper and all 14 browser LangChain Tools in `smartclaw/smartclaw/tools/browser_tools.py`
     - Implement `_safe_tool_call` wrapper that catches exceptions and returns human-readable error strings
     - Implement tools: `navigate`, `click`, `type_text`, `scroll`, `screenshot`, `get_page_snapshot`, `go_back`, `go_forward`, `wait`, `select_option`, `press_key`, `switch_tab`, `list_tabs`, `new_tab`, `close_tab`
     - Each tool extends LangChain `BaseTool` with proper name, description, and args_schema
     - Implement `get_all_browser_tools(session, parser, actions, capturer)` returning all 14+ tool instances
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11, 7.12, 7.13, 7.14, 7.15, 7.16_
 
-  - [ ] 12.2 Write property test for browser tools exception handling (Property 15)
+  - [x] 12.2 Write property test for browser tools exception handling (Property 15)
     - **Property 15: Browser tools catch exceptions and return error strings**
     - For any tool invocation that raises an exception, the tool returns a string error message instead of propagating
     - Use `st.sampled_from(EXCEPTION_TYPES)`, `st.text()` for error messages
     - File: `smartclaw/tests/browser/test_tools_props.py`
     - **Validates: Requirements 7.15**
 
-  - [ ] 12.3 Write unit tests for Browser Tools
+  - [x] 12.3 Write unit tests for Browser Tools
     - Test all 14 tools exist and return correct format (7.1-7.14), `get_all_browser_tools` returns correct count (7.16)
     - File: `smartclaw/tests/browser/test_tools.py`
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11, 7.12, 7.13, 7.14, 7.16_
 
-- [ ] 13. Wire browser tools into Agent Graph
-  - [ ] 13.1 Register browser tools in the Agent Graph build pipeline
+- [x] 13. Wire browser tools into Agent Graph
+  - [x] 13.1 Register browser tools in the Agent Graph build pipeline
     - Update `smartclaw/smartclaw/agent/graph.py` or create a helper to instantiate BrowserEngine, SessionManager, PageParser, ActionExecutor, ScreenshotCapturer, and call `get_all_browser_tools()` to produce the tool list for `build_graph`
     - Ensure browser tools are available alongside any existing tools
     - _Requirements: 7.16_
 
-  - [ ] 13.2 Add `browser/__init__.py` public exports
+  - [x] 13.2 Add `browser/__init__.py` public exports
     - Export `BrowserEngine`, `BrowserConfig`, `CDPClient`, `PageParser`, `ActionExecutor`, `ScreenshotCapturer`, `SessionManager` and key data models from `smartclaw/smartclaw/browser/__init__.py`
     - _Requirements: N/A (wiring)_
 
-- [ ] 14. Final checkpoint - Ensure all tests pass
+- [x] 14. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
