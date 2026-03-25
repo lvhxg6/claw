@@ -34,6 +34,25 @@ logging:
   file: null
 
 # ---------------------------------------------------------------------------
+# Model — LLM provider and model configuration
+# ---------------------------------------------------------------------------
+model:
+  # Primary model in "provider/model" format
+  # Supported providers: openai, anthropic, kimi
+  primary: "kimi/moonshot-v1-auto"
+
+  # Fallback models tried in order when the primary model fails
+  fallbacks:
+    - "openai/gpt-4o"
+    - "anthropic/claude-sonnet-4-20250514"
+
+  # Sampling temperature (0.0 = deterministic, 2.0 = max randomness)
+  temperature: 0.0
+
+  # Maximum tokens per LLM request
+  max_tokens: 32768
+
+# ---------------------------------------------------------------------------
 # Credentials — credential management settings
 # ---------------------------------------------------------------------------
 credentials:

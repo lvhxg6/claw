@@ -3,6 +3,8 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from smartclaw.providers.config import ModelConfig
+
 
 class LoggingSettings(BaseSettings):
     """Logging configuration."""
@@ -42,3 +44,4 @@ class SmartClawSettings(BaseSettings):
     agent_defaults: AgentDefaultsSettings = Field(default_factory=AgentDefaultsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     credentials: CredentialSettings = Field(default_factory=CredentialSettings)
+    model: ModelConfig = Field(default_factory=ModelConfig)
