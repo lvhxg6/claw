@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/providers/factory.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.6, 32768, 'KIMI_API_KEY', 'anthropic', 'api_key', 'base_url', 'disabled', 'extra_body', 'kimi', 'kimi-k2', 'max_tokens', 'model', 'model_name', 'openai', 'streaming', 'temperature', 'thinking', 'type']
