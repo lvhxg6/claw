@@ -122,7 +122,7 @@ def _format_sse(evt_dict: dict) -> dict | None:  # type: ignore[type-arg]
             "data": json.dumps(
                 {
                     "tool_name": evt_dict.get("tool_name", ""),
-                    "result": str(result_raw)[:256],
+                    "result": str(result_raw)[:2048],
                     "duration_ms": evt_dict.get("duration_ms", 0),
                     "success": evt_dict.get("error") is None,
                 },

@@ -214,7 +214,7 @@ def test_format_sse_mapping_correctness(
     data = json.loads(sse["data"])
     assert isinstance(data["tool_name"], str)
     assert isinstance(data["result"], str)
-    assert len(data["result"]) <= 256
+    assert len(data["result"]) <= 2048
     assert isinstance(data["duration_ms"], (int, float))
     assert isinstance(data["success"], bool)
     assert data["success"] == (error is None)

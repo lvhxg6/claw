@@ -136,8 +136,8 @@ def test_format_sse_all_types() -> None:
     assert data["current"] == 1
     assert data["max"] == 50
 
-    # tool:after result truncation to 256 chars
-    long_result = "x" * 500
+    # tool:after result truncation to 2048 chars
+    long_result = "x" * 3000
     sse = _format_sse({
         "hook_point": "tool:after",
         "tool_name": "t",
@@ -147,7 +147,7 @@ def test_format_sse_all_types() -> None:
     })
     assert sse is not None
     data = json.loads(sse["data"])
-    assert len(data["result"]) == 256
+    assert len(data["result"]) == 2048
 
 
 def test_format_sse_unknown() -> None:
