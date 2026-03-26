@@ -30,11 +30,41 @@ logger = get_logger("agent.nodes")
 # ---------------------------------------------------------------------------
 
 
+def _is_context_overflow_error(exc: Exception) -> bool:
+    """Check if an exception looks like an HTTP 400 context overflow error.
+
+    Returns True when the error message contains context/token/length
+    keywords AND appears to be an HTTP 400 error.
+    """
+    msg = str(exc).lower()
+    # Check for context overflow keywords
+    overflow_keywords = ("context", "token", "length")
+    has_keyword = any(kw in msg for kw in overflow_keywords)
+    if not has_keyword:
+        return False
+    # Check for HTTP 400 indicators
+    status = getattr(exc, "status_code", None)
+    if status == 400:
+        return True
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        sc = getattr(resp, "status_code", None)
+        if sc == 400:
+            return True
+    # Also check the message for "400" pattern
+    if "400" in msg:
+        return True
+    return False
+
+
 async def reasoning_node(
     state: AgentState,
     *,
     llm_call: Callable[..., Any],
     tools: list[BaseTool] | None = None,
+    session_pruner: Any | None = None,
+    summarizer: Any | None = None,
+    session_key: str | None = None,
 ) -> dict[str, Any]:
     """Reasoning node: invoke the LLM and return the AIMessage.
 
@@ -43,6 +73,9 @@ async def reasoning_node(
         llm_call: Async callable that takes messages (and optionally tools)
             and returns an AIMessage.
         tools: Optional list of tools to bind to the LLM.
+        session_pruner: Optional SessionPruner instance for L2 session pruning.
+        summarizer: Optional AutoSummarizer instance for context overflow recovery.
+        session_key: Optional session key for force_compression on overflow.
 
     Returns:
         Dict with ``messages`` (list containing the AIMessage) and
@@ -68,6 +101,10 @@ async def reasoning_node(
     try:
         logger.info("reasoning_node start", iteration=iteration)
         messages = state.get("messages", [])
+
+        # L2: Apply SessionPruner before LLM invocation
+        if session_pruner is not None:
+            messages = session_pruner.prune(messages)
 
         # P2A: trigger llm:before hook before LLM call
         try:
@@ -102,9 +139,39 @@ async def reasoning_node(
 
         logger.info("reasoning_node done", iteration=iteration, has_tool_calls=bool(response.tool_calls))
 
+        # Accumulate token stats from usage_metadata
+        existing_stats = state.get("token_stats") or {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        usage = getattr(response, "usage_metadata", None)
+        if usage and isinstance(usage, dict):
+            new_stats = {
+                "prompt_tokens": existing_stats["prompt_tokens"] + usage.get("input_tokens", 0),
+                "completion_tokens": existing_stats["completion_tokens"] + usage.get("output_tokens", 0),
+                "total_tokens": existing_stats["total_tokens"] + usage.get("total_tokens", 0),
+            }
+        else:
+            # Fallback: estimate tokens from messages
+            try:
+                from smartclaw.memory.summarizer import AutoSummarizer
+
+                est = AutoSummarizer.estimate_tokens(None, messages)  # type: ignore[arg-type]
+                resp_content = response.content if isinstance(response.content, str) else str(response.content)
+                resp_est = len(resp_content) * 2 // 5
+                new_stats = {
+                    "prompt_tokens": existing_stats["prompt_tokens"] + est,
+                    "completion_tokens": existing_stats["completion_tokens"] + resp_est,
+                    "total_tokens": existing_stats["total_tokens"] + est + resp_est,
+                }
+            except Exception:
+                new_stats = existing_stats
+
         result: dict[str, Any] = {
             "messages": [response],
             "iteration": iteration + 1,
+            "token_stats": new_stats,
         }
 
         # If no tool calls, this is the final answer
@@ -117,6 +184,45 @@ async def reasoning_node(
     except Exception as exc:
         error_msg = str(exc) or type(exc).__name__
         logger.error("reasoning_node error", iteration=iteration, error=error_msg, error_type=type(exc).__name__)
+
+        # Context overflow detection: catch HTTP 400 with context/token/length keywords
+        _resolved_session_key = session_key or state.get("session_key")
+        if (
+            summarizer is not None
+            and _resolved_session_key
+            and _is_context_overflow_error(exc)
+        ):
+            logger.warning(
+                "context_overflow_detected",
+                iteration=iteration,
+                session_key=_resolved_session_key,
+            )
+            try:
+                compressed_messages = await summarizer.force_compression(
+                    _resolved_session_key, messages
+                )
+                # Retry LLM call once with compressed messages
+                if session_pruner is not None:
+                    compressed_messages = session_pruner.prune(compressed_messages)
+                retry_response: AIMessage = await llm_call(compressed_messages, tools=tools)
+                logger.info(
+                    "context_overflow_retry_succeeded",
+                    iteration=iteration,
+                )
+                retry_result: dict[str, Any] = {
+                    "messages": [retry_response],
+                    "iteration": iteration + 1,
+                }
+                if not retry_response.tool_calls:
+                    content = retry_response.content if isinstance(retry_response.content, str) else str(retry_response.content)
+                    retry_result["final_answer"] = content
+                return retry_result
+            except Exception as retry_exc:
+                logger.error(
+                    "context_overflow_retry_failed",
+                    iteration=iteration,
+                    error=str(retry_exc),
+                )
 
         # P2A: trigger llm:after hook on error
         try:
@@ -148,12 +254,14 @@ async def action_node(
     state: AgentState,
     *,
     tools_by_name: dict[str, BaseTool] | None = None,
+    tool_result_guard: Any | None = None,
 ) -> dict[str, Any]:
     """Action node: execute tool calls from the last AIMessage.
 
     Args:
         state: Current agent state.
         tools_by_name: Mapping of tool name → BaseTool instance.
+        tool_result_guard: Optional ToolResultGuard instance for L1 truncation.
 
     Returns:
         Dict with ``messages`` containing one ToolMessage per tool call.
@@ -172,10 +280,25 @@ async def action_node(
         return {"messages": []}
 
     tool_messages: list[ToolMessage] = []
+    clarification_request = None
     for tool_call in last_ai.tool_calls:
         tool_name = tool_call["name"]
         tool_call_id = tool_call["id"]
         tool_args = tool_call.get("args", {})
+
+        # Intercept ask_clarification: extract request, emit ToolMessage, skip remaining calls
+        if tool_name == "ask_clarification":
+            question = tool_args.get("question", "")
+            options = tool_args.get("options")
+            clarification_request = {"question": question, "options": options}
+            tool_messages.append(
+                ToolMessage(
+                    content=f"Clarification requested: {question}",
+                    tool_call_id=tool_call_id,
+                )
+            )
+            logger.info("action_node intercepted ask_clarification", question=question)
+            break
 
         tool = tools_by_name.get(tool_name)
         if tool is None:
@@ -233,6 +356,10 @@ async def action_node(
             except Exception:
                 pass
 
+            # L1: Apply ToolResultGuard truncation before creating ToolMessage
+            if tool_result_guard is not None:
+                content = tool_result_guard.cap_tool_result(content, tool_name)
+
             tool_messages.append(
                 ToolMessage(content=content, tool_call_id=tool_call_id)
             )
@@ -274,7 +401,10 @@ async def action_node(
                 )
             )
 
-    return {"messages": tool_messages}
+    result: dict[str, Any] = {"messages": tool_messages}
+    if clarification_request is not None:
+        result["clarification_request"] = clarification_request
+    return result
 
 
 # ---------------------------------------------------------------------------
