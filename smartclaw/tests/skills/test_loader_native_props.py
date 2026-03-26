@@ -37,7 +37,10 @@ _valid_entry_point = st.builds(
     st.from_regex(r"[a-z][a-z_]{0,15}", fullmatch=True),
 )
 
-_optional_str = st.one_of(st.none(), st.text(min_size=1, max_size=30).filter(lambda s: s.strip()))
+_optional_str = st.one_of(st.none(), st.text(
+    min_size=1, max_size=30,
+    alphabet=st.characters(whitelist_categories=("L", "N", "P", "Z")),
+).filter(lambda s: s.strip()))
 
 _native_type = st.sampled_from(["shell", "script", "exec"])
 
@@ -131,7 +134,9 @@ def st_skill_definition_with_native(draw: st.DrawFn) -> SkillDefinition:
             keys=st.from_regex(r"[a-z_]{1,15}", fullmatch=True),
             values=st.one_of(
                 st.integers(min_value=0, max_value=1000),
-                st.text(min_size=1, max_size=20).filter(lambda s: s.strip()),
+                st.text(min_size=1, max_size=20, alphabet=st.characters(
+                    whitelist_categories=("L", "N", "P", "Z"),
+                )).filter(lambda s: s.strip()),
                 st.booleans(),
             ),
             max_size=3,

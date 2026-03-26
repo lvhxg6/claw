@@ -235,3 +235,17 @@ class TestErrorClassification:
         err = _StatusError(status, "no format indicators here")
         result = classify_error(err, provider, model)
         assert result.reason == FailoverReason.UNKNOWN
+
+    @settings(max_examples=100)
+    @given(
+        msg=st.text(min_size=0, max_size=50, alphabet=st.characters(
+            whitelist_categories=("L", "N", "Z"),
+        )).filter(lambda s: not any(ind in s.lower() for ind in ("format", "invalid", "malformed", "parse", "schema", "validation"))),
+        provider=_provider_st,
+        model=_model_st,
+    )
+    def test_400_no_format_is_rate_limit(self, msg: str, provider: str, model: str) -> None:
+        """# Feature: smartclaw-llm-agent-core, Property 7: Error classification — 400 without format → RATE_LIMIT"""
+        err = _StatusError(400, msg)
+        result = classify_error(err, provider, model)
+        assert result.reason == FailoverReason.RATE_LIMIT

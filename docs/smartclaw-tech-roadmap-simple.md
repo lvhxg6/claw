@@ -218,9 +218,11 @@ dev = [
 
 ## 开发路线图
 
-### P0：核心 MVP（第 1-4 周）
+### P0：核心 MVP（第 1-4 周）✅ 已完成
 
 目标：完整可用的浏览器 Agent，能通过 LLM 驱动浏览器完成任务，支持 MCP 工具生态
+
+**完成状态：** 全部完成。8 个系统工具（read_file, write_file, edit_file, append_file, list_directory, exec_command, web_search, web_fetch）、15 个浏览器工具、MCP 协议管理器、LLM Fallback Chain、配置管理、安全路径策略均已实现并通过测试。
 
 | 任务 | 涉及选型 | 实现方案 | 参考来源 |
 |------|---------|---------|---------|
@@ -242,9 +244,25 @@ dev = [
 
 里程碑：输入自然语言任务，Agent 能自动打开浏览器完成，支持 MCP 调用外部工具，YAML 配置驱动。
 
-### P1：增强能力（第 5-6 周）
+### P1：增强能力（第 5-6 周）✅ 已完成
 
 目标：Skills 技能体系、Sub-Agent 任务分解、跨会话记忆
+
+**完成状态：** 全部完成。6 个模块已实现：
+- **MemoryStore** — aiosqlite 持久化，跨会话记忆，完整消息类型支持（HumanMessage/AIMessage/ToolMessage）
+- **AutoSummarizer** — LLM 驱动的双阈值自动摘要（消息数 + token 百分比），force_compression 支持
+- **SkillsLoader** — YAML + SKILL.md 双格式，workspace/global/builtin 三级目录，优先级覆盖
+- **SkillsRegistry** — 动态注册到 ToolRegistry，支持 Python 函数工具 + Native Command 工具 + Markdown 提示词工具
+- **SubAgent** — LangGraph SubGraph + asyncio.Semaphore 并发控制，深度限制，超时保护
+- **MultiAgentCoordinator** — Supervisor 模式多 Agent 协同
+
+**额外完成（P1 补充）：**
+- **Native Command Skills** — shell/script/exec 三种命令工具类型，asyncio subprocess 执行
+- **SKILL.md 格式** — Markdown 提示词技能（YAML frontmatter + body），{param_name}/{skill_dir}/{workspace} 占位符替换
+- **scripts/ 自动发现** — 约定大于配置，scripts/ 子目录自动扫描 .sh/.py/.js/.mjs/.ts/.rb/.pl/.go 文件
+- **CLI 全功能** — 零配置启动，所有特性默认开启，斜杠命令（/history /summary /clear /tools /help /quit），工具调用追踪
+
+**测试覆盖：** 638+ 单元测试（含属性测试），12/12 基础场景，14/16 跨功能场景，15/16 全功能集成测试。
 
 | 任务 | 涉及选型 | 实现方案 | 参考来源 |
 |------|---------|---------|---------|
@@ -257,9 +275,15 @@ dev = [
 
 里程碑：能分解复杂任务给 Sub-Agent，跨会话记忆保持，Skills 技能可复用。
 
-### P2：生产级增强（第 7-9 周）
+### P2：生产级增强（第 7-9 周）⏳ 待开始
 
 目标：RAG 知识增强、完整安全体系、可观测性、插件化
+
+**优先级排序（已确认）：**
+1. API 网关（FastAPI）— 让 SmartClaw 能作为服务运行，不只是 CLI
+2. 生命周期 Hook — before/after tool call，对调试和安全审计关键
+3. 可观测性 — OpenTelemetry，生产环境必备
+4. RAG、插件体系、定时任务等后续再做
 
 | 任务 | 涉及选型 | 实现方案 | 参考来源 |
 |------|---------|---------|---------|

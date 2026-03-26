@@ -128,6 +128,22 @@ def _is_format_error(error: Exception) -> bool:
     return any(ind in msg for ind in indicators)
 
 
+def _is_rate_limit_400(error: Exception) -> bool:
+    """Check if a 400 error is actually a rate limit / quota exhaustion.
+
+    Some providers (notably Kimi/Moonshot) return HTTP 400 instead of 429
+    for rate limiting. We detect this by checking for rate/quota/limit
+    indicators in the error message, or by treating 400 errors that are
+    NOT format errors as likely rate limits.
+    """
+    msg = str(error).lower()
+    rate_indicators = (
+        "rate", "limit", "quota", "throttl", "too many", "concurren",
+        "capacity", "overload", "busy", "retry", "cooldown",
+    )
+    return any(ind in msg for ind in rate_indicators)
+
+
 def classify_error(error: Exception, provider: str, model: str) -> FailoverError:
     """Classify an LLM call exception into a FailoverError with a reason.
 
@@ -136,6 +152,8 @@ def classify_error(error: Exception, provider: str, model: str) -> FailoverError
     - HTTP 429 → RATE_LIMIT
     - Timeout / ConnectTimeout → TIMEOUT
     - HTTP 400 + format indicators → FORMAT
+    - HTTP 400 + rate/quota indicators → RATE_LIMIT
+    - HTTP 400 (no indicators) → RATE_LIMIT (conservative: treat as transient)
     - HTTP 503/529 → OVERLOADED
     - Others → UNKNOWN
     """
@@ -155,9 +173,14 @@ def classify_error(error: Exception, provider: str, model: str) -> FailoverError
             return FailoverError(
                 reason=FailoverReason.RATE_LIMIT, provider=provider, model=model, status=status, wrapped=error
             )
-        if status == 400 and _is_format_error(error):
+        if status == 400:
+            if _is_format_error(error):
+                return FailoverError(
+                    reason=FailoverReason.FORMAT, provider=provider, model=model, status=status, wrapped=error
+                )
+            # 400 without format indicators → treat as rate limit (Kimi/Moonshot pattern)
             return FailoverError(
-                reason=FailoverReason.FORMAT, provider=provider, model=model, status=status, wrapped=error
+                reason=FailoverReason.RATE_LIMIT, provider=provider, model=model, status=status, wrapped=error
             )
         if status in (503, 529):
             return FailoverError(

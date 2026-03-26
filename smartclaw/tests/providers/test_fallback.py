@@ -76,6 +76,18 @@ class TestClassifyError:
         result = classify_error(err, "openai", "gpt-4o")
         assert result.reason == FailoverReason.UNKNOWN
 
+    def test_400_no_format_indicators_is_rate_limit(self) -> None:
+        """HTTP 400 without format indicators → RATE_LIMIT (Kimi/Moonshot pattern)."""
+        err = _make_status_error(400, "some generic error")
+        result = classify_error(err, "kimi", "kimi-k2.5")
+        assert result.reason == FailoverReason.RATE_LIMIT
+
+    def test_400_empty_message_is_rate_limit(self) -> None:
+        """HTTP 400 with empty message → RATE_LIMIT."""
+        err = _make_status_error(400, "")
+        result = classify_error(err, "kimi", "kimi-k2.5")
+        assert result.reason == FailoverReason.RATE_LIMIT
+
 
 # ---------------------------------------------------------------------------
 # FailoverError.is_retriable
