@@ -195,7 +195,7 @@
 - [x] 8. Checkpoint — 确认 OTEL Traces 和脱敏测试通过
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 9. API 网关 — Pydantic 模型与 FastAPI 应用
+- [x] 9. API 网关 — Pydantic 模型与 FastAPI 应用
   - [x] 9.1 实现 Pydantic 请求/响应模型 (`smartclaw/smartclaw/gateway/models.py`)
     - 实现 `ChatRequest`: message (str, min_length=1), session_key (str | None), max_iterations (int | None)
     - 实现 `ChatResponse`: session_key, response, iterations, error
@@ -267,11 +267,11 @@
     - 测试 /health 和 /ready 端点 (Req 5.2, 5.3)
     - _Requirements: 1.1, 1.4, 2.1, 2.3, 2.4, 2.5, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 5.2, 5.3_
 
-- [ ] 10. Checkpoint — 确认 API 网关核心路由测试通过
+- [x] 10. Checkpoint — 确认 API 网关核心路由测试通过
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. API 网关 — 热重载与优雅关闭
-  - [ ] 11.1 实现热重载器 (`smartclaw/smartclaw/gateway/hot_reload.py`)
+- [-] 11. API 网关 — 热重载与优雅关闭
+  - [-] 11.1 实现热重载器 (`smartclaw/smartclaw/gateway/hot_reload.py`)
     - 实现 `HotReloader` 类：轮询配置文件 mtime，检测变化后重新加载
     - 实现 `start()` 启动轮询 asyncio.Task
     - 实现 `stop()` 停止轮询
@@ -289,7 +289,7 @@
     - 对任意无效 YAML 或不通过 Pydantic 校验的配置，HotReloader 保留当前配置不变并记录错误日志
     - **Validates: Requirements 7.3**
 
-  - [ ] 11.4 实现优雅关闭机制（集成到 `gateway/app.py` lifespan 和 `serve.py`）
+  - [-] 11.4 实现优雅关闭机制（集成到 `gateway/app.py` lifespan 和 `serve.py`）
     - 实现 `serve.py` uvicorn 启动入口：加载配置 → 创建 app → 注册 signal handler → 启动 uvicorn
     - SIGTERM/SIGINT 时停止接受新请求，等待进行中请求完成
     - 超时后强制终止并记录 structlog 警告
