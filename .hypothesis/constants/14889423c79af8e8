@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/gateway/routers/chat.py
+# hypothesis_version: 6.148.8
+
+[400, 500, '/api/chat', '/stream', 'chat', 'chat_invoke_error', 'chat_stream_error', 'data', 'done', 'error', 'event', 'final_answer', 'gateway.chat', 'iteration', 'iterations', 'response', 'session_key', 'started', 'status', 'thinking']

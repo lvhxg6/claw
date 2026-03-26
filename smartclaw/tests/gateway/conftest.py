@@ -45,6 +45,21 @@ def _build_test_app(
 
     @asynccontextmanager
     async def test_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        # Build a mock runtime that wraps the individual mocks
+        mock_runtime = MagicMock()
+        mock_runtime.graph = mock_graph
+        mock_runtime.registry = registry
+        mock_runtime.memory_store = mock_memory
+        mock_runtime.system_prompt = "You are SmartClaw, a helpful AI assistant."
+        mock_runtime.summarizer = None
+        mock_runtime.close = AsyncMock()
+        mock_runtime.tools = registry.get_all()
+
+        from smartclaw.providers.config import ModelConfig
+        mock_runtime.model_config = ModelConfig()
+
+        app.state.runtime = mock_runtime
+        # Backward compatibility aliases
         app.state.registry = registry
         app.state.memory_store = mock_memory
         app.state.graph = mock_graph

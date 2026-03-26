@@ -9,6 +9,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     session_key: str | None = None
     max_iterations: int | None = Field(default=None, ge=1)
+    model: str | None = Field(default=None, description="Optional model reference in 'provider/model' format")
 
 
 class ChatResponse(BaseModel):

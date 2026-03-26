@@ -51,24 +51,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         settings = SmartClawSettings()
         app.state.settings = settings
 
-    # Initialize ToolRegistry with system tools
-    from smartclaw.tools.registry import create_system_tools
-    import os
-    workspace = os.path.expanduser(settings.agent_defaults.workspace)
-    registry = create_system_tools(workspace)
-    app.state.registry = registry
+    # Initialize full agent stack via shared runtime
+    from smartclaw.agent.runtime import setup_agent_runtime
 
-    # Initialize MemoryStore
-    from smartclaw.memory.store import MemoryStore
-    db_path = os.path.expanduser(settings.memory.db_path)
-    memory_store = MemoryStore(db_path=db_path)
-    await memory_store.initialize()
-    app.state.memory_store = memory_store
+    runtime = await setup_agent_runtime(settings)
+    app.state.runtime = runtime
 
-    # Build Agent Graph with all system tools
-    from smartclaw.agent.graph import build_graph
-    graph = build_graph(model_config=settings.model, tools=registry.get_all())
-    app.state.graph = graph
+    # Backward compatibility aliases
+    app.state.graph = runtime.graph
+    app.state.registry = runtime.registry
+    app.state.memory_store = runtime.memory_store
 
     # Register hook handlers to broadcast events to debug UI
     import smartclaw.hooks.registry as hook_registry
@@ -81,7 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         hook_registry.register(hp, _debug_hook_handler)
 
     app.state.ready = True
-    logger.info("gateway_startup_complete", tools=registry.count)
+    logger.info("gateway_startup_complete", tools=runtime.registry.count)
 
     yield
 
@@ -89,10 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.ready = False
     for hp in hook_registry.VALID_HOOK_POINTS:
         hook_registry.unregister(hp, _debug_hook_handler)
-    try:
-        await memory_store.close()
-    except Exception:
-        pass
+    await runtime.close()
     logger.info("gateway_shutdown_complete")
 
 

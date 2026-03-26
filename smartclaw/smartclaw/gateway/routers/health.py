@@ -15,7 +15,8 @@ _VERSION = "0.1.0"
 @router.get("/health", response_model=HealthResponse)
 async def health(request: Request) -> HealthResponse:
     """Return service health information."""
-    registry = request.app.state.registry
+    runtime = request.app.state.runtime
+    registry = runtime.registry
     settings = getattr(request.app.state, "settings", None)
     model = getattr(settings, "model", None)
     model_name = getattr(model, "primary", "unknown") if model else "unknown"

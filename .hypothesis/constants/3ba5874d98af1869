@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/cli.py
+# hypothesis_version: 6.148.8
+
+['\n  ⚠️  No response', '\nBye!', '\n📖 Commands:', '\n🦀 SmartClaw CLI', '  /quit     — Exit\n', '  ⏳ thinking...', '--browser', '--no-memory', '--no-skills', '--no-sub-agent', '--session', '...', '/', '/clear', '/exit', '/help', '/history', '/q', '/quit', '/summary', '/tools', '0.1.0', '=', '?', 'Bye!', 'Enable browser tools', 'Memory:    OFF', 'You > ', '__main__', 'args', 'cli', 'error', 'exit', 'final_answer', 'messages', 'name', 'q', 'quit', 'store_true']

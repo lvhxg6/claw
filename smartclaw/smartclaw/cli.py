@@ -22,97 +22,40 @@ from smartclaw.config.settings import SmartClawSettings
 from smartclaw.credentials import load_dotenv
 from smartclaw.observability.logging import get_logger, setup_logging
 
-SYSTEM_PROMPT = """\
-You are SmartClaw, a helpful AI assistant with access to tools.
-
-Tool usage guidelines:
-- Use `web_fetch` to fetch content from a specific URL.
-- Use `web_search` to search the web. If it fails, fall back to `web_fetch`.
-- Use `exec_command` to run shell commands on the local system.
-- Use `read_file`, `write_file`, `edit_file`, `append_file`, `list_directory` for file operations.
-- Use `spawn_sub_agent` to delegate complex subtasks to a child agent (if available).
-- When a tool returns an error, try an alternative approach instead of giving up.
-- Always respond in the same language as the user's input.
-{skills_section}"""
-
 
 async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace) -> None:
     """Run the interactive agent loop with all features enabled by default."""
-    from smartclaw.agent.graph import build_graph, invoke
-    from smartclaw.tools.registry import ToolRegistry, create_system_tools
+    from smartclaw.agent.graph import invoke
+    from smartclaw.agent.runtime import setup_agent_runtime
 
     logger = get_logger("cli")
 
-    workspace = settings.agent_defaults.workspace
-    system_registry = create_system_tools(workspace)
+    # Apply --no-* flags to settings before runtime initialization
+    if args.no_memory:
+        settings.memory.enabled = False
+    if args.no_skills:
+        settings.skills.enabled = False
+    if args.no_sub_agent:
+        settings.sub_agent.enabled = False
 
-    # --- Skills (default ON) ---
-    skills_summary = ""
-    if settings.skills.enabled and not args.no_skills:
-        try:
-            from smartclaw.skills.loader import SkillsLoader
-            from smartclaw.skills.registry import SkillsRegistry
+    runtime = await setup_agent_runtime(settings)
 
-            ws_dir = settings.skills.workspace_dir.replace("{workspace}", workspace)
-            loader = SkillsLoader(workspace_dir=ws_dir, global_dir=settings.skills.global_dir)
-            skills_reg = SkillsRegistry(loader=loader, tool_registry=system_registry)
-            skills_reg.load_and_register_all()
-            skills_summary = loader.build_skills_summary()
-            if skills_summary:
-                logger.info("skills_loaded", count=len(skills_reg.list_skills()))
-        except Exception as exc:
-            logger.warning("skills_load_failed", error=str(exc))
+    graph = runtime.graph
+    memory_store = runtime.memory_store
+    summarizer = runtime.summarizer
+    prompt = runtime.system_prompt
+    tools = runtime.tools
 
-    # --- Sub-Agent (default ON) ---
-    if settings.sub_agent.enabled and not args.no_sub_agent:
-        try:
-            from smartclaw.agent.sub_agent import SpawnSubAgentTool
-
-            sem = asyncio.Semaphore(settings.sub_agent.max_concurrent)
-            tool = SpawnSubAgentTool(
-                default_model=settings.model.primary,
-                max_depth=settings.sub_agent.max_depth,
-                timeout_seconds=settings.sub_agent.default_timeout_seconds,
-                semaphore=sem,
-                concurrency_timeout=float(settings.sub_agent.concurrency_timeout_seconds),
-            )
-            system_registry.register(tool)
-        except Exception as exc:
-            logger.warning("sub_agent_setup_failed", error=str(exc))
-
-    tools = system_registry.get_all()
-    prompt = SYSTEM_PROMPT.format(
-        skills_section=f"\n\nAvailable skills:\n{skills_summary}" if skills_summary else ""
-    )
-
-    # --- Memory (default ON, auto session) ---
-    memory_store = None
-    summarizer = None
+    # Session key (only when memory is active)
     session_key = None
-
-    if settings.memory.enabled and not args.no_memory:
+    if memory_store is not None:
         session_key = args.session or f"cli-{uuid.uuid4().hex[:8]}"
-        from smartclaw.memory.store import MemoryStore
-        from smartclaw.memory.summarizer import AutoSummarizer
-
-        memory_store = MemoryStore(db_path=settings.memory.db_path)
-        await memory_store.initialize()
-        summarizer = AutoSummarizer(
-            store=memory_store, model_config=settings.model,
-            message_threshold=settings.memory.summary_threshold,
-            keep_recent=settings.memory.keep_recent,
-            token_percent_threshold=settings.memory.summarize_token_percent,
-            context_window=settings.memory.context_window,
-        )
-
-    graph = build_graph(settings.model, tools=tools)
-
 
     # --- Banner ---
     print("\n🦀 SmartClaw CLI")
     print("=" * 50)
     print(f"Model:     {settings.model.primary}")
-    print(f"Tools:     {len(system_registry.get_all())} ({', '.join(system_registry.list_tools())})")
+    print(f"Tools:     {len(runtime.tools)} ({', '.join(runtime.tool_names)})")
     if session_key:
         hist = await memory_store.get_history(session_key) if memory_store else []
         summ = await memory_store.get_summary(session_key) if memory_store else ""
@@ -121,8 +64,8 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
             print(f"  Summary: {summ[:80]}...")
     else:
         print("Memory:    OFF")
-    print(f"Skills:    {'ON' if skills_summary else 'OFF'}")
-    print(f"Sub-Agent: {'ON' if system_registry.get('spawn_sub_agent') else 'OFF'}")
+    print(f"Skills:    {'ON' if 'Available skills:' in runtime.system_prompt else 'OFF'}")
+    print(f"Sub-Agent: {'ON' if 'spawn_sub_agent' in runtime.tool_names else 'OFF'}")
     print("=" * 50)
     print("Commands: /history /summary /clear /tools /help /quit")
     print()
@@ -224,8 +167,7 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
         except Exception as e:
             print(f"\n❌ Exception: {e}\n")
 
-    if memory_store:
-        await memory_store.close()
+    await runtime.close()
 
 
 def main() -> None:
