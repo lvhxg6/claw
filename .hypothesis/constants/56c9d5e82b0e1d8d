@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/observability/redaction.py
+# hypothesis_version: 6.148.8
+
+[1024, 'API_KEY', 'PASSWORD', 'PRIVATE_KEY', 'SECRET', 'TOKEN', '[REDACTED]', '^key-', '^sk-', '^token-']

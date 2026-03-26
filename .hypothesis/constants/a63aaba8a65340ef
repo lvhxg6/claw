@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/hooks/events.py
+# hypothesis_version: 6.148.8
+
+[0.0, 'agent:end', 'agent:start', 'hook_point', 'llm:after', 'llm:before', 'session:end', 'session:start', 'tool:after', 'tool:before']

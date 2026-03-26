@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/browser/session.py
+# hypothesis_version: 6.148.8
+
+[200, 500, 'GET', 'about:blank', 'browser.session', 'console', 'log', 'method', 'pageerror', 'request', 'resource_type', 'tab_close_failed', 'tab_closed', 'tab_created', 'tab_switched', 'text', 'type', 'url']

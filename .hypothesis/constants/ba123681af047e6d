@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/observability/tracing.py
+# hypothesis_version: 6.148.8
+
+[256, '_root_ctx_var', '_root_span_var', 'agent.invoke', 'agent.run', 'end', 'error', 'grpc', 'has_tool_calls', 'llm.call', 'llm.called', 'max_iterations', 'message_count', 'model', 'phase', 'service.name', 'session_key', 'start', 'success', 'tool.executed', 'tool_name', 'unknown', 'user_message']

@@ -82,6 +82,33 @@ class MultiAgentSettings(BaseSettings):
     roles: list[AgentRoleConfig] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# P2A Settings models
+# ---------------------------------------------------------------------------
+
+
+class GatewaySettings(BaseSettings):
+    """API Gateway configuration."""
+
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8000
+    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    shutdown_timeout: int = 30
+    reload_interval: int = 5
+
+
+class ObservabilitySettings(BaseSettings):
+    """Observability configuration."""
+
+    tracing_enabled: bool = False
+    otlp_endpoint: str = "http://localhost:4318"
+    otlp_protocol: str = "http/protobuf"
+    service_name: str = "smartclaw"
+    sample_rate: float = 1.0
+    redact_sensitive: bool = True
+
+
 class SmartClawSettings(BaseSettings):
     """SmartClaw root configuration schema.
 
@@ -108,3 +135,7 @@ class SmartClawSettings(BaseSettings):
     skills: SkillsSettings = Field(default_factory=SkillsSettings)
     sub_agent: SubAgentSettings = Field(default_factory=SubAgentSettings)
     multi_agent: MultiAgentSettings = Field(default_factory=MultiAgentSettings)
+
+    # P2A fields
+    gateway: GatewaySettings = Field(default_factory=GatewaySettings)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)

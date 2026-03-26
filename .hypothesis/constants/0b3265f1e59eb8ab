@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/shell.py
+# hypothesis_version: 6.148.8
+
+[10000, '(no output)', 'Timeout in seconds', 'Working directory', '\\bchown\\b', '\\bdd\\s+if=', '\\bkill\\b', '\\bkillall\\b', '\\bmkfs\\b', '\\bpkill\\b', '\\bpoweroff\\b', '\\breboot\\b', '\\brm\\s+-[rf]{1,2}\\b', '\\bshutdown\\b', '\\bsudo\\b', 'exec_command', 'replace']

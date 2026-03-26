@@ -19,6 +19,11 @@ dependencies = [
     "tavily-python>=0.3.0",
     "mcp>=1.9",
     "aiosqlite>=0.20.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp>=1.25.0",
+    "sse-starlette>=2.0.0",
 ]
 
 [project.optional-dependencies]

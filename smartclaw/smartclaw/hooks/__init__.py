@@ -1,0 +1,1 @@
+"""SmartClaw lifecycle hooks module."""

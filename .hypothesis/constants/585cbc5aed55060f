@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/browser/engine.py
+# hypothesis_version: 6.148.8
+
+[10.0, 30.0, 720, 1280, 'Proxy server URL', 'Run in headless mode', 'User-Agent override', 'args', 'browser.engine', 'browser_connected', 'browser_connecting', 'browser_launched', 'browser_launching', 'headless', 'height', 'launch timed out', 'proxy', 'server', 'user_agent', 'viewport', 'width']

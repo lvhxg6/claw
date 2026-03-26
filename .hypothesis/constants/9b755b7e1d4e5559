@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/mcp_tool.py
+# hypothesis_version: 6.148.8
+
+[16777619, 2166136261, 4294967295, '08x', 'MCPToolInput', 'Use async', '[^a-z0-9_\\-]', '_', '_{2,}', 'array', 'boolean', 'integer', 'mcp_', 'number', 'object', 'properties', 'required', 'string', 'tools.mcp_tool', 'type', 'utf-8']
