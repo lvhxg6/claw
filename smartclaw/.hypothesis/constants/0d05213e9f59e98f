@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/hooks/registry.py
+# hypothesis_version: 6.148.8
+
+['__name__', 'agent:end', 'agent:start', 'hook_handler_error', 'hooks.registry', 'llm:after', 'llm:before', 'session:end', 'session:start', 'tool:after', 'tool:before']

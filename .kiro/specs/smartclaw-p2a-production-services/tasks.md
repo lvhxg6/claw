@@ -270,8 +270,8 @@
 - [x] 10. Checkpoint — 确认 API 网关核心路由测试通过
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 11. API 网关 — 热重载与优雅关闭
-  - [-] 11.1 实现热重载器 (`smartclaw/smartclaw/gateway/hot_reload.py`)
+- [x] 11. API 网关 — 热重载与优雅关闭
+  - [x] 11.1 实现热重载器 (`smartclaw/smartclaw/gateway/hot_reload.py`)
     - 实现 `HotReloader` 类：轮询配置文件 mtime，检测变化后重新加载
     - 实现 `start()` 启动轮询 asyncio.Task
     - 实现 `stop()` 停止轮询
@@ -279,24 +279,24 @@
     - 实现 `_reload()` 重新加载：解析 YAML → Pydantic 校验 → 更新 app.state；校验失败保留旧配置并记录错误；成功时 emit config.reloaded 诊断事件
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ] 11.2 编写属性测试：有效配置变更触发热重载 (`tests/gateway/test_hot_reload_props.py`)
+  - [x] 11.2 编写属性测试：有效配置变更触发热重载 (`tests/gateway/test_hot_reload_props.py`)
     - **Property 6: 有效配置变更触发热重载**
     - 对任意有效 YAML 配置文件变更，HotReloader 在下一个轮询周期内检测到变更并成功更新 SmartClawSettings
     - **Validates: Requirements 7.2**
 
-  - [ ] 11.3 编写属性测试：无效配置保留当前设置 (`tests/gateway/test_hot_reload_props.py`)
+  - [x] 11.3 编写属性测试：无效配置保留当前设置 (`tests/gateway/test_hot_reload_props.py`)
     - **Property 7: 无效配置保留当前设置**
     - 对任意无效 YAML 或不通过 Pydantic 校验的配置，HotReloader 保留当前配置不变并记录错误日志
     - **Validates: Requirements 7.3**
 
-  - [-] 11.4 实现优雅关闭机制（集成到 `gateway/app.py` lifespan 和 `serve.py`）
+  - [x] 11.4 实现优雅关闭机制（集成到 `gateway/app.py` lifespan 和 `serve.py`）
     - 实现 `serve.py` uvicorn 启动入口：加载配置 → 创建 app → 注册 signal handler → 启动 uvicorn
     - SIGTERM/SIGINT 时停止接受新请求，等待进行中请求完成
     - 超时后强制终止并记录 structlog 警告
     - lifespan shutdown 阶段：关闭 MemoryStore、释放 ToolRegistry、flush OTEL spans、停止 HotReloader
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 11.5 编写单元测试 (`tests/gateway/test_hot_reload.py`)
+  - [x] 11.5 编写单元测试 (`tests/gateway/test_hot_reload.py`)
     - 测试 mtime 变化检测 (Req 7.1)
     - 测试 reload 成功更新配置 (Req 7.2)
     - 测试 reload 失败保留旧配置 (Req 7.3)
@@ -304,24 +304,24 @@
     - 测试 start/stop 生命周期
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 12. Checkpoint — 确认热重载与优雅关闭测试通过
+- [x] 12. Checkpoint — 确认热重载与优雅关闭测试通过
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Agent Graph 集成 — Hook 触发与诊断事件埋点
-  - [ ] 13.1 修改 `agent/graph.py` 插入 Hook 触发和诊断事件 emit
+- [x] 13. Agent Graph 集成 — Hook 触发与诊断事件埋点
+  - [x] 13.1 修改 `agent/graph.py` 插入 Hook 触发和诊断事件 emit
     - `invoke()` 函数首部插入 `hook.trigger("agent:start", AgentStartEvent(...))` 和 `diagnostic_bus.emit("agent.run", {"phase": "start", ...})`
     - `invoke()` 函数尾部插入 `hook.trigger("agent:end", AgentEndEvent(...))` 和 `diagnostic_bus.emit("agent.run", {"phase": "end", ...})`
     - `_llm_call_with_fallback()` 前后插入 `hook.trigger("llm:before/after", ...)` 和 `diagnostic_bus.emit("llm.called", ...)`
     - 所有 hook trigger 和 diagnostic emit 使用 try/except 包裹，确保不影响正常执行流
     - _Requirements: 11.1, 11.2, 11.5, 11.6, 11.7, 19.1, 19.2, 19.4, 19.5_
 
-  - [ ] 13.2 修改 `agent/nodes.py` 插入 Hook 触发和诊断事件 emit
+  - [x] 13.2 修改 `agent/nodes.py` 插入 Hook 触发和诊断事件 emit
     - `action_node()` 每个 tool call 前后插入 `hook.trigger("tool:before/after", ...)` 和 `diagnostic_bus.emit("tool.executed", ...)`
     - `reasoning_node()` LLM 调用前后插入 `hook.trigger("llm:before/after", ...)` 和 `diagnostic_bus.emit("llm.called", ...)`
     - 所有 hook trigger 和 diagnostic emit 使用 try/except 包裹
     - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.7, 19.3, 19.4, 19.5_
 
-  - [ ] 13.3 编写 Hook 集成测试 (`tests/hooks/test_integration.py`)
+  - [x] 13.3 编写 Hook 集成测试 (`tests/hooks/test_integration.py`)
     - 测试 invoke 触发 agent:start 和 agent:end hook (Req 11.1, 11.2)
     - 测试 action_node 触发 tool:before 和 tool:after hook (Req 11.3, 11.4)
     - 测试 reasoning_node 触发 llm:before 和 llm:after hook (Req 11.5, 11.6)
@@ -329,11 +329,11 @@
     - 测试诊断事件 emit 与 hook trigger 同步触发 (Req 19.1, 19.3, 19.4)
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 19.1, 19.3, 19.4_
 
-- [ ] 14. Checkpoint — 确认 Agent Graph 集成测试通过
+- [x] 14. Checkpoint — 确认 Agent Graph 集成测试通过
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. 向后兼容验证与最终集成
-  - [ ] 15.1 验证 P2A 模块向后兼容性
+- [x] 15. 向后兼容验证与最终集成
+  - [x] 15.1 验证 P2A 模块向后兼容性
     - 确认所有 P2A 模块禁用时（gateway.enabled=False, observability.tracing_enabled=False），系统行为与 P1 完全一致
     - 确认 P2A 模块未修改任何 P0/P1 模块接口（AgentState, build_graph, invoke, ToolRegistry, SmartClawSettings 现有字段, MemoryStore, SkillsLoader, SubAgent）
     - 确认 P2A 模块 import 使用 try/except 包裹，P2A 依赖未安装时静默降级
@@ -341,7 +341,7 @@
     - 确认诊断事件系统在 OTEL 禁用时也可用 (Req 20.5)
     - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
 
-  - [ ] 15.2 编写向后兼容集成测试 (`tests/test_backward_compat.py`)
+  - [x] 15.2 编写向后兼容集成测试 (`tests/test_backward_compat.py`)
     - 测试所有 P2A 开关关闭时 invoke 行为与 P1 一致 (Req 20.1)
     - 测试 SmartClawSettings 现有 P0/P1 字段未被修改 (Req 20.2)
     - 测试 P2A 新增字段默认禁用，兼容现有 YAML 配置 (Req 20.3)
@@ -349,7 +349,7 @@
     - 测试诊断事件系统在 OTEL 禁用时可用 (Req 20.5)
     - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
 
-- [ ] 16. Final checkpoint — 确认全部测试通过
+- [x] 16. Final checkpoint — 确认全部测试通过
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
