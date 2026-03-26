@@ -36,7 +36,11 @@ case "$MODE" in
         echo "Swagger: http://localhost:8000/docs"
         echo "================================"
         echo ""
-        uv run python -m smartclaw.serve
+        uv run python -m smartclaw.serve &
+        echo $! > /tmp/smartclaw.pid
+        echo "PID:     $(cat /tmp/smartclaw.pid)"
+        wait
+        rm -f /tmp/smartclaw.pid
         ;;
     cli)
         echo "模式:    交互式 CLI"
