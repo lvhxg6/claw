@@ -20,7 +20,13 @@ logger = structlog.get_logger(component="serve")
 def main() -> None:
     """Load config → create app → register signal handlers → start uvicorn."""
     from smartclaw.config.loader import load_config
+    from smartclaw.credentials import load_dotenv
     from smartclaw.gateway.app import create_app
+
+    # ------------------------------------------------------------------
+    # Load environment variables from .env
+    # ------------------------------------------------------------------
+    load_dotenv()
 
     # ------------------------------------------------------------------
     # Load configuration
