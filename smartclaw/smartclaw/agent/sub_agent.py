@@ -51,6 +51,7 @@ class SubAgentConfig:
         max_iterations: Max reasoning-action loop iterations (default 25).
         timeout_seconds: Execution timeout in seconds (default 300).
         max_depth: Maximum nesting depth for recursive sub-agents (default 3).
+        fallbacks: Fallback model references inherited from parent (default empty).
     """
 
     task: str
@@ -60,6 +61,7 @@ class SubAgentConfig:
     max_iterations: int = 25
     timeout_seconds: int = 300
     max_depth: int = 3
+    fallbacks: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         """Validate required fields. Raises ValueError if invalid."""
@@ -79,15 +81,20 @@ class EphemeralStore:
 
     Auto-truncates at ``max_size`` to prevent memory accumulation
     in long-running sub-agents. Does NOT persist to disk.
+
+    When ``compact_threshold`` is set (default 0.8), triggers L2-style
+    soft-trimming of middle ToolMessages before truncation kicks in.
     """
 
-    def __init__(self, max_size: int = 50) -> None:
+    def __init__(self, max_size: int = 50, compact_threshold: float = 0.8) -> None:
         self._max_size = max_size
+        self._compact_threshold = compact_threshold
         self._messages: list[BaseMessage] = []
 
     def add_message(self, message: BaseMessage) -> None:
-        """Append a message, auto-truncating if max_size is exceeded."""
+        """Append a message, compact if threshold exceeded, then truncate."""
         self._messages.append(message)
+        self._compact_if_needed()
         self._truncate_if_needed()
 
     def get_history(self) -> list[BaseMessage]:
@@ -111,6 +118,35 @@ class EphemeralStore:
         """Return the configured max_size."""
         return self._max_size
 
+    def _compact_if_needed(self) -> None:
+        """Soft-trim middle ToolMessages when count exceeds compact_threshold."""
+        threshold = int(self._max_size * self._compact_threshold)
+        if len(self._messages) <= threshold:
+            return
+
+        # Preserve first 2 and last 5 messages (like L2 defaults)
+        keep_head = min(2, len(self._messages))
+        keep_tail = min(5, len(self._messages))
+        prune_start = keep_head
+        prune_end = max(len(self._messages) - keep_tail, prune_start)
+
+        if prune_start >= prune_end:
+            return
+
+        from langchain_core.messages import ToolMessage as _TM
+        import copy
+
+        for i in range(prune_start, prune_end):
+            msg = self._messages[i]
+            if isinstance(msg, _TM):
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                if len(content) > 800:
+                    # Soft-trim: keep first 500 + last 300 chars
+                    trimmed = content[:500] + "..." + content[-300:]
+                    new_msg = copy.copy(msg)
+                    new_msg.content = trimmed
+                    self._messages[i] = new_msg
+
     def _truncate_if_needed(self) -> None:
         """Internal: truncate to max_size if exceeded."""
         if len(self._messages) > self._max_size:
@@ -129,6 +165,7 @@ async def spawn_sub_agent(
     parent_depth: int = 0,
     semaphore: asyncio.Semaphore | None = None,
     concurrency_timeout: float = 30.0,
+    context_engine: Any | None = None,
 ) -> str:
     """Spawn a sub-agent to execute a delegated task.
 
@@ -136,15 +173,18 @@ async def spawn_sub_agent(
         1. Validate config
         2. Depth check: parent_depth >= config.max_depth → DepthLimitExceededError
         3. Semaphore acquire with timeout → ConcurrencyTimeoutError
-        4. Build graph via build_graph with config.model and config.tools
-        5. Run with asyncio.timeout(config.timeout_seconds)
-        6. Return final_answer or error string
+        4. Call context_engine.prepare_subagent_spawn (if available)
+        5. Build graph via build_graph with config.model and config.tools
+        6. Run with asyncio.timeout(config.timeout_seconds)
+        7. Call context_engine.on_subagent_ended (if available)
+        8. Return final_answer or error string
 
     Args:
         config: Sub-agent configuration.
         parent_depth: Current nesting depth of the parent agent.
         semaphore: Optional asyncio.Semaphore for concurrency control.
         concurrency_timeout: Seconds to wait for a semaphore slot.
+        context_engine: Optional ContextEngine for sub-agent lifecycle hooks.
 
     Returns:
         The sub-agent's final response string.
@@ -175,14 +215,23 @@ async def spawn_sub_agent(
             )
 
     try:
-        # 3. Build graph (lazy imports to avoid circular deps)
+        # 3. ContextEngine: prepare_subagent_spawn hook
+        if context_engine is not None:
+            try:
+                await context_engine.prepare_subagent_spawn(
+                    config.task, {"model": config.model, "depth": parent_depth}
+                )
+            except Exception:
+                pass  # non-critical
+
+        # 4. Build graph (lazy imports to avoid circular deps)
         from smartclaw.agent import graph as _graph_mod
         from smartclaw.providers.config import ModelConfig, parse_model_ref
 
         provider, model_name = parse_model_ref(config.model)
         model_config = ModelConfig(
             primary=config.model,
-            fallbacks=[],
+            fallbacks=list(config.fallbacks),
             temperature=0.0,
         )
 
@@ -217,11 +266,22 @@ async def spawn_sub_agent(
         final_answer = result.get("final_answer")
         if final_answer:
             logger.info("sub_agent_complete", answer_len=len(final_answer))
+            # ContextEngine: on_subagent_ended hook
+            if context_engine is not None:
+                try:
+                    await context_engine.on_subagent_ended(config.task, final_answer)
+                except Exception:
+                    pass
             return final_answer
 
         error = result.get("error")
         if error:
             logger.error("sub_agent_error", error=error)
+            if context_engine is not None:
+                try:
+                    await context_engine.on_subagent_ended(config.task, f"Error: {error}")
+                except Exception:
+                    pass
             return f"Error: {error}"
 
         return "Sub-agent completed without producing a final answer."
@@ -264,9 +324,15 @@ class SpawnSubAgentTool(BaseTool):
 
     name: str = "spawn_sub_agent"
     description: str = (
-        "Delegate a subtask to a sub-agent. "
-        "Provide a clear task description. "
-        "Optionally specify a model reference."
+        "Delegate a subtask to an independent sub-agent. "
+        "USE WHEN: complex subtask needing isolated context; "
+        "specialized task requiring different tools; "
+        "independent subtasks that can run in parallel. "
+        "DO NOT USE WHEN: simple single-step tool call; "
+        "task needs current conversation context; "
+        "result requires tight interaction with current dialogue. "
+        "TASK DESC GUIDE: include clear goal, necessary background, "
+        "and expected output format. Optionally specify a model reference."
     )
     args_schema: type[BaseModel] = SpawnSubAgentInput
 
@@ -279,6 +345,10 @@ class SpawnSubAgentTool(BaseTool):
     max_iterations: int = 25
     timeout_seconds: int = 300
     available_tools: list[BaseTool] = Field(default_factory=list)
+    parent_model_config: Any | None = Field(
+        default=None,
+        description="Parent Agent's ModelConfig for fallback inheritance",
+    )
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -289,6 +359,11 @@ class SpawnSubAgentTool(BaseTool):
         """Spawn a sub-agent for the given task."""
         effective_model = model if model else self.default_model
 
+        # Inherit fallbacks from parent ModelConfig
+        fallbacks: list[str] = []
+        if self.parent_model_config is not None:
+            fallbacks = list(getattr(self.parent_model_config, "fallbacks", []))
+
         config = SubAgentConfig(
             task=task,
             model=effective_model,
@@ -296,6 +371,7 @@ class SpawnSubAgentTool(BaseTool):
             max_iterations=self.max_iterations,
             timeout_seconds=self.timeout_seconds,
             max_depth=self.max_depth,
+            fallbacks=fallbacks,
         )
 
         try:
