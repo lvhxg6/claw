@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SmartClaw Debug UI</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; font-size: 16px; overflow: hidden; }
@@ -23,7 +24,20 @@
   #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 80%; padding: 10px 14px; border-radius: 10px; font-size: 15px; line-height: 1.5; word-break: break-word; }
   .msg.user { background: #1d4ed8; color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
-  .msg.assistant { background: #1e1e1e; color: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #2a2a2a; white-space: pre-wrap; }
+  .msg.assistant { background: #1e1e1e; color: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #2a2a2a; }
+  .msg.assistant .md-content { white-space: normal; }
+  .msg.assistant .md-content h1,.msg.assistant .md-content h2,.msg.assistant .md-content h3 { margin: 8px 0 4px; color: #fff; }
+  .msg.assistant .md-content h1 { font-size: 1.2em; } .msg.assistant .md-content h2 { font-size: 1.1em; } .msg.assistant .md-content h3 { font-size: 1em; }
+  .msg.assistant .md-content p { margin: 4px 0; }
+  .msg.assistant .md-content ul,.msg.assistant .md-content ol { margin: 4px 0 4px 20px; }
+  .msg.assistant .md-content code { background: #2a2a2a; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+  .msg.assistant .md-content pre { background: #141414; padding: 8px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+  .msg.assistant .md-content pre code { background: none; padding: 0; }
+  .msg.assistant .md-content table { border-collapse: collapse; margin: 6px 0; width: 100%; }
+  .msg.assistant .md-content th,.msg.assistant .md-content td { border: 1px solid #333; padding: 4px 8px; font-size: 0.9em; }
+  .msg.assistant .md-content th { background: #1a1a1a; color: #aaa; }
+  .msg.assistant .md-content strong { color: #fff; }
+  .msg.assistant .md-content a { color: #60a5fa; }
   .msg.assistant.streaming { border-color: #3b82f6; }
   .msg.tool-call { background: #1a2a1a; border: 1px solid #2d4a2d; color: #86efac; font-size: 13px; font-family: monospace; align-self: flex-start; max-width: 90%; }
   .msg.tool-result { background: #1a1a2a; border: 1px solid #2d2d4a; color: #93c5fd; font-size: 13px; font-family: monospace; align-self: flex-start; max-width: 90%; }
@@ -256,9 +270,9 @@ function handleEvent(type, data) {
   if (type === 'thinking') {
     updateStream('⏳ 思考中...（第 ' + (data.iteration || 0) + ' 轮）');
   } else if (type === 'tool_call') {
-    addMsg('tool-call', '🔧 ' + (data.tool_name || '?') + (data.tool_call_id ? ' [' + data.tool_call_id + ']' : '') + '\n' + JSON.stringify(data.args || {}, null, 2));
+    addMsgBefore(streamEl, 'tool-call', '🔧 ' + (data.tool_name || '?') + (data.tool_call_id ? ' [' + data.tool_call_id + ']' : '') + '\n' + JSON.stringify(data.args || {}, null, 2));
   } else if (type === 'tool_result') {
-    addMsg('tool-result', (data.success ? '✅' : '❌') + ' ' + (data.tool_name || '?') + ' (' + (data.duration_ms || 0).toFixed(0) + 'ms)\n' + (data.result || ''));
+    addMsgBefore(streamEl, 'tool-result', (data.success ? '✅' : '❌') + ' ' + (data.tool_name || '?') + ' (' + (data.duration_ms || 0).toFixed(0) + 'ms)\n' + (data.result || ''));
   } else if (type === 'iteration') {
     updateStream('🔄 迭代 ' + (data.current || 0) + '/' + (data.max || 0));
   } else if (type === 'done') {
@@ -266,7 +280,7 @@ function handleEvent(type, data) {
     const sk = data.session_key;
     const iters = data.iterations || 0;
     if (sk) { sessionKey = sk; updateSessionUI(); }
-    updateStream(response || '(无响应)');
+    updateStream(response || '(无响应)', true);
     if (streamEl) {
       streamEl.classList.remove('streaming');
       const cur = streamEl.querySelector('.cursor');
@@ -286,6 +300,20 @@ function handleEvent(type, data) {
       updateStream(data.response || data.final_answer);
     }
   }
+}
+
+function addMsgBefore(beforeEl, type, text) {
+  const c = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg ' + type;
+  el.innerHTML = '<div class="msg-label">' + (type === 'tool-call' ? 'TOOL CALL' : 'TOOL RESULT') + '</div><pre style="white-space:pre-wrap;word-break:break-all;font-size:10px;margin:0">' + esc(text) + '</pre>';
+  if (beforeEl && beforeEl.parentNode === c) {
+    c.insertBefore(el, beforeEl);
+  } else {
+    c.appendChild(el);
+  }
+  c.scrollTop = c.scrollHeight;
+  return el;
 }
 
 function addMsg(type, text, streaming) {
@@ -310,10 +338,17 @@ function addMsg(type, text, streaming) {
   return el;
 }
 
-function updateStream(text) {
+function updateStream(text, renderMd) {
   if (!streamEl) return;
   const s = streamEl.querySelector('.msg-text');
-  if (s) s.textContent = text;
+  if (s) {
+    if (renderMd && typeof marked !== 'undefined') {
+      s.className = 'md-content';
+      s.innerHTML = marked.parse(text);
+    } else {
+      s.textContent = text;
+    }
+  }
   document.getElementById('messages').scrollTop = 99999;
 }
 
