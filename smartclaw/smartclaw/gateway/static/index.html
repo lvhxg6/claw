@@ -254,11 +254,13 @@ async function sendMessage() {
 
 function handleEvent(type, data) {
   if (type === 'thinking') {
-    updateStream('⏳ 思考中...');
+    updateStream('⏳ 思考中...（第 ' + (data.iteration || 0) + ' 轮）');
   } else if (type === 'tool_call') {
-    addMsg('tool-call', '🔧 ' + (data.tool_name || '?') + '\n' + JSON.stringify(data.args || {}, null, 2));
+    addMsg('tool-call', '🔧 ' + (data.tool_name || '?') + (data.tool_call_id ? ' [' + data.tool_call_id + ']' : '') + '\n' + JSON.stringify(data.args || {}, null, 2));
   } else if (type === 'tool_result') {
-    addMsg('tool-result', '📤 ' + String(data.result || '').slice(0, 300));
+    addMsg('tool-result', (data.success ? '✅' : '❌') + ' ' + (data.tool_name || '?') + ' (' + (data.duration_ms || 0).toFixed(0) + 'ms)\n' + (data.result || ''));
+  } else if (type === 'iteration') {
+    updateStream('🔄 迭代 ' + (data.current || 0) + '/' + (data.max || 0));
   } else if (type === 'done') {
     const response = data.response || data.final_answer || '';
     const sk = data.session_key;
