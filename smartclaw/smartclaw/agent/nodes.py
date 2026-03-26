@@ -215,7 +215,7 @@ async def action_node(
                     tool_name=tool_name,
                     tool_args=tool_args,
                     tool_call_id=tool_call_id,
-                    result=content[:256],
+                    result=content[:2048],
                     duration_ms=_tool_duration_ms,
                     error=None,
                 )
