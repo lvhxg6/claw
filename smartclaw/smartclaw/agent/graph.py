@@ -59,12 +59,33 @@ async def _llm_call_with_fallback(
     Builds candidates from model_config, creates a ChatModel per candidate,
     optionally binds tools, and invokes via the fallback chain.
     """
+    import time as _time
+
     # Build candidate list: primary + fallbacks
     primary_provider, primary_model = parse_model_ref(model_config.primary)
     candidates = [FallbackCandidate(provider=primary_provider, model=primary_model)]
     for ref in model_config.fallbacks:
         p, m = parse_model_ref(ref)
         candidates.append(FallbackCandidate(provider=p, model=m))
+
+    # P2A: trigger llm:before hook and emit llm.called diagnostic event (phase=start)
+    _llm_start = _time.monotonic()
+    try:
+        import smartclaw.hooks.registry as _hook_registry
+        from smartclaw.hooks.events import LLMBeforeEvent
+        _llm_before_event = LLMBeforeEvent(
+            model=model_config.primary,
+            message_count=len(messages),
+            has_tools=bool(tools),
+        )
+        await _hook_registry.trigger("llm:before", _llm_before_event)
+    except Exception:
+        pass
+    try:
+        from smartclaw.observability import diagnostic_bus as _dbus
+        await _dbus.emit("llm.called", {"phase": "start", "model": model_config.primary, "message_count": len(messages)})
+    except Exception:
+        pass
 
     async def run(provider: str, model: str) -> AIMessage:
         llm = ProviderFactory.create(
@@ -92,6 +113,32 @@ async def _llm_call_with_fallback(
         return result
 
     fb_result = await fallback_chain.execute(candidates, run)
+
+    # P2A: trigger llm:after hook and emit llm.called diagnostic event (phase=end)
+    _llm_duration_ms = (_time.monotonic() - _llm_start) * 1000.0
+    try:
+        import smartclaw.hooks.registry as _hook_registry
+        from smartclaw.hooks.events import LLMAfterEvent
+        _llm_after_event = LLMAfterEvent(
+            model=model_config.primary,
+            has_tool_calls=bool(fb_result.response.tool_calls),
+            duration_ms=_llm_duration_ms,
+            error=None,
+        )
+        await _hook_registry.trigger("llm:after", _llm_after_event)
+    except Exception:
+        pass
+    try:
+        from smartclaw.observability import diagnostic_bus as _dbus
+        await _dbus.emit("llm.called", {
+            "phase": "end",
+            "model": model_config.primary,
+            "duration_ms": _llm_duration_ms,
+            "has_tool_calls": bool(fb_result.response.tool_calls),
+        })
+    except Exception:
+        pass
+
     return fb_result.response
 
 
@@ -212,6 +259,24 @@ async def invoke(
         "sub_agent_depth": None,
     }
 
+    # P2A: trigger agent:start hook and emit agent.run diagnostic event
+    try:
+        import smartclaw.hooks.registry as _hook_registry
+        from smartclaw.hooks.events import AgentStartEvent
+        _start_event = AgentStartEvent(
+            session_key=session_key,
+            user_message=user_message[:256],
+            tools_count=0,
+        )
+        await _hook_registry.trigger("agent:start", _start_event)
+    except Exception:
+        pass
+    try:
+        from smartclaw.observability import diagnostic_bus as _dbus
+        await _dbus.emit("agent.run", {"phase": "start", "session_key": session_key, "user_message": user_message[:256]})
+    except Exception:
+        pass
+
     logger.info("invoke start", user_message=user_message[:100], max_iterations=_max, session_key=session_key)
     result = await graph.ainvoke(initial_state)
     logger.info("invoke done", iteration=result.get("iteration", 0))
@@ -225,6 +290,30 @@ async def invoke(
         if summarizer is not None:
             updated_history = await memory_store.get_history(session_key)
             await summarizer.maybe_summarize(session_key, updated_history)
+
+    # P2A: trigger agent:end hook and emit agent.run diagnostic event
+    try:
+        import smartclaw.hooks.registry as _hook_registry
+        from smartclaw.hooks.events import AgentEndEvent
+        _end_event = AgentEndEvent(
+            session_key=session_key,
+            final_answer=result.get("final_answer"),
+            iterations=result.get("iteration", 0),
+            error=result.get("error"),
+        )
+        await _hook_registry.trigger("agent:end", _end_event)
+    except Exception:
+        pass
+    try:
+        from smartclaw.observability import diagnostic_bus as _dbus
+        await _dbus.emit("agent.run", {
+            "phase": "end",
+            "session_key": session_key,
+            "iterations": result.get("iteration", 0),
+            "error": result.get("error"),
+        })
+    except Exception:
+        pass
 
     return result  # type: ignore[return-value]
 
