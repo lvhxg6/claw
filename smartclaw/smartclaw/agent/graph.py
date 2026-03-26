@@ -191,6 +191,11 @@ def build_graph(
     model_config: ModelConfig,
     tools: list[BaseTool],
     stream_callback: Callable[[str], None] | None = None,
+    tool_result_guard: Any | None = None,
+    session_pruner: Any | None = None,
+    summarizer: Any | None = None,
+    session_key: str | None = None,
+    loop_detector: Any | None = None,
 ) -> CompiledStateGraph:
     """Build a compiled LangGraph StateGraph for the ReAct agent loop.
 
@@ -198,6 +203,11 @@ def build_graph(
         model_config: Model configuration (primary, fallbacks, temperature, etc.).
         tools: List of LangChain Tool objects to bind to the LLM.
         stream_callback: Optional callback invoked with accumulated text during streaming.
+        tool_result_guard: Optional ToolResultGuard instance for L1 tool result truncation.
+        session_pruner: Optional SessionPruner instance for L2 session pruning.
+        summarizer: Optional AutoSummarizer instance for context overflow recovery.
+        session_key: Optional session key for force_compression on overflow.
+        loop_detector: Optional LoopDetector instance for loop detection.
 
     Returns:
         A compiled StateGraph ready for invocation.
@@ -214,10 +224,17 @@ def build_graph(
     )
 
     async def _reasoning(state: AgentState) -> dict[str, Any]:
-        return await reasoning_node(state, llm_call=llm_call, tools=tools or None)
+        return await reasoning_node(
+            state,
+            llm_call=llm_call,
+            tools=tools or None,
+            session_pruner=session_pruner,
+            summarizer=summarizer,
+            session_key=session_key,
+        )
 
     async def _action(state: AgentState) -> dict[str, Any]:
-        return await action_node(state, tools_by_name=tools_by_name)
+        return await action_node(state, tools_by_name=tools_by_name, tool_result_guard=tool_result_guard, loop_detector=loop_detector)
 
     # Build the graph
     graph = StateGraph(AgentState)
@@ -249,6 +266,7 @@ async def invoke(
     session_key: str | None = None,
     memory_store: Any | None = None,
     summarizer: Any | None = None,
+    context_engine: Any | None = None,
 ) -> AgentState:
     """Run the agent graph and return the final AgentState.
 
@@ -262,6 +280,8 @@ async def invoke(
         memory_store: Optional MemoryStore instance for loading/persisting history.
         summarizer: Optional AutoSummarizer instance for context building and
             summarization checks.
+        context_engine: Optional ContextEngine instance. When provided, used
+            instead of direct summarizer calls for assemble/after_turn.
 
     Returns:
         The final AgentState after the graph completes.
@@ -280,8 +300,12 @@ async def invoke(
         if history:
             messages.extend(history)
 
-        # Build context with summary prepended (if summarizer available)
-        if summarizer is not None:
+        # Build context: prefer context_engine, fall back to summarizer
+        if context_engine is not None:
+            messages = await context_engine.assemble(
+                messages, system_prompt=system_prompt
+            )
+        elif summarizer is not None:
             messages = await summarizer.build_context(
                 session_key, messages, system_prompt=system_prompt
             )
@@ -297,6 +321,7 @@ async def invoke(
         "session_key": session_key,
         "summary": None,
         "sub_agent_depth": None,
+        "token_stats": None,
     }
 
     # P2A: trigger agent:start hook and emit agent.run diagnostic event
@@ -327,7 +352,11 @@ async def invoke(
         for msg in result_messages:
             await memory_store.add_full_message(session_key, msg)
 
-        if summarizer is not None:
+        # Post-turn: prefer context_engine, fall back to summarizer
+        if context_engine is not None:
+            updated_history = await memory_store.get_history(session_key)
+            await context_engine.after_turn(session_key, updated_history)
+        elif summarizer is not None:
             updated_history = await memory_store.get_history(session_key)
             await summarizer.maybe_summarize(session_key, updated_history)
 
