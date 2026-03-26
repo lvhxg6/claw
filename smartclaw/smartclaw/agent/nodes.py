@@ -83,11 +83,12 @@ async def reasoning_node(
         return result
 
     except Exception as exc:
-        logger.error("reasoning_node error", iteration=iteration, error=str(exc))
+        error_msg = str(exc) or type(exc).__name__
+        logger.error("reasoning_node error", iteration=iteration, error=error_msg, error_type=type(exc).__name__)
         return {
-            "messages": [AIMessage(content=f"Error: {exc}")],
+            "messages": [AIMessage(content=f"Error: {error_msg}")],
             "iteration": iteration + 1,
-            "error": str(exc),
+            "error": error_msg,
         }
 
 
