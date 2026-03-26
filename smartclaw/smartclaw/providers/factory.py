@@ -18,7 +18,7 @@ from smartclaw.providers.config import ProviderSpec
 _KIMI_BASE_URL = "https://api.moonshot.cn/v1"
 
 # GLM API base URL (OpenAI-compatible via modelhub)
-_GLM_BASE_URL = "https://modelhub.ailemac.com"
+_GLM_BASE_URL = "https://modelhub.ailemac.com/v1"
 
 
 class ProviderFactory:
