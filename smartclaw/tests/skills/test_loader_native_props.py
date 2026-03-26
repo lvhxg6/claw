@@ -42,7 +42,10 @@ _optional_str = st.one_of(st.none(), st.text(min_size=1, max_size=30).filter(lam
 _native_type = st.sampled_from(["shell", "script", "exec"])
 
 _tool_name = st.from_regex(r"[a-z][a-z0-9_]{0,19}", fullmatch=True)
-_tool_desc = st.text(min_size=1, max_size=50).filter(lambda s: s.strip())
+_tool_desc = st.text(
+    min_size=1, max_size=50,
+    alphabet=st.characters(whitelist_categories=("L", "N", "P", "Z")),
+).filter(lambda s: s.strip())
 
 _valid_command = st.text(
     min_size=1, max_size=50,

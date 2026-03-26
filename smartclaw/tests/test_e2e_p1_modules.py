@@ -291,7 +291,7 @@ class TestSkillsLoaderE2E:
         bad_dir.mkdir(parents=True)
         (bad_dir / "skill.yaml").write_text("{{broken yaml", encoding="utf-8")
 
-        loader = SkillsLoader(workspace_dir=str(ws))
+        loader = SkillsLoader(workspace_dir=str(ws), global_dir=str(tmp_path / "no_global"))
         skills = loader.list_skills()
 
         assert len(skills) == 1
@@ -303,7 +303,7 @@ class TestSkillsLoaderE2E:
         self._create_skill(ws, "search-tool", "Web search", "pkg:search")
         self._create_skill(ws, "calc-tool", "Calculator", "pkg:calc")
 
-        loader = SkillsLoader(workspace_dir=str(ws))
+        loader = SkillsLoader(workspace_dir=str(ws), global_dir=str(tmp_path / "no_global"))
         summary = loader.build_skills_summary()
 
         assert "search-tool" in summary
