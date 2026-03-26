@@ -16,10 +16,14 @@ _VERSION = "0.1.0"
 async def health(request: Request) -> HealthResponse:
     """Return service health information."""
     registry = request.app.state.registry
+    settings = getattr(request.app.state, "settings", None)
+    model = getattr(settings, "model", None)
+    model_name = getattr(model, "primary", "unknown") if model else "unknown"
     return HealthResponse(
         status="ok",
         version=_VERSION,
         tools_count=registry.count,
+        model=model_name,
     )
 
 

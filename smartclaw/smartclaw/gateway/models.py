@@ -32,6 +32,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     tools_count: int
+    model: str = ""
 
 
 class SessionHistoryResponse(BaseModel):

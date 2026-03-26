@@ -6,136 +6,98 @@
 <title>SmartClaw Debug UI</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
-
-  /* Header */
-  header { background: #1a1a1a; border-bottom: 1px solid #2a2a2a; padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-  header h1 { font-size: 16px; font-weight: 600; color: #fff; }
-  #status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; flex-shrink: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; font-size: 13px; }
+  header { background: #1a1a1a; border-bottom: 1px solid #2a2a2a; padding: 8px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  header h1 { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; }
+  #status-dot { width: 7px; height: 7px; border-radius: 50%; background: #555; flex-shrink: 0; }
   #status-dot.ok { background: #22c55e; }
-  #status-dot.err { background: #ef4444; }
-  #status-text { font-size: 12px; color: #888; }
-  .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #2a2a2a; color: #aaa; }
+  #status-text { font-size: 11px; color: #888; }
+  .header-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #2a2a2a; color: #aaa; white-space: nowrap; }
   #model-badge { color: #60a5fa; }
-
-  /* Layout */
   .main { display: flex; flex: 1; min-height: 0; }
-
-  /* Left: Chat */
   .chat-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #2a2a2a; }
-  .panel-header { padding: 8px 14px; font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #1e1e1e; background: #141414; display: flex; align-items: center; gap: 8px; }
-  .panel-header .session-id { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: auto; cursor: pointer; }
-  .panel-header .session-id:hover { color: #888; }
-
-  #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .msg { max-width: 85%; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; word-break: break-word; }
-  .msg.user { background: #1d4ed8; color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
-  .msg.assistant { background: #1e1e1e; color: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 3px; border: 1px solid #2a2a2a; }
+  .panel-hdr { padding: 6px 10px; font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #1e1e1e; background: #141414; display: flex; align-items: center; gap: 6px; }
+  .panel-hdr .right { margin-left: auto; font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; cursor: pointer; }
+  .panel-hdr .right:hover { color: #888; }
+  #messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.45; word-break: break-word; }
+  .msg.user { background: #1d4ed8; color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
+  .msg.assistant { background: #1e1e1e; color: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #2a2a2a; white-space: pre-wrap; }
   .msg.assistant.streaming { border-color: #3b82f6; }
-  .msg.tool-call { background: #1a2a1a; border: 1px solid #2d4a2d; color: #86efac; font-size: 12px; font-family: monospace; align-self: flex-start; max-width: 95%; }
-  .msg.tool-result { background: #1a1a2a; border: 1px solid #2d2d4a; color: #93c5fd; font-size: 12px; font-family: monospace; align-self: flex-start; max-width: 95%; }
+  .msg.tool-call { background: #1a2a1a; border: 1px solid #2d4a2d; color: #86efac; font-size: 11px; font-family: monospace; align-self: flex-start; max-width: 90%; }
+  .msg.tool-result { background: #1a1a2a; border: 1px solid #2d2d4a; color: #93c5fd; font-size: 11px; font-family: monospace; align-self: flex-start; max-width: 90%; }
   .msg.error { background: #2a1a1a; border: 1px solid #4a2d2d; color: #fca5a5; align-self: flex-start; }
-  .msg-label { font-size: 10px; color: #555; margin-bottom: 4px; }
-  .cursor { display: inline-block; width: 2px; height: 14px; background: #60a5fa; animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
+  .msg-label { font-size: 9px; color: #555; margin-bottom: 3px; }
+  .msg-meta { font-size: 9px; color: #444; margin-top: 4px; }
+  .cursor { display: inline-block; width: 2px; height: 12px; background: #60a5fa; animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
-  .input-area { padding: 12px; border-top: 1px solid #2a2a2a; display: flex; gap: 8px; background: #141414; }
-  #msg-input { flex: 1; background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; color: #e0e0e0; font-size: 14px; resize: none; height: 44px; max-height: 120px; outline: none; transition: border-color 0.2s; }
+  .input-area { padding: 8px 10px; border-top: 1px solid #2a2a2a; display: flex; gap: 6px; background: #141414; }
+  #msg-input { flex: 1; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; color: #e0e0e0; font-size: 13px; resize: none; height: 38px; max-height: 100px; outline: none; }
   #msg-input:focus { border-color: #3b82f6; }
   #msg-input:disabled { opacity: 0.5; }
-  #send-btn { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 0 18px; font-size: 14px; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+  .btn { border: none; border-radius: 6px; padding: 0 12px; height: 38px; font-size: 12px; cursor: pointer; }
+  #send-btn { background: #2563eb; color: #fff; }
   #send-btn:hover:not(:disabled) { background: #1d4ed8; }
   #send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  #clear-btn { background: #2a2a2a; color: #888; border: none; border-radius: 8px; padding: 0 12px; font-size: 13px; cursor: pointer; }
+  #clear-btn { background: #2a2a2a; color: #888; }
   #clear-btn:hover { background: #333; color: #ccc; }
-
-  /* Right: Debug panels */
-  .debug-panel { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; background: #0f0f0f; }
-
-  /* Tabs */
+  .debug-panel { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; }
   .tabs { display: flex; border-bottom: 1px solid #2a2a2a; background: #141414; }
-  .tab { padding: 8px 14px; font-size: 12px; cursor: pointer; color: #666; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab { padding: 6px 10px; font-size: 11px; cursor: pointer; color: #666; border-bottom: 2px solid transparent; }
   .tab:hover { color: #aaa; }
   .tab.active { color: #60a5fa; border-bottom-color: #3b82f6; }
-  .tab-content { display: none; flex: 1; overflow-y: auto; }
+  .tab-content { display: none; flex: 1; overflow-y: auto; padding: 6px; gap: 4px; }
   .tab-content.active { display: flex; flex-direction: column; }
-
-  /* Hook events */
-  #hook-events { padding: 8px; gap: 4px; }
-  .hook-event { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px 10px; font-size: 11px; font-family: monospace; }
-  .hook-event .hook-point { font-weight: 600; margin-bottom: 4px; }
-  .hook-event.tool-before .hook-point { color: #fbbf24; }
-  .hook-event.tool-after .hook-point { color: #34d399; }
-  .hook-event.agent-start .hook-point { color: #60a5fa; }
-  .hook-event.agent-end .hook-point { color: #a78bfa; }
-  .hook-event.llm-before .hook-point { color: #f472b6; }
-  .hook-event.llm-after .hook-point { color: #fb923c; }
-  .hook-event .hook-data { color: #888; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow: hidden; }
-  .hook-event .hook-data.expanded { max-height: none; }
-  .hook-event .expand-btn { color: #555; cursor: pointer; font-size: 10px; margin-top: 2px; }
-  .hook-event .expand-btn:hover { color: #888; }
-  .hook-event .hook-time { color: #444; font-size: 10px; float: right; }
-  #hook-events-empty { color: #444; font-size: 12px; text-align: center; padding: 24px; }
-
-  /* Tools list */
-  #tools-list { padding: 8px; gap: 4px; }
-  .tool-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px 10px; }
-  .tool-name { font-size: 12px; font-weight: 600; color: #60a5fa; font-family: monospace; }
-  .tool-desc { font-size: 11px; color: #666; margin-top: 2px; }
-
-  /* Session history */
-  #history-list { padding: 8px; gap: 4px; }
-  .history-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px 10px; font-size: 11px; }
-  .history-role { font-weight: 600; color: #888; margin-bottom: 2px; }
+  .hook-event { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px; padding: 6px 8px; font-size: 10px; font-family: monospace; margin-bottom: 3px; }
+  .hook-event .hp { font-weight: 600; margin-bottom: 2px; }
+  .hook-event.tool-before .hp { color: #fbbf24; }
+  .hook-event.tool-after .hp { color: #34d399; }
+  .hook-event.agent-start .hp { color: #60a5fa; }
+  .hook-event.agent-end .hp { color: #a78bfa; }
+  .hook-event.llm-before .hp { color: #f472b6; }
+  .hook-event.llm-after .hp { color: #fb923c; }
+  .hook-event .hd { color: #666; white-space: pre-wrap; word-break: break-all; max-height: 60px; overflow: hidden; }
+  .hook-event .hd.exp { max-height: none; }
+  .hook-event .ht { color: #444; font-size: 9px; float: right; }
+  .tool-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px; padding: 6px 8px; margin-bottom: 3px; }
+  .tool-name { font-size: 11px; font-weight: 600; color: #60a5fa; font-family: monospace; }
+  .tool-desc { font-size: 10px; color: #666; margin-top: 1px; }
+  .history-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px; padding: 6px 8px; font-size: 10px; margin-bottom: 3px; }
+  .history-role { font-weight: 600; color: #888; margin-bottom: 1px; }
   .history-role.human { color: #60a5fa; }
   .history-role.ai { color: #34d399; }
-  .history-content { color: #aaa; white-space: pre-wrap; word-break: break-all; max-height: 60px; overflow: hidden; }
-  #history-empty { color: #444; font-size: 12px; text-align: center; padding: 24px; }
-  #refresh-history { margin: 8px; background: #1e1e1e; border: 1px solid #333; color: #888; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; width: calc(100% - 16px); }
-  #refresh-history:hover { background: #2a2a2a; color: #ccc; }
-
-  /* Summary */
-  #summary-box { padding: 12px; }
-  #summary-text { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 10px; font-size: 12px; color: #aaa; min-height: 80px; white-space: pre-wrap; }
-  #summary-empty { color: #444; font-size: 12px; }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 4px; }
+  .history-content { color: #aaa; white-space: pre-wrap; word-break: break-all; max-height: 50px; overflow: hidden; }
+  .empty-msg { color: #444; font-size: 11px; text-align: center; padding: 20px; }
+  .small-btn { background: #1e1e1e; border: 1px solid #333; color: #666; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer; }
+  .small-btn:hover { background: #2a2a2a; color: #ccc; }
+  #summary-text { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px; padding: 8px; font-size: 11px; color: #aaa; min-height: 60px; white-space: pre-wrap; margin: 6px; }
+  ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-  ::-webkit-scrollbar-thumb:hover { background: #444; }
 </style>
 </head>
 <body>
-
 <header>
   <div id="status-dot"></div>
-  <h1>🦀 SmartClaw Debug UI</h1>
+  <h1>🦀 SmartClaw</h1>
   <span id="status-text">connecting...</span>
   <div class="header-right">
     <span class="badge" id="model-badge">—</span>
     <span class="badge" id="tools-count-badge">0 tools</span>
-    <span class="badge" id="session-badge" title="Click to copy" style="cursor:pointer" onclick="copySession()">no session</span>
+    <span class="badge" id="session-badge" style="cursor:pointer" onclick="copySession()">no session</span>
   </div>
 </header>
-
 <div class="main">
-  <!-- Chat Panel -->
   <div class="chat-panel">
-    <div class="panel-header">
-      💬 Chat
-      <span class="session-id" id="session-display" onclick="copySession()">—</span>
-    </div>
+    <div class="panel-hdr">💬 Chat <span class="right" id="session-display" onclick="copySession()">—</span></div>
     <div id="messages"></div>
     <div class="input-area">
-      <textarea id="msg-input" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1"></textarea>
-      <button id="clear-btn" onclick="clearChat()">清空</button>
-      <button id="send-btn" onclick="sendMessage()">发送</button>
+      <textarea id="msg-input" placeholder="输入消息... (Enter 发送)" rows="1"></textarea>
+      <button class="btn" id="clear-btn" onclick="clearChat()">清空</button>
+      <button class="btn" id="send-btn" onclick="sendMessage()">发送</button>
     </div>
   </div>
-
-  <!-- Debug Panel -->
   <div class="debug-panel">
     <div class="tabs">
       <div class="tab active" onclick="switchTab('hooks')">🪝 Hooks</div>
@@ -143,318 +105,217 @@
       <div class="tab" onclick="switchTab('history')">📜 History</div>
       <div class="tab" onclick="switchTab('summary')">📝 Summary</div>
     </div>
-
-    <!-- Hooks Tab -->
-    <div class="tab-content active" id="tab-hooks">
-      <div class="panel-header">
-        Hook Events
-        <button onclick="clearHooks()" style="margin-left:auto;background:#1e1e1e;border:1px solid #333;color:#666;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer">清空</button>
-      </div>
-      <div id="hook-events" class="tab-content active" style="display:flex;flex-direction:column;">
-        <div id="hook-events-empty">等待 hook 事件...</div>
-      </div>
-    </div>
-
-    <!-- Tools Tab -->
-    <div class="tab-content" id="tab-tools">
-      <div class="panel-header">已注册工具</div>
-      <div id="tools-list" class="tab-content" style="display:flex;flex-direction:column;"></div>
-    </div>
-
-    <!-- History Tab -->
-    <div class="tab-content" id="tab-history">
-      <div class="panel-header">会话历史</div>
-      <button id="refresh-history" onclick="loadHistory()">🔄 刷新历史</button>
-      <div id="history-list" class="tab-content" style="display:flex;flex-direction:column;">
-        <div id="history-empty">暂无历史记录</div>
-      </div>
-    </div>
-
-    <!-- Summary Tab -->
-    <div class="tab-content" id="tab-summary">
-      <div class="panel-header">
-        对话摘要
-        <button onclick="loadSummary()" style="margin-left:auto;background:#1e1e1e;border:1px solid #333;color:#666;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer">刷新</button>
-      </div>
-      <div id="summary-box">
-        <div id="summary-text"><span id="summary-empty" class="summary-empty">暂无摘要</span></div>
-      </div>
-    </div>
+    <div class="tab-content active" id="tab-hooks"><div class="empty-msg" id="hooks-empty">等待 hook 事件...</div></div>
+    <div class="tab-content" id="tab-tools"></div>
+    <div class="tab-content" id="tab-history"><div class="empty-msg">暂无历史</div></div>
+    <div class="tab-content" id="tab-summary"><div id="summary-text" style="color:#444">暂无摘要</div></div>
   </div>
 </div>
-
 <script>
-const API = '';  // same origin
+const API = '';
 let sessionKey = null;
 let isStreaming = false;
-let hookEventSource = null;
-let streamingMsgEl = null;
-let streamingText = '';
-
-// ─── Init ───────────────────────────────────────────────────────────────────
+let hookES = null;
+let streamEl = null;
 
 async function init() {
   await checkHealth();
   await loadTools();
-  connectHookEvents();
+  connectHooks();
 }
-
-// ─── Health ──────────────────────────────────────────────────────────────────
 
 async function checkHealth() {
   try {
-    const r = await fetch(`${API}/health`);
-    const data = await r.json();
+    const r = await fetch(API + '/health');
+    const d = await r.json();
     document.getElementById('status-dot').className = 'ok';
-    document.getElementById('status-text').textContent = `ready · v${data.version}`;
-    document.getElementById('tools-count-badge').textContent = `${data.tools_count} tools`;
+    document.getElementById('status-text').textContent = 'ready · v' + d.version;
+    document.getElementById('tools-count-badge').textContent = d.tools_count + ' tools';
+    document.getElementById('model-badge').textContent = d.model || 'kimi/kimi-k2.5';
   } catch(e) {
-    document.getElementById('status-dot').className = 'err';
+    document.getElementById('status-dot').className = '';
     document.getElementById('status-text').textContent = 'offline';
   }
 }
 
-// ─── Tools ───────────────────────────────────────────────────────────────────
-
 async function loadTools() {
   try {
-    const r = await fetch(`${API}/api/tools`);
+    const r = await fetch(API + '/api/tools');
     const tools = await r.json();
-    const list = document.getElementById('tools-list');
-    list.innerHTML = '';
-    if (!tools.length) { list.innerHTML = '<div style="color:#444;font-size:12px;text-align:center;padding:24px">无工具</div>'; return; }
+    const c = document.getElementById('tab-tools');
+    c.innerHTML = '';
     tools.forEach(t => {
-      const el = document.createElement('div');
-      el.className = 'tool-item';
-      el.innerHTML = `<div class="tool-name">${t.name}</div><div class="tool-desc">${t.description || ''}</div>`;
-      list.appendChild(el);
+      c.innerHTML += '<div class="tool-item"><div class="tool-name">' + esc(t.name) + '</div><div class="tool-desc">' + esc(t.description||'') + '</div></div>';
     });
-    document.getElementById('tools-count-badge').textContent = `${tools.length} tools`;
+    if (!tools.length) c.innerHTML = '<div class="empty-msg">无工具</div>';
   } catch(e) {}
 }
 
-// ─── Hook Events SSE ─────────────────────────────────────────────────────────
-
-function connectHookEvents() {
-  if (hookEventSource) hookEventSource.close();
-  hookEventSource = new EventSource(`${API}/api/debug/hook-events`);
-  hookEventSource.onmessage = (e) => {
+function connectHooks() {
+  if (hookES) hookES.close();
+  hookES = new EventSource(API + '/api/debug/hook-events');
+  hookES.onmessage = function(e) {
     try {
-      const data = JSON.parse(e.data);
-      addHookEvent(data);
+      const d = JSON.parse(e.data);
+      if (d.ping) return; // skip heartbeat
+      if (!d.hook_point) return;
+      addHook(d);
     } catch(err) {}
   };
-  hookEventSource.onerror = () => {
-    // reconnect after 3s
-    setTimeout(connectHookEvents, 3000);
-  };
+  hookES.onerror = function() { setTimeout(connectHooks, 3000); };
 }
 
-function addHookEvent(data) {
-  const container = document.getElementById('hook-events');
-  const empty = document.getElementById('hook-events-empty');
+function addHook(d) {
+  const c = document.getElementById('tab-hooks');
+  const empty = document.getElementById('hooks-empty');
   if (empty) empty.remove();
-
-  const hp = data.hook_point || '';
+  const hp = d.hook_point || '';
   const cls = hp.replace(':', '-');
-  const time = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-
+  const t = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const s = JSON.stringify(d, null, 2);
   const el = document.createElement('div');
-  el.className = `hook-event ${cls}`;
-
-  const dataStr = JSON.stringify(data, null, 2);
-  const isLong = dataStr.length > 200;
-
-  el.innerHTML = `
-    <div class="hook-point">
-      ${hp}
-      <span class="hook-time">${time}</span>
-    </div>
-    <div class="hook-data" id="hd-${Date.now()}">${escHtml(dataStr)}</div>
-    ${isLong ? `<div class="expand-btn" onclick="toggleExpand(this)">▼ 展开</div>` : ''}
-  `;
-  container.insertBefore(el, container.firstChild);
-
-  // Keep max 100 events
-  while (container.children.length > 100) container.removeChild(container.lastChild);
+  el.className = 'hook-event ' + cls;
+  el.innerHTML = '<div class="hp">' + esc(hp) + '<span class="ht">' + t + '</span></div><div class="hd">' + esc(s) + '</div>';
+  el.querySelector('.hd').onclick = function() { this.classList.toggle('exp'); };
+  c.insertBefore(el, c.firstChild);
+  while (c.children.length > 80) c.removeChild(c.lastChild);
 }
 
-function toggleExpand(btn) {
-  const dataEl = btn.previousElementSibling;
-  if (dataEl.classList.contains('expanded')) {
-    dataEl.classList.remove('expanded');
-    btn.textContent = '▼ 展开';
-  } else {
-    dataEl.classList.add('expanded');
-    btn.textContent = '▲ 收起';
-  }
-}
-
-function clearHooks() {
-  const c = document.getElementById('hook-events');
-  c.innerHTML = '<div id="hook-events-empty">等待 hook 事件...</div>';
-}
-
-// ─── Chat ─────────────────────────────────────────────────────────────────────
+// ── Chat (use sync /api/chat instead of SSE to avoid parsing issues) ──
 
 async function sendMessage() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
   if (!text || isStreaming) return;
-
   input.value = '';
-  input.style.height = '44px';
+  input.style.height = '38px';
   setStreaming(true);
-
-  appendMsg('user', text);
-
-  // Create streaming assistant message
-  streamingText = '';
-  streamingMsgEl = appendMsg('assistant', '', true);
+  addMsg('user', text);
+  streamEl = addMsg('assistant', '⏳ 思考中...', true);
 
   try {
     const body = { message: text };
     if (sessionKey) body.session_key = sessionKey;
 
-    const resp = await fetch(`${API}/api/chat/stream`, {
+    // Use SSE stream
+    const resp = await fetch(API + '/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 
     if (!resp.ok) {
-      const err = await resp.text();
-      finishStreaming();
-      appendMsg('error', `HTTP ${resp.status}: ${err}`);
+      finishStream();
+      addMsg('error', 'HTTP ' + resp.status + ': ' + (await resp.text()));
       return;
     }
 
     const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    const dec = new TextDecoder();
+    let buf = '';
+    let curEvent = 'message';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      buf += dec.decode(value, { stream: true });
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      // Process complete lines
+      while (buf.indexOf('\n') !== -1) {
+        const idx = buf.indexOf('\n');
+        const line = buf.substring(0, idx).trim();
+        buf = buf.substring(idx + 1);
 
-      for (const line of lines) {
+        if (line === '') {
+          // Empty line = end of event, reset
+          curEvent = 'message';
+          continue;
+        }
         if (line.startsWith('event:')) {
-          // handled below
-        } else if (line.startsWith('data:')) {
-          const raw = line.slice(5).trim();
+          curEvent = line.substring(6).trim();
+          continue;
+        }
+        if (line.startsWith('data:')) {
+          const raw = line.substring(5).trim();
           if (!raw) continue;
           try {
-            const evt = JSON.parse(raw);
-            handleSSEEvent(evt);
+            const data = JSON.parse(raw);
+            handleEvent(curEvent, data);
           } catch(e) {}
         }
       }
     }
   } catch(e) {
-    appendMsg('error', `连接错误: ${e.message}`);
+    addMsg('error', '连接错误: ' + e.message);
   } finally {
-    finishStreaming();
+    finishStream();
   }
 }
 
-function handleSSEEvent(evt) {
-  const type = evt.event || evt.type;
-
+function handleEvent(type, data) {
   if (type === 'thinking') {
-    updateStreamingMsg('⏳ 思考中...');
+    updateStream('⏳ 思考中...');
   } else if (type === 'tool_call') {
-    // Show tool call as separate bubble
-    const args = JSON.stringify(evt.data?.args || evt.args || {}, null, 2);
-    appendMsg('tool-call', `🔧 ${evt.data?.tool_name || evt.tool_name || '?'}\n${args}`);
+    addMsg('tool-call', '🔧 ' + (data.tool_name || '?') + '\n' + JSON.stringify(data.args || {}, null, 2));
   } else if (type === 'tool_result') {
-    const result = evt.data?.result || evt.result || '';
-    appendMsg('tool-result', `📤 ${String(result).slice(0, 300)}${result.length > 300 ? '...' : ''}`);
+    addMsg('tool-result', '📤 ' + String(data.result || '').slice(0, 300));
   } else if (type === 'done') {
-    const d = evt.data || evt;
-    const response = d.response || d.final_answer || '';
-    const sk = d.session_key;
-    const iters = d.iterations || 0;
-
-    if (sk && !sessionKey) {
-      sessionKey = sk;
-      updateSessionDisplay();
-    }
-
-    updateStreamingMsg(response || '(无响应)');
-    if (streamingMsgEl) {
-      streamingMsgEl.classList.remove('streaming');
-      const cursor = streamingMsgEl.querySelector('.cursor');
-      if (cursor) cursor.remove();
-      // Add iteration count
+    const response = data.response || data.final_answer || '';
+    const sk = data.session_key;
+    const iters = data.iterations || 0;
+    if (sk) { sessionKey = sk; updateSessionUI(); }
+    updateStream(response || '(无响应)');
+    if (streamEl) {
+      streamEl.classList.remove('streaming');
+      const cur = streamEl.querySelector('.cursor');
+      if (cur) cur.remove();
       const meta = document.createElement('div');
-      meta.style.cssText = 'font-size:10px;color:#444;margin-top:6px';
-      meta.textContent = `${iters} iterations · session: ${sk || '—'}`;
-      streamingMsgEl.appendChild(meta);
+      meta.className = 'msg-meta';
+      meta.textContent = iters + ' iterations';
+      streamEl.appendChild(meta);
     }
   } else if (type === 'error') {
-    const errMsg = evt.data?.error || evt.error || '未知错误';
-    if (streamingMsgEl) {
-      streamingMsgEl.classList.add('error');
-      streamingMsgEl.classList.remove('streaming');
-      updateStreamingMsg(`❌ ${errMsg}`);
+    updateStream('❌ ' + (data.error || '未知错误'));
+    if (streamEl) { streamEl.classList.add('error'); streamEl.classList.remove('streaming'); }
+  } else {
+    // Unknown event type — try to extract useful info
+    if (data.session_key && !sessionKey) { sessionKey = data.session_key; updateSessionUI(); }
+    if (data.response || data.final_answer) {
+      updateStream(data.response || data.final_answer);
     }
   }
 }
 
-function appendMsg(type, text, streaming = false) {
-  const msgs = document.getElementById('messages');
+function addMsg(type, text, streaming) {
+  const c = document.getElementById('messages');
   const el = document.createElement('div');
-  el.className = `msg ${type}${streaming ? ' streaming' : ''}`;
-
+  el.className = 'msg ' + type + (streaming ? ' streaming' : '');
   if (type === 'user') {
     el.textContent = text;
   } else if (type === 'tool-call' || type === 'tool-result') {
-    const label = document.createElement('div');
-    label.className = 'msg-label';
-    label.textContent = type === 'tool-call' ? 'TOOL CALL' : 'TOOL RESULT';
-    el.appendChild(label);
-    const pre = document.createElement('pre');
-    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:11px';
-    pre.textContent = text;
-    el.appendChild(pre);
+    el.innerHTML = '<div class="msg-label">' + (type === 'tool-call' ? 'TOOL CALL' : 'TOOL RESULT') + '</div><pre style="white-space:pre-wrap;word-break:break-all;font-size:10px;margin:0">' + esc(text) + '</pre>';
   } else if (type === 'error') {
     el.textContent = text;
   } else {
-    // assistant
-    const content = document.createElement('div');
-    content.className = 'msg-content';
-    content.textContent = text;
-    el.appendChild(content);
-    if (streaming) {
-      const cursor = document.createElement('span');
-      cursor.className = 'cursor';
-      el.appendChild(cursor);
-    }
+    const span = document.createElement('span');
+    span.className = 'msg-text';
+    span.textContent = text;
+    el.appendChild(span);
+    if (streaming) { const cur = document.createElement('span'); cur.className = 'cursor'; el.appendChild(cur); }
   }
-
-  msgs.appendChild(el);
-  msgs.scrollTop = msgs.scrollHeight;
+  c.appendChild(el);
+  c.scrollTop = c.scrollHeight;
   return el;
 }
 
-function updateStreamingMsg(text) {
-  if (!streamingMsgEl) return;
-  const content = streamingMsgEl.querySelector('.msg-content');
-  if (content) content.textContent = text;
-  else streamingMsgEl.firstChild && (streamingMsgEl.firstChild.textContent = text);
-  streamingText = text;
+function updateStream(text) {
+  if (!streamEl) return;
+  const s = streamEl.querySelector('.msg-text');
+  if (s) s.textContent = text;
   document.getElementById('messages').scrollTop = 99999;
 }
 
-function finishStreaming() {
-  setStreaming(false);
-  streamingMsgEl = null;
-  streamingText = '';
-}
+function finishStream() { setStreaming(false); streamEl = null; }
 
 function setStreaming(v) {
   isStreaming = v;
@@ -466,111 +327,76 @@ function setStreaming(v) {
 function clearChat() {
   document.getElementById('messages').innerHTML = '';
   sessionKey = null;
-  updateSessionDisplay();
+  updateSessionUI();
 }
 
-// ─── Session ──────────────────────────────────────────────────────────────────
-
-function updateSessionDisplay() {
-  const display = document.getElementById('session-display');
-  const badge = document.getElementById('session-badge');
+function updateSessionUI() {
+  const d = document.getElementById('session-display');
+  const b = document.getElementById('session-badge');
   if (sessionKey) {
-    const short = sessionKey.slice(0, 8) + '...';
-    display.textContent = `session: ${short}`;
-    badge.textContent = short;
+    const s = sessionKey.slice(0, 8) + '...';
+    d.textContent = 'session: ' + s;
+    b.textContent = s;
   } else {
-    display.textContent = '—';
-    badge.textContent = 'no session';
+    d.textContent = '—';
+    b.textContent = 'no session';
   }
 }
 
 function copySession() {
-  if (sessionKey) {
-    navigator.clipboard.writeText(sessionKey).then(() => {
-      const badge = document.getElementById('session-badge');
-      const orig = badge.textContent;
-      badge.textContent = '✓ copied';
-      setTimeout(() => badge.textContent = orig, 1500);
-    });
-  }
+  if (sessionKey) navigator.clipboard.writeText(sessionKey).then(() => {
+    const b = document.getElementById('session-badge');
+    const o = b.textContent; b.textContent = '✓'; setTimeout(() => b.textContent = o, 1000);
+  });
 }
 
 async function loadHistory() {
-  if (!sessionKey) {
-    document.getElementById('history-list').innerHTML = '<div id="history-empty">暂无会话，先发送消息</div>';
-    return;
-  }
+  const c = document.getElementById('tab-history');
+  if (!sessionKey) { c.innerHTML = '<div class="empty-msg">先发送消息创建会话</div>'; return; }
   try {
-    const r = await fetch(`${API}/api/sessions/${sessionKey}/history`);
-    const data = await r.json();
-    const list = document.getElementById('history-list');
-    list.innerHTML = '';
-    if (!data.messages || !data.messages.length) {
-      list.innerHTML = '<div id="history-empty">暂无历史记录</div>';
-      return;
-    }
-    data.messages.forEach(m => {
-      const el = document.createElement('div');
-      el.className = 'history-item';
+    const r = await fetch(API + '/api/sessions/' + sessionKey + '/history');
+    const d = await r.json();
+    c.innerHTML = '';
+    if (!d.messages || !d.messages.length) { c.innerHTML = '<div class="empty-msg">暂无历史</div>'; return; }
+    d.messages.forEach(m => {
       const role = m.type || m.role || '?';
       const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-      el.innerHTML = `<div class="history-role ${role}">${role.toUpperCase()}</div><div class="history-content">${escHtml(content)}</div>`;
-      list.appendChild(el);
+      c.innerHTML += '<div class="history-item"><div class="history-role ' + role + '">' + role.toUpperCase() + '</div><div class="history-content">' + esc(content) + '</div></div>';
     });
-  } catch(e) {
-    document.getElementById('history-list').innerHTML = `<div style="color:#f87171;padding:12px;font-size:12px">加载失败: ${e.message}</div>`;
-  }
+  } catch(e) { c.innerHTML = '<div class="empty-msg" style="color:#f87171">加载失败</div>'; }
 }
 
 async function loadSummary() {
-  if (!sessionKey) {
-    document.getElementById('summary-text').innerHTML = '<span id="summary-empty" class="summary-empty">暂无摘要</span>';
-    return;
-  }
+  if (!sessionKey) { document.getElementById('summary-text').textContent = '暂无摘要'; return; }
   try {
-    const r = await fetch(`${API}/api/sessions/${sessionKey}/summary`);
-    const data = await r.json();
-    const box = document.getElementById('summary-text');
-    box.textContent = data.summary || '（暂无摘要）';
+    const r = await fetch(API + '/api/sessions/' + sessionKey + '/summary');
+    const d = await r.json();
+    document.getElementById('summary-text').textContent = d.summary || '（暂无摘要）';
   } catch(e) {}
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
-
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    const names = ['hooks', 'tools', 'history', 'summary'];
-    t.classList.toggle('active', names[i] === name);
-  });
-  document.querySelectorAll('.tab-content[id^="tab-"]').forEach(c => {
-    c.classList.toggle('active', c.id === `tab-${name}`);
+  const names = ['hooks', 'tools', 'history', 'summary'];
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
+  names.forEach(n => {
+    const el = document.getElementById('tab-' + n);
+    if (el) el.classList.toggle('active', n === name);
   });
   if (name === 'history') loadHistory();
   if (name === 'summary') loadSummary();
   if (name === 'tools') loadTools();
 }
 
-// ─── Utils ────────────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// Enter to send, Shift+Enter for newline
 document.getElementById('msg-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-
-// Auto-resize textarea
 document.getElementById('msg-input').addEventListener('input', function() {
-  this.style.height = '44px';
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  this.style.height = '38px';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
 });
 
-// Start
 init();
 </script>
 </body>

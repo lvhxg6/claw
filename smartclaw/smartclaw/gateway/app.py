@@ -153,6 +153,18 @@ def create_app(settings: Any = None) -> FastAPI:
 
         return EventSourceResponse(generator())
 
+    # Config endpoint for Debug UI
+    @app.get("/api/config")
+    async def get_config(request: Request):
+        """Return model and gateway configuration for the debug UI."""
+        settings = getattr(request.app.state, "settings", None)
+        if settings is None:
+            return {"model": "unknown", "gateway_port": 8000}
+        return {
+            "model": settings.model.primary,
+            "gateway_port": settings.gateway.port,
+        }
+
     # Debug UI: serve static HTML
     if _STATIC_DIR.exists():
         @app.get("/", response_class=HTMLResponse)
