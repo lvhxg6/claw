@@ -183,9 +183,24 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
     runtime = request.app.state.runtime
     memory_store = runtime.memory_store
 
+    # Track active request for model switching protection
+    runtime.increment_requests()
+
+    # Session model override: if request has no model, check session_config
+    if not request_body.model and memory_store is not None:
+        try:
+            cfg = await memory_store.get_session_config(session_key)
+            if cfg and cfg.get("model_override"):
+                request_body = request_body.model_copy(
+                    update={"model": cfg["model_override"]}
+                )
+        except Exception:
+            pass  # fall back to default model
+
     try:
         graph = _resolve_graph(request_body, runtime)
     except ValueError as exc:
+        runtime.decrement_requests()
         return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content={"error": str(exc)},
@@ -202,12 +217,14 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
             memory_store=memory_store,
             system_prompt=runtime.system_prompt,
             summarizer=runtime.summarizer,
+            context_engine=getattr(runtime, "context_engine", None),
         )
         return ChatResponse(
             session_key=session_key,
             response=result.get("final_answer") or "",
             iterations=result.get("iteration", 0),
             error=result.get("error"),
+            token_stats=result.get("token_stats"),
         )
     except Exception as exc:
         logger.error("chat_invoke_error", error=str(exc))
@@ -215,6 +232,8 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
             status_code=500,
             content={"error": str(exc)},
         )
+    finally:
+        runtime.decrement_requests()
 
 
 @router.post("/stream")
@@ -225,9 +244,13 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
     memory_store = runtime.memory_store
     max_iterations = request_body.max_iterations
 
+    # Track active request for model switching protection
+    runtime.increment_requests()
+
     try:
         graph = _resolve_graph(request_body, runtime)
     except ValueError as exc:
+        runtime.decrement_requests()
         return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content={"error": str(exc)},
@@ -257,6 +280,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     memory_store=memory_store,
                     system_prompt=runtime.system_prompt,
                     summarizer=runtime.summarizer,
+                    context_engine=getattr(runtime, "context_engine", None),
                 )
                 yield {
                     "event": "done",
@@ -276,6 +300,8 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                         {"error": str(fallback_exc)}, ensure_ascii=False
                     ),
                 }
+            finally:
+                runtime.decrement_requests()
             return
 
         try:
@@ -288,6 +314,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     memory_store=memory_store,
                     system_prompt=runtime.system_prompt,
                     summarizer=runtime.summarizer,
+                    context_engine=getattr(runtime, "context_engine", None),
                 )
             )
 
@@ -329,5 +356,6 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
             }
         finally:
             _unregister_stream_handlers(handlers)
+            runtime.decrement_requests()
 
     return EventSourceResponse(event_generator())

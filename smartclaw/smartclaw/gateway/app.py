@@ -89,6 +89,7 @@ def create_app(settings: Any = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     from smartclaw.gateway.routers.chat import router as chat_router
     from smartclaw.gateway.routers.health import router as health_router
+    from smartclaw.gateway.routers.models import router as models_router
     from smartclaw.gateway.routers.sessions import router as sessions_router
     from smartclaw.gateway.routers.tools import router as tools_router
 
@@ -116,6 +117,7 @@ def create_app(settings: Any = None) -> FastAPI:
     app.include_router(sessions_router)
     app.include_router(tools_router)
     app.include_router(health_router)
+    app.include_router(models_router)
 
     # Debug UI: hook events SSE endpoint
     @app.get("/api/debug/hook-events")

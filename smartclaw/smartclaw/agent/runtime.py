@@ -17,6 +17,7 @@ from typing import Any
 from smartclaw.agent.graph import build_graph
 from smartclaw.observability.logging import get_logger
 from smartclaw.providers.config import ModelConfig
+from smartclaw.providers.factory import ProviderFactory
 from smartclaw.tools.registry import ToolRegistry, create_system_tools
 
 logger = get_logger("agent.runtime")
@@ -46,6 +47,13 @@ class AgentRuntime:
     system_prompt: str
     mcp_manager: Any | None  # MCPManager | None
     model_config: ModelConfig
+    context_engine: Any | None = None  # ContextEngine | None
+    _active_requests: int = 0  # Track active requests for model switching
+    _lock: asyncio.Lock | None = None  # Lock for thread-safe model switching
+
+    def __post_init__(self) -> None:
+        """Initialize the lock after dataclass creation."""
+        object.__setattr__(self, "_lock", asyncio.Lock())
 
     @property
     def tools(self) -> list:
@@ -57,8 +65,75 @@ class AgentRuntime:
         """Return sorted list of registered tool names."""
         return self.registry.list_tools()
 
+    @property
+    def is_busy(self) -> bool:
+        """Return True if there are active requests."""
+        return self._active_requests > 0
+
+    def increment_requests(self) -> None:
+        """Increment active request counter."""
+        object.__setattr__(self, "_active_requests", self._active_requests + 1)
+
+    def decrement_requests(self) -> None:
+        """Decrement active request counter."""
+        object.__setattr__(self, "_active_requests", max(0, self._active_requests - 1))
+
+    async def switch_model(self, new_primary: str) -> bool:
+        """Switch the primary model. Returns False if busy.
+
+        Args:
+            new_primary: New primary model in 'provider/model' format.
+
+        Returns:
+            True if switch succeeded, False if busy with active requests.
+        """
+        if self._lock is None:
+            object.__setattr__(self, "_lock", asyncio.Lock())
+
+        async with self._lock:
+            if self._active_requests > 0:
+                logger.warning("model_switch_rejected", reason="active_requests", count=self._active_requests)
+                return False
+
+            # Validate model format
+            from smartclaw.providers.config import parse_model_ref
+            try:
+                provider, model = parse_model_ref(new_primary)
+                # Validate provider exists
+                from smartclaw.providers.factory import ProviderFactory
+                ProviderFactory.get_spec(provider)
+            except ValueError as e:
+                logger.warning("model_switch_rejected", reason="invalid_model", error=str(e))
+                return False
+
+            # Update model_config
+            old_primary = self.model_config.primary
+            object.__setattr__(self.model_config, "primary", new_primary)
+
+            # Rebuild graph with new model config
+            new_graph = build_graph(self.model_config, self.registry.get_all())
+            object.__setattr__(self, "graph", new_graph)
+
+            # Update summarizer if exists
+            if self.summarizer is not None:
+                object.__setattr__(self.summarizer, "model_config", self.model_config)
+
+            logger.info("model_switched", old=old_primary, new=new_primary)
+            return True
+
+    def get_available_models(self) -> list[str]:
+        """Return list of available models (primary + fallbacks)."""
+        models = [self.model_config.primary]
+        models.extend(self.model_config.fallbacks)
+        return models
+
     async def close(self) -> None:
         """Release all resources. Never propagates exceptions."""
+        if self.context_engine is not None:
+            try:
+                await self.context_engine.dispose()
+            except Exception:
+                logger.error("context_engine_dispose_failed", exc_info=True)
         if self.memory_store is not None:
             try:
                 await self.memory_store.close()
@@ -91,6 +166,10 @@ async def setup_agent_runtime(
     Each step is wrapped in try/except — logs warning and continues on failure.
     """
     workspace = os.path.expanduser(settings.agent_defaults.workspace)
+
+    # 0. Register custom ProviderSpecs from config (before any provider usage)
+    if hasattr(settings, "providers") and settings.providers:
+        ProviderFactory.register_specs(settings.providers)
 
     # 1. System tools — always created
     registry = create_system_tools(workspace)
@@ -143,6 +222,7 @@ async def setup_agent_runtime(
                 timeout_seconds=settings.sub_agent.default_timeout_seconds,
                 semaphore=sem,
                 concurrency_timeout=float(settings.sub_agent.concurrency_timeout_seconds),
+                parent_model_config=settings.model,
             )
             registry.register(tool)
         except Exception as exc:
@@ -186,6 +266,33 @@ async def setup_agent_runtime(
     # 8. Build graph
     graph = build_graph(settings.model, registry.get_all(), stream_callback)
 
+    # 9. Create ContextEngine
+    context_engine = None
+    if settings.memory.enabled and memory_store is not None and summarizer is not None:
+        try:
+            from smartclaw.context_engine.registry import ContextEngineRegistry
+
+            engine_name = getattr(settings, "context_engine", "legacy")
+            context_engine = ContextEngineRegistry.create(
+                engine_name,
+                summarizer=summarizer,
+                store=memory_store,
+            )
+            logger.info("context_engine_created", engine=engine_name)
+        except Exception as exc:
+            logger.warning("context_engine_init_failed", error=str(exc))
+            context_engine = None
+
+    # 10. Restore CooldownTracker state from MemoryStore
+    if settings.memory.enabled and memory_store is not None:
+        try:
+            from smartclaw.providers.fallback import CooldownTracker
+
+            cooldown_tracker = CooldownTracker()
+            await cooldown_tracker.restore_state(memory_store)
+        except Exception as exc:
+            logger.warning("cooldown_restore_failed", error=str(exc))
+
     return AgentRuntime(
         graph=graph,
         registry=registry,
@@ -194,4 +301,5 @@ async def setup_agent_runtime(
         system_prompt=system_prompt,
         mcp_manager=mcp_manager,
         model_config=settings.model,
+        context_engine=context_engine,
     )

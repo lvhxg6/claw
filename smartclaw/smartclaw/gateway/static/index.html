@@ -15,7 +15,10 @@
   #status-text { font-size: 13px; color: #888; }
   .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
   .badge { font-size: 12px; padding: 3px 8px; border-radius: 10px; background: #2a2a2a; color: #aaa; white-space: nowrap; }
-  #model-badge { color: #60a5fa; }
+  #model-select { font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #2a2a2a; color: #60a5fa; border: 1px solid #3b82f6; cursor: pointer; outline: none; }
+  #model-select:hover { background: #333; }
+  #model-select:disabled { opacity: 0.5; cursor: not-allowed; }
+  #model-select option { background: #1a1a1a; color: #e0e0e0; }
   .main { display: flex; flex: 1; min-height: 0; }
   .chat-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #2a2a2a; }
   .panel-hdr { padding: 8px 12px; font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #1e1e1e; background: #141414; display: flex; align-items: center; gap: 8px; }
@@ -42,6 +45,7 @@
   .msg.tool-call { background: #1a2a1a; border: 1px solid #2d4a2d; color: #86efac; font-size: 13px; font-family: monospace; align-self: flex-start; max-width: 90%; }
   .msg.tool-result { background: #1a1a2a; border: 1px solid #2d2d4a; color: #93c5fd; font-size: 13px; font-family: monospace; align-self: flex-start; max-width: 90%; }
   .msg.error { background: #2a1a1a; border: 1px solid #4a2d2d; color: #fca5a5; align-self: flex-start; }
+  .msg.system { background: #1a1a1a; border: 1px solid #333; color: #888; font-size: 12px; align-self: center; padding: 6px 12px; }
   .msg-label { font-size: 11px; color: #555; margin-bottom: 3px; }
   .msg-meta { font-size: 11px; color: #444; margin-top: 4px; }
   .cursor { display: inline-block; width: 2px; height: 14px; background: #60a5fa; animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
@@ -97,7 +101,9 @@
   <h1>🦀 SmartClaw</h1>
   <span id="status-text">connecting...</span>
   <div class="header-right">
-    <span class="badge" id="model-badge">—</span>
+    <select id="model-select" onchange="switchModel()" title="切换模型">
+      <option value="">加载中...</option>
+    </select>
     <span class="badge" id="tools-count-badge">0 tools</span>
     <span class="badge" id="session-badge" style="cursor:pointer" onclick="copySession()">no session</span>
   </div>
@@ -131,9 +137,12 @@ let sessionKey = null;
 let isStreaming = false;
 let hookES = null;
 let streamEl = null;
+let currentModel = '';
+let availableModels = [];
 
 async function init() {
   await checkHealth();
+  await loadModels();
   await loadTools();
   connectHooks();
 }
@@ -145,10 +154,72 @@ async function checkHealth() {
     document.getElementById('status-dot').className = 'ok';
     document.getElementById('status-text').textContent = 'ready · v' + d.version;
     document.getElementById('tools-count-badge').textContent = d.tools_count + ' tools';
-    document.getElementById('model-badge').textContent = d.model || 'kimi/kimi-k2.5';
   } catch(e) {
     document.getElementById('status-dot').className = '';
     document.getElementById('status-text').textContent = 'offline';
+  }
+}
+
+async function loadModels() {
+  const select = document.getElementById('model-select');
+  try {
+    const r = await fetch(API + '/api/models');
+    const d = await r.json();
+    currentModel = d.primary;
+    availableModels = d.available || [];
+    
+    select.innerHTML = '';
+    availableModels.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (m === currentModel) opt.selected = true;
+      select.appendChild(opt);
+    });
+  } catch(e) {
+    select.innerHTML = '<option value="">加载失败</option>';
+  }
+}
+
+async function switchModel() {
+  const select = document.getElementById('model-select');
+  const newModel = select.value;
+  if (!newModel || newModel === currentModel) return;
+  
+  if (isStreaming) {
+    alert('请等待当前请求完成后再切换模型');
+    select.value = currentModel;
+    return;
+  }
+  
+  select.disabled = true;
+  const oldModel = currentModel;
+  
+  try {
+    const r = await fetch(API + '/api/models', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: newModel }),
+    });
+    
+    if (r.ok) {
+      const d = await r.json();
+      currentModel = d.current_model;
+      select.value = currentModel;
+      addMsg('system', '✅ 模型已切换: ' + oldModel + ' → ' + currentModel);
+    } else if (r.status === 409) {
+      alert('有请求正在进行中，无法切换模型');
+      select.value = currentModel;
+    } else {
+      const err = await r.json();
+      alert('切换失败: ' + (err.detail || '未知错误'));
+      select.value = currentModel;
+    }
+  } catch(e) {
+    alert('切换失败: ' + e.message);
+    select.value = currentModel;
+  } finally {
+    select.disabled = false;
   }
 }
 
@@ -171,7 +242,7 @@ function connectHooks() {
   hookES.onmessage = function(e) {
     try {
       const d = JSON.parse(e.data);
-      if (d.ping) return; // skip heartbeat
+      if (d.ping) return;
       if (!d.hook_point) return;
       addHook(d);
     } catch(err) {}
@@ -195,8 +266,6 @@ function addHook(d) {
   while (c.children.length > 80) c.removeChild(c.lastChild);
 }
 
-// ── Chat (use sync /api/chat instead of SSE to avoid parsing issues) ──
-
 async function sendMessage() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
@@ -211,7 +280,6 @@ async function sendMessage() {
     const body = { message: text };
     if (sessionKey) body.session_key = sessionKey;
 
-    // Use SSE stream
     const resp = await fetch(API + '/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -234,14 +302,12 @@ async function sendMessage() {
       if (done) break;
       buf += dec.decode(value, { stream: true });
 
-      // Process complete lines
       while (buf.indexOf('\n') !== -1) {
         const idx = buf.indexOf('\n');
         const line = buf.substring(0, idx).trim();
         buf = buf.substring(idx + 1);
 
         if (line === '') {
-          // Empty line = end of event, reset
           curEvent = 'message';
           continue;
         }
@@ -294,7 +360,6 @@ function handleEvent(type, data) {
     updateStream('❌ ' + (data.error || '未知错误'));
     if (streamEl) { streamEl.classList.add('error'); streamEl.classList.remove('streaming'); }
   } else {
-    // Unknown event type — try to extract useful info
     if (data.session_key && !sessionKey) { sessionKey = data.session_key; updateSessionUI(); }
     if (data.response || data.final_answer) {
       updateStream(data.response || data.final_answer);
@@ -325,6 +390,8 @@ function addMsg(type, text, streaming) {
   } else if (type === 'tool-call' || type === 'tool-result') {
     el.innerHTML = '<div class="msg-label">' + (type === 'tool-call' ? 'TOOL CALL' : 'TOOL RESULT') + '</div><pre style="white-space:pre-wrap;word-break:break-all;font-size:10px;margin:0">' + esc(text) + '</pre>';
   } else if (type === 'error') {
+    el.textContent = text;
+  } else if (type === 'system') {
     el.textContent = text;
   } else {
     const span = document.createElement('span');
@@ -359,6 +426,7 @@ function setStreaming(v) {
   document.getElementById('send-btn').disabled = v;
   document.getElementById('msg-input').disabled = v;
   document.getElementById('send-btn').textContent = v ? '...' : '发送';
+  document.getElementById('model-select').disabled = v;
 }
 
 function clearChat() {
