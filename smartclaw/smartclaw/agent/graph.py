@@ -58,8 +58,16 @@ async def _llm_call_with_fallback(
 
     Builds candidates from model_config, creates a ChatModel per candidate,
     optionally binds tools, and invokes via the fallback chain.
+
+    When ``model_config.auth_profiles`` is non-empty, the FallbackChain
+    expands candidates via two-stage logic (profile rotation before provider
+    switching).  The inner ``run`` callable resolves the API key and base_url
+    from the matching AuthProfile using a per-provider queue that is consumed
+    in the same order as the expanded candidate list.
     """
+    import os as _os
     import time as _time
+    from collections import defaultdict, deque
 
     # Build candidate list: primary + fallbacks
     primary_provider, primary_model = parse_model_ref(model_config.primary)
@@ -67,6 +75,20 @@ async def _llm_call_with_fallback(
     for ref in model_config.fallbacks:
         p, m = parse_model_ref(ref)
         candidates.append(FallbackCandidate(provider=p, model=m))
+
+    # Build per-provider profile queue matching the order that
+    # _build_two_stage_candidates will produce.  Each call to run()
+    # for a given provider pops the next profile from the queue.
+    _profile_queues: dict[str, deque] = defaultdict(deque)
+    if model_config.auth_profiles:
+        profiles_by_provider: dict[str, list] = defaultdict(list)
+        for ap in model_config.auth_profiles:
+            profiles_by_provider[ap.provider].append(ap)
+        for cand in candidates:
+            provider_profiles = profiles_by_provider.get(cand.provider)
+            if provider_profiles:
+                for ap in provider_profiles:
+                    _profile_queues[cand.provider].append(ap)
 
     # P2A: trigger llm:before hook and emit llm.called diagnostic event (phase=start)
     _llm_start = _time.monotonic()
@@ -88,9 +110,22 @@ async def _llm_call_with_fallback(
         pass
 
     async def run(provider: str, model: str) -> AIMessage:
+        # Resolve API key and base_url from AuthProfile when available.
+        # The profile queue is consumed in the same order as the expanded
+        # candidate list produced by _build_two_stage_candidates.
+        api_key: str | None = None
+        api_base: str | None = None
+        if _profile_queues.get(provider):
+            profile = _profile_queues[provider].popleft()
+            api_key = _os.environ.get(profile.env_key)
+            if profile.base_url:
+                api_base = profile.base_url
+
         llm = ProviderFactory.create(
             provider,
             model,
+            api_key=api_key,
+            api_base=api_base,
             temperature=model_config.temperature,
             max_tokens=model_config.max_tokens,
             streaming=stream_callback is not None,
@@ -112,7 +147,12 @@ async def _llm_call_with_fallback(
             return AIMessage(content=str(result.content))
         return result
 
-    fb_result = await fallback_chain.execute(candidates, run)
+    fb_result = await fallback_chain.execute(
+        candidates,
+        run,
+        auth_profiles=model_config.auth_profiles,
+        session_sticky=model_config.session_sticky,
+    )
 
     # P2A: trigger llm:after hook and emit llm.called diagnostic event (phase=end)
     _llm_duration_ms = (_time.monotonic() - _llm_start) * 1000.0
