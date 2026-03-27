@@ -24,6 +24,7 @@ dependencies = [
     "opentelemetry-sdk>=1.25.0",
     "opentelemetry-exporter-otlp>=1.25.0",
     "sse-starlette>=2.0.0",
+    "watchdog>=4.0.0",
 ]
 
 [project.optional-dependencies]

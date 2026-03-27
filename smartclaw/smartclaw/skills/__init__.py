@@ -3,6 +3,7 @@
 Provides:
 - ``SkillsLoader`` — YAML skill definition discovery and dynamic loading.
 - ``SkillsRegistry`` — skill registration, management, and ToolRegistry integration.
+- ``SkillsWatcher`` — file watcher for SKILL.md hot-reload.
 - ``SkillDefinition`` — YAML skill definition dataclass.
 - ``SkillInfo`` — skill discovery information dataclass.
 """
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from smartclaw.skills.loader import SkillsLoader as SkillsLoader
     from smartclaw.skills.models import SkillDefinition as SkillDefinition
     from smartclaw.skills.models import SkillInfo as SkillInfo
+    from smartclaw.skills.watcher import SkillsWatcher as SkillsWatcher
 
 
 def __getattr__(name: str) -> object:
@@ -26,6 +28,10 @@ def __getattr__(name: str) -> object:
         from smartclaw.skills.registry import SkillsRegistry
 
         return SkillsRegistry
+    if name == "SkillsWatcher":
+        from smartclaw.skills.watcher import SkillsWatcher
+
+        return SkillsWatcher
     if name == "SkillDefinition":
         from smartclaw.skills.models import SkillDefinition
 
@@ -37,4 +43,4 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = ["SkillsLoader", "SkillsRegistry", "SkillDefinition", "SkillInfo"]
+__all__ = ["SkillsLoader", "SkillsRegistry", "SkillsWatcher", "SkillDefinition", "SkillInfo"]
