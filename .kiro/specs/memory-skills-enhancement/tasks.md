@@ -159,115 +159,115 @@
   - 运行 `pytest tests/config/test_watcher*.py -v`
   - 确保所有测试通过（61 passed）
 
-- [ ] 10. 数据库 Schema 扩展
-  - [~] 10.1 创建记忆分块表和索引
+- [x] 10. 数据库 Schema 扩展
+  - [x] 10.1 创建记忆分块表和索引
     - 在 `smartclaw/memory/schema.py` 中添加 `memory_chunks` 表
     - 创建 `idx_memory_chunks_file` 索引
     - _Requirements: 5.3_
-  - [~] 10.2 创建向量嵌入表（sqlite-vec）
+  - [x] 10.2 创建向量嵌入表（sqlite-vec）
     - 创建 `memory_embeddings` 虚拟表
     - 支持 1536 维向量（OpenAI text-embedding-3-small）
     - _Requirements: 6.1_
-  - [~] 10.3 创建 BM25 全文索引表
+  - [x] 10.3 创建 BM25 全文索引表
     - 创建 `memory_fts` FTS5 虚拟表
     - _Requirements: 6.3_
-  - [~] 10.4 创建事实表
+  - [x] 10.4 创建事实表
     - 创建 `facts` 表和 `idx_facts_confidence` 索引
     - _Requirements: 7.5_
 
-- [ ] 11. MemoryIndexManager 记忆索引管理器实现
-  - [~] 11.1 创建 EmbeddingProvider 基类和实现
+- [x] 11. MemoryIndexManager 记忆索引管理器实现
+  - [x] 11.1 创建 EmbeddingProvider 基类和实现
     - 创建 `smartclaw/memory/index_manager.py`
     - 实现 `EmbeddingProvider` 基类
     - 实现 `OpenAIEmbeddingProvider`（text-embedding-3-small）
     - 实现 `OllamaEmbeddingProvider`（nomic-embed-text）
     - _Requirements: 6.2_
-  - [~] 11.2 实现 Provider 自动降级
+  - [x] 11.2 实现 Provider 自动降级
     - 优先使用配置的 Provider
     - 不可用时自动降级到下一个 Provider
     - 最终降级到纯 BM25 搜索
     - _Requirements: 6.6_
-  - [~] 11.3 编写 Property 18 属性测试：Embedding Provider 降级
+  - [x] 11.3 编写 Property 18 属性测试：Embedding Provider 降级
     - **Property 18: Embedding Provider 降级**
     - **Validates: Requirements 6.2, 6.6**
-  - [~] 11.4 实现 index_chunks() 方法
+  - [x] 11.4 实现 index_chunks() 方法
     - 将 MemoryChunk 向量化并存储到 sqlite-vec
     - 同时更新 BM25 索引
     - _Requirements: 6.1_
-  - [~] 11.5 实现 Hybrid Search
+  - [x] 11.5 实现 Hybrid Search
     - 实现 `_vector_search()` 方法
     - 实现 `_bm25_search()` 方法
     - 实现 `_merge_results()` 方法，按权重合并结果
     - 支持 MMR 去重
     - _Requirements: 6.3, 6.4, 6.5, 6.7_
-  - [~] 11.6 编写 Property 19 属性测试：Hybrid Search 权重计算
+  - [x] 11.6 编写 Property 19 属性测试：Hybrid Search 权重计算
     - **Property 19: Hybrid Search 权重计算**
     - **Validates: Requirements 6.3**
 
-- [~] 12. Checkpoint - 确保 MemoryIndexManager 测试通过
+- [x] 12. Checkpoint - 确保 MemoryIndexManager 测试通过
   - 运行 `pytest tests/memory/test_index_manager*.py -v`
-  - 确保所有测试通过，如有问题请询问用户
+  - 确保所有测试通过（32 passed）
 
-- [ ] 13. FactExtractor 事实提取器实现（可选功能）
-  - [~] 13.1 创建 FactExtractor 核心类
+- [x] 13. FactExtractor 事实提取器实现（可选功能）
+  - [x] 13.1 创建 FactExtractor 核心类
     - 创建 `smartclaw/memory/fact_extractor.py`
     - 实现 `Fact`、`FactStore` 数据类
     - 实现 `_build_extraction_prompt()` 方法
     - _Requirements: 7.2_
-  - [~] 13.2 实现事实提取逻辑
+  - [x] 13.2 实现事实提取逻辑
     - 实现 `extract_facts()` 方法，使用 LLM 分析对话
     - 提取用户偏好、项目信息、工作上下文
     - 为每个事实分配置信度分数
     - _Requirements: 7.1, 7.2, 7.3_
-  - [~] 13.3 编写 Property 20 属性测试：事实置信度过滤
+  - [x] 13.3 编写 Property 20 属性测试：事实置信度过滤
     - **Property 20: 事实置信度过滤**
     - **Validates: Requirements 7.3**
-  - [~] 13.4 实现事实去重和裁剪
+  - [x] 13.4 实现事实去重和裁剪
     - 实现 `_deduplicate_facts()` 方法
     - 实现 `_prune_facts()` 方法，按置信度裁剪
     - _Requirements: 7.4, 7.7, 7.8_
-  - [~] 13.5 编写 Property 21 属性测试：事实数量裁剪
+  - [x] 13.5 编写 Property 21 属性测试：事实数量裁剪
     - **Property 21: 事实数量裁剪**
     - **Validates: Requirements 7.8**
-  - [~] 13.6 实现事实持久化
+  - [x] 13.6 实现事实持久化
     - 实现 `save_facts()` 和 `load_facts()` 方法
     - 保存到 `<workspace>/.smartclaw/facts.json`
     - _Requirements: 7.5, 7.9_
 
-- [~] 14. Checkpoint - 确保 FactExtractor 测试通过
+- [x] 14. Checkpoint - 确保 FactExtractor 测试通过
   - 运行 `pytest tests/memory/test_fact_extractor*.py -v`
-  - 确保所有测试通过，如有问题请询问用户
+  - 确保所有测试通过（35 passed）
 
-- [ ] 15. 系统集成
-  - [~] 15.1 集成 MemoryLoader 到 AgentRuntime
+- [x] 15. 系统集成
+  - [x] 15.1 集成 MemoryLoader 到 AgentRuntime
     - 在 Agent 启动时调用 MemoryLoader 加载记忆
     - 将记忆内容注入系统提示词
     - _Requirements: 1.4_
-  - [~] 15.2 集成 BootstrapLoader 到 SystemPromptBuilder
+  - [x] 15.2 集成 BootstrapLoader 到 SystemPromptBuilder
     - 在构建系统提示词时加载 Bootstrap 文件
     - SOUL.md 作为第一部分，USER.md 注入用户上下文
     - _Requirements: 2.7, 2.8_
-  - [~] 15.3 集成 SkillsWatcher 到 AgentRuntime
+  - [x] 15.3 集成 SkillsWatcher 到 AgentRuntime
     - 在 Agent 启动时启动 SkillsWatcher
     - 在 Agent 关闭时停止 SkillsWatcher
     - _Requirements: 3.6_
-  - [~] 15.4 集成 ConfigWatcher 到应用启动流程
+  - [x] 15.4 集成 ConfigWatcher 到应用启动流程
     - 在应用启动时启动 ConfigWatcher
     - 发布 `config_reloaded` 事件
     - _Requirements: 4.4_
-  - [~] 15.5 集成 MemoryIndexManager 到 MemoryLoader
+  - [x] 15.5 集成 MemoryIndexManager 到 MemoryLoader
     - 在加载 memory/ 目录后自动索引
     - 监听目录变化时增量更新索引
     - _Requirements: 5.6_
-  - [~] 15.6 集成 FactExtractor 到会话管理
+  - [x] 15.6 集成 FactExtractor 到会话管理
     - 在会话结束或超时后触发事实提取
     - 将提取的事实加载到记忆上下文
     - _Requirements: 7.1_
 
-- [~] 16. 最终 Checkpoint - 确保所有测试通过
+- [x] 16. 最终 Checkpoint - 确保所有测试通过
   - 运行 `pytest tests/memory tests/bootstrap tests/skills tests/config -v`
   - 运行 `pytest tests/memory/test_integration.py -v`
-  - 确保所有测试通过，如有问题请询问用户
+  - 确保所有测试通过（792 passed）
 
 ## 备注
 
