@@ -11,7 +11,7 @@
     - 在 `smartclaw/config/settings.py` 中添加 `MemorySettings`、`BootstrapSettings`、`SkillsSettings`、`ConfigSettings` 配置类
     - 添加所有新增配置项：`memory.enabled`、`memory.chunk_tokens`、`bootstrap.enabled`、`skills.hot_reload` 等
     - _Requirements: 1.5, 2.6, 3.7, 3.8, 4.8, 5.4, 5.5, 6.5, 6.8, 7.6, 7.7_
-  - [ ]* 1.2 编写配置类单元测试
+  - [ ] 1.2 编写配置类单元测试
     - 测试配置默认值、类型验证、边界条件
     - _Requirements: 1.5, 2.6, 3.7, 4.8_
 
@@ -22,10 +22,10 @@
     - 实现 `load_memory_md()` 方法，支持大小写不敏感文件名查找
     - 实现文件大小限制（2MB）和截断逻辑
     - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
-  - [ ]* 2.2 编写 Property 1 属性测试：MEMORY.md 文件发现优先级
+  - [ ] 2.2 编写 Property 1 属性测试：MEMORY.md 文件发现优先级
     - **Property 1: MEMORY.md 文件发现优先级**
     - **Validates: Requirements 1.1**
-  - [ ]* 2.3 编写 Property 2 属性测试：记忆文件大小限制
+  - [ ] 2.3 编写 Property 2 属性测试：记忆文件大小限制
     - **Property 2: 记忆文件大小限制**
     - **Validates: Requirements 1.3**
   - [ ] 2.4 实现 Markdown 分块功能
@@ -33,29 +33,29 @@
     - 实现 `compute_hash()` 方法，计算 SHA-256 前 16 位
     - 支持配置 `chunk_tokens` 和 `chunk_overlap`
     - _Requirements: 5.2, 5.3, 5.4, 5.5_
-  - [ ]* 2.5 编写 Property 15 属性测试：Markdown 分块一致性
+  - [ ] 2.5 编写 Property 15 属性测试：Markdown 分块一致性
     - **Property 15: Markdown 分块一致性**
     - **Validates: Requirements 5.2**
-  - [ ]* 2.6 编写 Property 16 属性测试：分块哈希唯一性
+  - [ ] 2.6 编写 Property 16 属性测试：分块哈希唯一性
     - **Property 16: 分块哈希唯一性**
     - **Validates: Requirements 5.3**
   - [ ] 2.7 实现 memory/ 目录扫描
     - 实现 `load_memory_dir()` 方法，递归扫描 `.md` 文件
     - 实现目录大小限制（50MB）
     - _Requirements: 5.1, 5.7, 5.8_
-  - [ ]* 2.8 编写 Property 14 属性测试：memory/ 目录递归扫描
+  - [ ] 2.8 编写 Property 14 属性测试：memory/ 目录递归扫描
     - **Property 14: memory/ 目录递归扫描**
     - **Validates: Requirements 5.1**
-  - [ ]* 2.9 编写 Property 17 属性测试：memory/ 目录大小限制
+  - [ ] 2.9 编写 Property 17 属性测试：memory/ 目录大小限制
     - **Property 17: memory/ 目录大小限制**
     - **Validates: Requirements 5.7**
   - [ ] 2.10 实现 build_memory_context() 方法
     - 构建记忆上下文字符串，用于注入系统提示词
     - _Requirements: 1.4_
-  - [ ]* 2.11 编写 Property 3 属性测试：记忆内容注入位置
+  - [ ] 2.11 编写 Property 3 属性测试：记忆内容注入位置
     - **Property 3: 记忆内容注入位置**
     - **Validates: Requirements 1.4**
-  - [ ]* 2.12 编写 Property 4 属性测试：记忆加载配置开关
+  - [ ] 2.12 编写 Property 4 属性测试：记忆加载配置开关
     - **Property 4: 记忆加载配置开关**
     - **Validates: Requirements 1.5**
 
@@ -70,17 +70,17 @@
     - 实现多级目录查找（workspace > global）
     - 实现文件大小限制（512KB）
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.9_
-  - [ ]* 4.2 编写 Property 5 属性测试：Bootstrap 文件优先级覆盖
+  - [ ] 4.2 编写 Property 5 属性测试：Bootstrap 文件优先级覆盖
     - **Property 5: Bootstrap 文件优先级覆盖**
     - **Validates: Requirements 2.1, 2.3**
-  - [ ]* 4.3 编写 Property 6 属性测试：Bootstrap 文件大小限制
+  - [ ] 4.3 编写 Property 6 属性测试：Bootstrap 文件大小限制
     - **Property 6: Bootstrap 文件大小限制**
     - **Validates: Requirements 2.4**
   - [ ] 4.4 实现文件缓存机制
     - 基于 mtime 判断是否需要重新加载
     - 实现 `invalidate_cache()` 方法
     - _Requirements: 2.5_
-  - [ ]* 4.5 编写 Property 7 属性测试：Bootstrap 文件缓存一致性
+  - [ ] 4.5 编写 Property 7 属性测试：Bootstrap 文件缓存一致性
     - **Property 7: Bootstrap 文件缓存一致性**
     - **Validates: Requirements 2.5**
   - [ ] 4.6 实现 get_soul_content()、get_user_content()、get_tools_content() 方法
@@ -88,7 +88,7 @@
     - USER.md 内容注入用户上下文部分
     - TOOLS.md 内容注入工具描述部分
     - _Requirements: 2.7, 2.8_
-  - [ ]* 4.7 编写 Property 8 属性测试：SOUL.md 提示词位置
+  - [ ] 4.7 编写 Property 8 属性测试：SOUL.md 提示词位置
     - **Property 8: SOUL.md 提示词位置**
     - **Validates: Requirements 2.7**
 
@@ -107,27 +107,27 @@
     - 使用 threading.Timer 实现防抖
     - 支持配置 `debounce_ms`（默认 250ms）
     - _Requirements: 3.3, 3.8_
-  - [ ]* 6.3 编写 Property 9 属性测试：文件监听器防抖行为
+  - [ ] 6.3 编写 Property 9 属性测试：文件监听器防抖行为
     - **Property 9: 文件监听器防抖行为**
     - **Validates: Requirements 3.3, 4.2**
   - [ ] 6.4 实现版本号管理
     - 实现 `_bump_version()` 方法，基于时间戳保证单调递增
     - 实现 `get_version()` 方法
     - _Requirements: 3.4_
-  - [ ]* 6.5 编写 Property 10 属性测试：Skills 版本号单调递增
+  - [ ] 6.5 编写 Property 10 属性测试：Skills 版本号单调递增
     - **Property 10: Skills 版本号单调递增**
     - **Validates: Requirements 3.4**
   - [ ] 6.6 实现忽略目录过滤
     - 忽略 `.git`、`__pycache__`、`venv`、`.venv`、`node_modules`、`.idea`、`.vscode`
     - _Requirements: 3.5_
-  - [ ]* 6.7 编写 Property 11 属性测试：忽略目录过滤
+  - [ ] 6.7 编写 Property 11 属性测试：忽略目录过滤
     - **Property 11: 忽略目录过滤**
     - **Validates: Requirements 3.5**
   - [ ] 6.8 实现错误回退机制
     - 重载失败时保持上一个有效版本
     - 记录 ERROR 级别日志
     - _Requirements: 3.10_
-  - [ ]* 6.9 编写 Property 12 属性测试：监听器错误回退
+  - [ ] 6.9 编写 Property 12 属性测试：监听器错误回退
     - **Property 12: 监听器错误回退**
     - **Validates: Requirements 3.10, 4.5**
   - [ ] 6.10 集成 SkillsLoader
@@ -151,7 +151,7 @@
     - 支持热更新：`providers`、`memory`、`skills`、`logging.level`
     - 标记需重启：`gateway.host`、`gateway.port`
     - _Requirements: 4.3, 4.4, 4.5, 4.6, 4.7, 4.9_
-  - [ ]* 8.3 编写 Property 13 属性测试：配置热更新范围
+  - [ ] 8.3 编写 Property 13 属性测试：配置热更新范围
     - **Property 13: 配置热更新范围**
     - **Validates: Requirements 4.6, 4.7**
 
@@ -187,7 +187,7 @@
     - 不可用时自动降级到下一个 Provider
     - 最终降级到纯 BM25 搜索
     - _Requirements: 6.6_
-  - [ ]* 11.3 编写 Property 18 属性测试：Embedding Provider 降级
+  - [ ] 11.3 编写 Property 18 属性测试：Embedding Provider 降级
     - **Property 18: Embedding Provider 降级**
     - **Validates: Requirements 6.2, 6.6**
   - [ ] 11.4 实现 index_chunks() 方法
@@ -200,7 +200,7 @@
     - 实现 `_merge_results()` 方法，按权重合并结果
     - 支持 MMR 去重
     - _Requirements: 6.3, 6.4, 6.5, 6.7_
-  - [ ]* 11.6 编写 Property 19 属性测试：Hybrid Search 权重计算
+  - [ ] 11.6 编写 Property 19 属性测试：Hybrid Search 权重计算
     - **Property 19: Hybrid Search 权重计算**
     - **Validates: Requirements 6.3**
 
@@ -219,14 +219,14 @@
     - 提取用户偏好、项目信息、工作上下文
     - 为每个事实分配置信度分数
     - _Requirements: 7.1, 7.2, 7.3_
-  - [ ]* 13.3 编写 Property 20 属性测试：事实置信度过滤
+  - [ ] 13.3 编写 Property 20 属性测试：事实置信度过滤
     - **Property 20: 事实置信度过滤**
     - **Validates: Requirements 7.3**
   - [ ] 13.4 实现事实去重和裁剪
     - 实现 `_deduplicate_facts()` 方法
     - 实现 `_prune_facts()` 方法，按置信度裁剪
     - _Requirements: 7.4, 7.7, 7.8_
-  - [ ]* 13.5 编写 Property 21 属性测试：事实数量裁剪
+  - [ ] 13.5 编写 Property 21 属性测试：事实数量裁剪
     - **Property 21: 事实数量裁剪**
     - **Validates: Requirements 7.8**
   - [ ] 13.6 实现事实持久化
@@ -271,7 +271,7 @@
 
 ## 备注
 
-- 标记 `*` 的任务为可选任务，可跳过以加快 MVP 开发
+- 所有任务均为必须执行的任务
 - 每个任务都引用了具体的需求条款以确保可追溯性
 - Checkpoint 任务用于确保增量验证
 - 属性测试验证通用正确性属性，单元测试验证具体示例和边界条件
