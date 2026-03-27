@@ -137,6 +137,35 @@ memory:
 context_engine: "legacy"
 
 # ---------------------------------------------------------------------------
+# Uploads — attachment upload and text extraction
+# ---------------------------------------------------------------------------
+uploads:
+  enabled: true
+  root_dir: "{workspace}/.smartclaw/uploads"
+  max_file_size_mb: 10
+  max_files_per_session: 8
+  max_attachment_chars: 4000
+  max_context_chars: 12000
+  image_analysis_mode: "ocr_only"  # disabled | ocr_only | vision_preferred | vision_only
+  ocr_tesseract_cmd: "tesseract"
+  ocr_languages:
+    - "eng"
+  allowed_media_types:
+    - "text/plain"
+    - "text/markdown"
+    - "application/json"
+    - "application/x-yaml"
+    - "text/yaml"
+    - "text/x-yaml"
+    - "text/csv"
+    - "application/pdf"
+    - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    - "image/png"
+    - "image/jpeg"
+    - "image/webp"
+
+# ---------------------------------------------------------------------------
 # Credentials — credential management settings
 # ---------------------------------------------------------------------------
 credentials:

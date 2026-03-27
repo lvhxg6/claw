@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from langchain_core.messages import HumanMessage
 
 from smartclaw.agent.mode_router import ModeDecision
 from smartclaw.agent.runtime import AgentRuntime
@@ -157,6 +158,34 @@ class TestCapabilityPackEndpoints:
             }
         ]
 
+    def test_models_endpoint_returns_image_analysis_mode_and_capabilities(self):
+        client, _, _, _ = make_test_client()
+
+        with client:
+            runtime = client.app.state.runtime
+            runtime.get_available_models = MagicMock(
+                return_value=["glm/glm-5", "kimi/kimi-k2.5"]
+            )
+            runtime.resolve_model_capabilities = MagicMock(
+                side_effect=lambda model_ref=None, **_: {
+                    "glm/glm-5": MagicMock(
+                        model_dump=lambda: {"supports_vision": False, "source": "builtin_model_registry"}
+                    ),
+                    "kimi/kimi-k2.5": MagicMock(
+                        model_dump=lambda: {"supports_vision": True, "source": "builtin_model_registry"}
+                    ),
+                }[model_ref or runtime.model_config.primary]
+            )
+            client.app.state.settings.uploads.image_analysis_mode = "vision_preferred"
+
+            resp = client.get("/api/models")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["image_analysis_mode"] == "vision_preferred"
+        assert payload["capabilities"]["glm/glm-5"]["supports_vision"] is False
+        assert payload["capabilities"]["kimi/kimi-k2.5"]["supports_vision"] is True
+
     def test_chat_stream_passes_system_prompt_and_summarizer(self):
         import smartclaw.agent.graph as graph_module
         original_invoke = graph_module.invoke
@@ -175,6 +204,37 @@ class TestCapabilityPackEndpoints:
             assert "summarizer" in call_kwargs.kwargs
         finally:
             graph_module.invoke = original_invoke
+
+    def test_session_stats_endpoint_returns_context_metrics(self):
+        client, _, mock_memory, _ = make_test_client()
+
+        with client:
+            mock_memory.get_history = AsyncMock(return_value=[HumanMessage(content="hello world")])
+            mock_memory.get_summary = AsyncMock(return_value="summary text")
+            mock_memory.list_attachments = AsyncMock(return_value=[{"extract_text": "asset text"}])
+            mock_memory.get_session_config = AsyncMock(
+                return_value={
+                    "config": {
+                        "runtime_stats": {
+                            "last_token_stats": {
+                                "prompt_tokens": 10,
+                                "completion_tokens": 5,
+                                "total_tokens": 15,
+                            }
+                        }
+                    }
+                }
+            )
+            resp = client.get("/api/sessions/sess-ctx/stats")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["session_key"] == "sess-ctx"
+        assert payload["message_count"] == 1
+        assert payload["attachment_count"] == 1
+        assert payload["context_tokens_est"] > 0
+        assert payload["last_token_stats"]["total_tokens"] == 15
+        assert payload["provider_cache_supported"] is False
 
     def test_chat_applies_capability_pack_prompt_and_graph_scope(self):
         import smartclaw.agent.graph as graph_module

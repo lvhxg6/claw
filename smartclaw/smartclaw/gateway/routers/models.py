@@ -5,15 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from smartclaw.gateway.models import ModelCapabilityInfo, ModelInfo
+
 router = APIRouter(prefix="/api/models", tags=["models"])
-
-
-class ModelInfo(BaseModel):
-    """Current model information."""
-    primary: str
-    fallbacks: list[str]
-    available: list[str]
-    is_busy: bool
 
 
 class SwitchModelRequest(BaseModel):
@@ -34,15 +28,23 @@ async def get_models(request: Request) -> ModelInfo:
     runtime = request.app.state.runtime
     model_config = runtime.model_config
 
-    # Get all registered providers
-    from smartclaw.providers.factory import ProviderFactory
     available = list(runtime.get_available_models())
+    capability_map = {
+        model_ref: ModelCapabilityInfo(**runtime.resolve_model_capabilities(model_ref).model_dump())
+        for model_ref in available
+    }
+    current_capabilities = ModelCapabilityInfo(
+        **runtime.resolve_model_capabilities(model_config.primary).model_dump()
+    )
 
     return ModelInfo(
         primary=model_config.primary,
         fallbacks=list(model_config.fallbacks),
         available=available,
         is_busy=runtime.is_busy,
+        image_analysis_mode=request.app.state.settings.uploads.image_analysis_mode,
+        current_capabilities=current_capabilities,
+        capabilities=capability_map,
     )
 
 

@@ -17,6 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from smartclaw.agent.mode_router import ModeDecision
+from smartclaw.config.settings import SmartClawSettings
+from smartclaw.providers.capabilities import ModelCapabilities
+from smartclaw.providers.config import parse_model_ref
 from smartclaw.tools.registry import ToolRegistry
 
 
@@ -43,11 +46,15 @@ def _build_test_app(
     from smartclaw.gateway.routers.capability_packs import router as capability_packs_router
     from smartclaw.gateway.routers.chat import router as chat_router
     from smartclaw.gateway.routers.health import router as health_router
+    from smartclaw.gateway.routers.models import router as models_router
     from smartclaw.gateway.routers.sessions import router as sessions_router
     from smartclaw.gateway.routers.tools import router as tools_router
+    from smartclaw.gateway.routers.uploads import router as uploads_router
 
     @asynccontextmanager
     async def test_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        import smartclaw.agent.graph as graph_module
+
         # Build a mock runtime that wraps the individual mocks
         mock_runtime = MagicMock()
         mock_runtime.graph = mock_graph
@@ -57,8 +64,22 @@ def _build_test_app(
         mock_runtime.summarizer = None
         mock_runtime.close = AsyncMock()
         mock_runtime.tools = registry.get_all()
-        mock_runtime.create_graph = MagicMock(return_value=mock_graph)
-        mock_runtime.create_request_graph = MagicMock(return_value=mock_graph)
+
+        def _create_request_graph(
+            model_ref: str | None = None,
+            *,
+            mode: str | None = None,
+            capability_pack: str | None = None,
+        ) -> Any:
+            del mode, capability_pack
+            if not model_ref:
+                return mock_graph
+            parse_model_ref(model_ref)
+            temp_config = mock_runtime.model_config.model_copy(update={"primary": model_ref})
+            return graph_module.build_graph(temp_config, registry.get_all())
+
+        mock_runtime.create_graph = MagicMock(side_effect=_create_request_graph)
+        mock_runtime.create_request_graph = MagicMock(side_effect=_create_request_graph)
         mock_runtime.resolve_mode = MagicMock(
             return_value=ModeDecision(
                 requested_mode=None,
@@ -80,11 +101,14 @@ def _build_test_app(
         mock_runtime.capability_registry.get = MagicMock(return_value=None)
         mock_runtime.compose_system_prompt = MagicMock(return_value=mock_runtime.system_prompt)
         mock_runtime.build_capability_policy = MagicMock(return_value=None)
+        mock_runtime.resolve_model_capabilities = MagicMock(return_value=ModelCapabilities())
+        mock_runtime.get_available_models = MagicMock(return_value=["kimi/kimi-k2.5", "glm/glm-5"])
 
         from smartclaw.providers.config import ModelConfig
         mock_runtime.model_config = ModelConfig()
 
         app.state.runtime = mock_runtime
+        app.state.settings = SmartClawSettings()
         # Backward compatibility aliases
         app.state.registry = registry
         app.state.memory_store = mock_memory
@@ -102,7 +126,9 @@ def _build_test_app(
     )
     app.include_router(chat_router)
     app.include_router(capability_packs_router)
+    app.include_router(models_router)
     app.include_router(sessions_router)
+    app.include_router(uploads_router)
     app.include_router(tools_router)
     app.include_router(health_router)
     return app
@@ -123,9 +149,18 @@ def make_test_client(
     mock_memory.get_summary = AsyncMock(return_value="")
     mock_memory.set_history = AsyncMock()
     mock_memory.set_summary = AsyncMock()
+    mock_memory.delete_summary = AsyncMock()
+    mock_memory.delete_session = AsyncMock()
     mock_memory.get_session_config = AsyncMock(return_value=None)
     mock_memory.set_session_config = AsyncMock()
+    mock_memory.delete_session_config = AsyncMock()
     mock_memory.list_sessions = AsyncMock(return_value=[])
+    mock_memory.upsert_attachment = AsyncMock()
+    mock_memory.get_attachment = AsyncMock(return_value=None)
+    mock_memory.get_attachments = AsyncMock(return_value=[])
+    mock_memory.list_attachments = AsyncMock(return_value=[])
+    mock_memory.delete_attachment = AsyncMock()
+    mock_memory.delete_attachments_for_session = AsyncMock()
 
     # Mock graph
     mock_graph = MagicMock()

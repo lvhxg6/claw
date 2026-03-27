@@ -14,7 +14,7 @@ from contextlib import suppress
 from functools import partial
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph as _CompiledStateGraph
@@ -445,6 +445,174 @@ async def invoke(
 
 
 # ---------------------------------------------------------------------------
+# invoke_multimodal
+# ---------------------------------------------------------------------------
+
+
+async def invoke_multimodal(
+    user_message: BaseMessage,
+    *,
+    model_config: ModelConfig,
+    system_prompt: str | None = None,
+    session_key: str | None = None,
+    memory_store: Any | None = None,
+    summarizer: Any | None = None,
+    context_engine: Any | None = None,
+    stream_callback: Callable[[str], None] | None = None,
+) -> AgentState:
+    """Directly invoke the model with a pre-built multimodal user message."""
+    messages: list[BaseMessage] = []
+    if system_prompt:
+        messages.append(SystemMessage(content=system_prompt))
+
+    if session_key is not None and memory_store is not None:
+        if context_engine is not None:
+            with suppress(Exception):
+                await context_engine.bootstrap(session_key, system_prompt=system_prompt)
+        history = await memory_store.get_history(session_key)
+        if history:
+            messages.extend(history)
+        if context_engine is not None:
+            messages = await context_engine.assemble(messages, system_prompt=system_prompt)
+        elif summarizer is not None:
+            messages = await summarizer.build_context(session_key, messages, system_prompt=system_prompt)
+
+    messages.append(user_message)
+
+    preview = _message_preview(user_message)
+
+    if session_key is not None:
+        try:
+            import smartclaw.hooks.registry as _hook_registry
+            from smartclaw.hooks.events import SessionStartEvent
+
+            await _hook_registry.trigger("session:start", SessionStartEvent(session_key=session_key))
+        except Exception:
+            pass
+
+    try:
+        import smartclaw.hooks.registry as _hook_registry
+        from smartclaw.hooks.events import AgentStartEvent
+
+        await _hook_registry.trigger(
+            "agent:start",
+            AgentStartEvent(
+                session_key=session_key,
+                user_message=preview[:256],
+                tools_count=0,
+            ),
+        )
+    except Exception:
+        pass
+
+    try:
+        from smartclaw.observability import diagnostic_bus as _dbus
+
+        await _dbus.emit(
+            "agent.run",
+            {
+                "phase": "start",
+                "session_key": session_key,
+                "user_message": preview[:256],
+                "mode": "multimodal_direct",
+            },
+        )
+    except Exception:
+        pass
+
+    logger.info("invoke_multimodal start", session_key=session_key, user_message=preview[:100])
+
+    response = await _llm_call_with_fallback(
+        messages,
+        tools=None,
+        model_config=model_config,
+        fallback_chain=FallbackChain(),
+        stream_callback=stream_callback,
+    )
+
+    final_answer = _message_preview(response)
+    result_messages = [user_message, response]
+
+    if session_key is not None and memory_store is not None:
+        for msg in result_messages:
+            await memory_store.add_full_message(session_key, msg)
+        if context_engine is not None:
+            updated_history = await memory_store.get_history(session_key)
+            await context_engine.after_turn(session_key, updated_history)
+        elif summarizer is not None:
+            updated_history = await memory_store.get_history(session_key)
+            await summarizer.maybe_summarize(session_key, updated_history)
+
+    try:
+        import smartclaw.hooks.registry as _hook_registry
+        from smartclaw.hooks.events import AgentEndEvent
+
+        await _hook_registry.trigger(
+            "agent:end",
+            AgentEndEvent(
+                session_key=session_key,
+                final_answer=final_answer,
+                iterations=1,
+                error=None,
+            ),
+        )
+    except Exception:
+        pass
+
+    try:
+        from smartclaw.observability import diagnostic_bus as _dbus
+
+        await _dbus.emit(
+            "agent.run",
+            {
+                "phase": "end",
+                "session_key": session_key,
+                "iterations": 1,
+                "error": None,
+                "mode": "multimodal_direct",
+            },
+        )
+    except Exception:
+        pass
+
+    if session_key is not None:
+        try:
+            import smartclaw.hooks.registry as _hook_registry
+            from smartclaw.hooks.events import SessionEndEvent
+
+            await _hook_registry.trigger("session:end", SessionEndEvent(session_key=session_key))
+        except Exception:
+            pass
+
+    logger.info("invoke_multimodal done", session_key=session_key)
+
+    return {
+        "messages": result_messages,
+        "iteration": 1,
+        "max_iterations": 1,
+        "final_answer": final_answer,
+        "error": None,
+        "session_key": session_key,
+        "summary": None,
+        "sub_agent_depth": None,
+        "mode": None,
+        "plan": None,
+        "todos": None,
+        "current_phase": None,
+        "phase_status": None,
+        "phase_index": None,
+        "capability_pack": None,
+        "capability_policy": None,
+        "dispatch_batches": None,
+        "task_results": None,
+        "structured_result": None,
+        "schema_validation": None,
+        "token_stats": None,
+        "clarification_request": None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # create_vision_message
 # ---------------------------------------------------------------------------
 
@@ -464,15 +632,40 @@ def create_vision_message(
     Returns:
         A HumanMessage with a content list containing a text block and an image_url block.
     """
-    return HumanMessage(
-        content=[
-            {"type": "text", "text": text},
+    return create_vision_message_batch(
+        text,
+        [{"media_type": media_type, "image_base64": image_base64}],
+    )
+
+
+def create_vision_message_batch(
+    text: str,
+    images: list[dict[str, str]],
+) -> HumanMessage:
+    """Construct a multimodal HumanMessage with text and one or more images."""
+    content: list[dict[str, Any]] = [{"type": "text", "text": text}]
+    for image in images:
+        content.append(
             {
                 "type": "image_url",
-                "image_url": {"url": f"data:{media_type};base64,{image_base64}"},
-            },
-        ]
-    )
+                "image_url": {"url": f"data:{image['media_type']};base64,{image['image_base64']}"},
+            }
+        )
+    return HumanMessage(content=content)
+
+
+def _message_preview(message: BaseMessage) -> str:
+    """Return a readable preview string from a message content payload."""
+    content = message.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        return "\n".join(part for part in parts if part).strip()
+    return str(content)
 
 
 # ---------------------------------------------------------------------------

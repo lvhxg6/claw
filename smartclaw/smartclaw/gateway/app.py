@@ -148,12 +148,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app(settings: Any = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    from smartclaw.gateway.routers.chat import router as chat_router
     from smartclaw.gateway.routers.capability_packs import router as capability_packs_router
+    from smartclaw.gateway.routers.chat import router as chat_router
     from smartclaw.gateway.routers.health import router as health_router
     from smartclaw.gateway.routers.models import router as models_router
     from smartclaw.gateway.routers.sessions import router as sessions_router
     from smartclaw.gateway.routers.tools import router as tools_router
+    from smartclaw.gateway.routers.uploads import router as uploads_router
 
     app = FastAPI(title="SmartClaw API", version="0.1.0", lifespan=lifespan)
 
@@ -178,6 +179,7 @@ def create_app(settings: Any = None) -> FastAPI:
     app.include_router(chat_router)
     app.include_router(capability_packs_router)
     app.include_router(sessions_router)
+    app.include_router(uploads_router)
     app.include_router(tools_router)
     app.include_router(health_router)
     app.include_router(models_router)
@@ -197,13 +199,11 @@ def create_app(settings: Any = None) -> FastAPI:
                     try:
                         payload = await asyncio.wait_for(q.get(), timeout=15.0)
                         yield {"data": payload}
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield {"data": json.dumps({"ping": True})}
             finally:
-                try:
+                with suppress(ValueError):
                     _hook_event_queues.remove(q)
-                except ValueError:
-                    pass
 
         return EventSourceResponse(generator())
 
@@ -222,13 +222,11 @@ def create_app(settings: Any = None) -> FastAPI:
                     try:
                         payload = await asyncio.wait_for(q.get(), timeout=15.0)
                         yield {"data": payload}
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield {"data": json.dumps({"ping": True})}
             finally:
-                try:
+                with suppress(ValueError):
                     _decision_event_queues.remove(q)
-                except ValueError:
-                    pass
 
         return EventSourceResponse(generator())
 

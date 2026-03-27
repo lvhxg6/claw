@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import suppress
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -16,6 +18,9 @@ from sse_starlette.sse import EventSourceResponse
 
 from smartclaw.gateway.models import ChatRequest, ChatResponse, ClarificationData
 from smartclaw.hooks.events import HookEvent
+from smartclaw.uploads import build_attachment_context
+from smartclaw.uploads.models import AttachmentRecord
+from smartclaw.uploads.service import UploadService
 
 logger = structlog.get_logger(component="gateway.chat")
 
@@ -90,6 +95,216 @@ def _build_approval_response(policy: dict | None, *, session_key: str) -> ChatRe
             options=clarification.get("options"),
         ),
     )
+
+
+async def _apply_session_model_override(
+    request_body: ChatRequest,
+    *,
+    session_key: str,
+    memory_store: Any,
+) -> ChatRequest:
+    """Apply persisted session-level model override when request omits model."""
+    if request_body.model or memory_store is None:
+        return request_body
+    try:
+        cfg = await memory_store.get_session_config(session_key)
+        if cfg and cfg.get("model_override"):
+            return request_body.model_copy(update={"model": cfg["model_override"]})
+    except Exception:
+        pass
+    return request_body
+
+
+async def _persist_session_token_stats(
+    *,
+    memory_store: Any,
+    session_key: str,
+    token_stats: dict[str, int] | None,
+) -> None:
+    """Persist latest token stats in session config JSON for later stats queries."""
+    if memory_store is None or not session_key or token_stats is None:
+        return
+    try:
+        existing = await memory_store.get_session_config(session_key) or {}
+        model_override = existing.get("model_override")
+        config = existing.get("config") or {}
+        if not isinstance(config, dict):
+            config = {}
+        config["runtime_stats"] = {
+            "last_token_stats": token_stats,
+        }
+        await memory_store.set_session_config(
+            session_key,
+            model_override=model_override,
+            config_json=json.dumps(config, ensure_ascii=False),
+        )
+    except Exception:
+        pass
+
+
+async def _resolve_session_key(
+    request_body: ChatRequest,
+    *,
+    runtime: Any,
+    settings: Any,
+) -> str:
+    """Resolve session key, preferring attachment-linked sessions when present."""
+    if request_body.session_key:
+        return request_body.session_key
+    attachment_ids = request_body.attachment_ids or []
+    if not attachment_ids:
+        return str(uuid.uuid4())
+
+    service = UploadService(runtime.memory_store, settings)
+    attachments = await service.get_attachments(list(attachment_ids))
+    attachment_session_keys = {item.session_key for item in attachments if item.session_key}
+    if len(attachment_session_keys) == 1:
+        return next(iter(attachment_session_keys))
+    return str(uuid.uuid4())
+
+
+async def _resolve_request_attachments(
+    request_body: ChatRequest,
+    *,
+    session_key: str,
+    runtime: Any,
+    settings: Any,
+) -> list[AttachmentRecord]:
+    """Resolve attachment ids into attachment records and validate session affinity."""
+    attachment_ids = request_body.attachment_ids or []
+    if not attachment_ids:
+        return []
+
+    service = UploadService(runtime.memory_store, settings)
+    attachments = await service.get_attachments(list(attachment_ids))
+    if len(attachments) != len(attachment_ids):
+        raise ValueError("One or more attachments were not found")
+
+    for attachment in attachments:
+        if attachment.session_key and attachment.session_key != session_key:
+            raise ValueError("Attachment session mismatch")
+
+    return attachments
+
+
+async def _compose_request_message(
+    request_body: ChatRequest,
+    *,
+    session_key: str,
+    runtime: Any,
+    settings: Any,
+) -> str:
+    """Merge uploaded attachment summaries into the effective user message."""
+    attachments = await _resolve_request_attachments(
+        request_body,
+        session_key=session_key,
+        runtime=runtime,
+        settings=settings,
+    )
+    if not attachments:
+        return request_body.message
+
+    attachment_context = build_attachment_context(attachments, settings.uploads)
+    if not attachment_context:
+        return request_body.message
+    return attachment_context + "\n\n[User Request]\n" + request_body.message
+
+
+def _effective_model_config(runtime: Any, model_ref: str | None) -> Any:
+    """Return a request-scoped model config, preserving fallbacks and defaults."""
+    if not model_ref:
+        return runtime.model_config
+    return runtime.model_config.model_copy(update={"primary": model_ref})
+
+
+def _merge_attachment_context(
+    attachments: list[AttachmentRecord],
+    *,
+    settings: Any,
+    user_message: str,
+) -> str:
+    """Merge attachment context into a plain-text user request."""
+    if not attachments:
+        return user_message
+    attachment_context = build_attachment_context(attachments, settings.uploads)
+    if not attachment_context:
+        return user_message
+    return attachment_context + "\n\n[User Request]\n" + user_message
+
+
+def _resolve_image_strategy(
+    *,
+    runtime: Any,
+    settings: Any,
+    request_body: ChatRequest,
+    attachments: list[AttachmentRecord],
+) -> tuple[str, Any]:
+    """Resolve image handling strategy for the effective model and request attachments."""
+    image_attachments = [item for item in attachments if item.media_type.startswith("image/")]
+    capabilities = runtime.resolve_model_capabilities(request_body.model or None)
+    if not image_attachments:
+        return "text_only", capabilities
+
+    image_mode = (settings.uploads.image_analysis_mode or "disabled").strip().lower()
+    if image_mode == "disabled":
+        return "disabled", capabilities
+    if image_mode == "ocr_only":
+        return "ocr_only", capabilities
+    if image_mode == "vision_only":
+        if not capabilities.supports_vision:
+            raise ValueError("Current model does not support image input required by vision_only mode")
+        return "vision_only", capabilities
+    if image_mode == "vision_preferred":
+        if capabilities.supports_vision:
+            return "vision_preferred", capabilities
+        return "ocr_only", capabilities
+    return "ocr_only", capabilities
+
+
+def _build_vision_user_message(
+    *,
+    request_body: ChatRequest,
+    attachments: list[AttachmentRecord],
+    settings: Any,
+    capabilities: Any,
+):
+    """Build a multimodal user message from uploaded image attachments."""
+    from smartclaw.agent.graph import create_vision_message_batch
+
+    image_attachments = [item for item in attachments if item.media_type.startswith("image/")]
+    non_image_attachments = [item for item in attachments if not item.media_type.startswith("image/")]
+
+    if not image_attachments:
+        raise ValueError("No image attachments available for multimodal analysis")
+
+    if capabilities.max_image_count is not None and len(image_attachments) > capabilities.max_image_count:
+        raise ValueError(f"Current model supports at most {capabilities.max_image_count} images per request")
+
+    image_payloads: list[dict[str, str]] = []
+    for attachment in image_attachments:
+        image_bytes = Path(attachment.storage_path).read_bytes()
+        if capabilities.max_image_bytes is not None and len(image_bytes) > capabilities.max_image_bytes:
+            raise ValueError(f"Attachment '{attachment.filename}' exceeds the model image size limit")
+        image_payloads.append(
+            {
+                "media_type": attachment.media_type,
+                "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+            }
+        )
+
+    sections: list[str] = []
+    if non_image_attachments:
+        attachment_context = build_attachment_context(non_image_attachments, settings.uploads)
+        if attachment_context:
+            sections.append(attachment_context)
+
+    sections.append("[Images]")
+    for attachment in image_attachments:
+        sections.append(f"- {attachment.filename} ({attachment.media_type})")
+
+    sections.append("[User Request]\n" + request_body.message)
+    text = "\n".join(section for section in sections if section).strip()
+    return create_vision_message_batch(text, image_payloads)
 
 
 # ---------------------------------------------------------------------------
@@ -222,23 +437,19 @@ def _unregister_stream_handlers(handlers: dict[str, Any]) -> None:
 @router.post("", response_model=ChatResponse)
 async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
     """Synchronous chat endpoint: invoke Agent Graph and return full result."""
-    session_key = request_body.session_key or str(uuid.uuid4())
     runtime = request.app.state.runtime
+    settings = request.app.state.settings
+    session_key = await _resolve_session_key(request_body, runtime=runtime, settings=settings)
     memory_store = runtime.memory_store
 
     # Track active request for model switching protection
     runtime.increment_requests()
 
-    # Session model override: if request has no model, check session_config
-    if not request_body.model and memory_store is not None:
-        try:
-            cfg = await memory_store.get_session_config(session_key)
-            if cfg and cfg.get("model_override"):
-                request_body = request_body.model_copy(
-                    update={"model": cfg["model_override"]}
-                )
-        except Exception:
-            pass  # fall back to default model
+    request_body = await _apply_session_model_override(
+        request_body,
+        session_key=session_key,
+        memory_store=memory_store,
+    )
 
     try:
         resolved_mode, graph, system_prompt, capability_pack, capability_policy = _resolve_execution(
@@ -257,27 +468,68 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
         return _build_approval_response(capability_policy, session_key=session_key)
 
     try:
-        from smartclaw.agent.graph import invoke
+        from smartclaw.agent.graph import invoke, invoke_multimodal
 
-        result = await invoke(
-            graph,
-            request_body.message,
-            max_iterations=request_body.max_iterations,
+        attachments = await _resolve_request_attachments(
+            request_body,
             session_key=session_key,
-            memory_store=memory_store,
-            system_prompt=system_prompt,
-            summarizer=runtime.summarizer,
-            context_engine=getattr(runtime, "context_engine", None),
-            mode=resolved_mode,
-            capability_pack=capability_pack,
-            capability_policy=capability_policy,
+            runtime=runtime,
+            settings=settings,
         )
+        image_strategy, capabilities = _resolve_image_strategy(
+            runtime=runtime,
+            settings=settings,
+            request_body=request_body,
+            attachments=attachments,
+        )
+
+        if image_strategy in {"vision_preferred", "vision_only"}:
+            user_message = _build_vision_user_message(
+                request_body=request_body,
+                attachments=attachments,
+                settings=settings,
+                capabilities=capabilities,
+            )
+            result = await invoke_multimodal(
+                user_message,
+                model_config=_effective_model_config(runtime, request_body.model),
+                session_key=session_key,
+                memory_store=memory_store,
+                system_prompt=system_prompt,
+                summarizer=runtime.summarizer,
+                context_engine=getattr(runtime, "context_engine", None),
+            )
+        else:
+            effective_message = _merge_attachment_context(
+                attachments,
+                settings=settings,
+                user_message=request_body.message,
+            )
+
+            result = await invoke(
+                graph,
+                effective_message,
+                max_iterations=request_body.max_iterations,
+                session_key=session_key,
+                memory_store=memory_store,
+                system_prompt=system_prompt,
+                summarizer=runtime.summarizer,
+                context_engine=getattr(runtime, "context_engine", None),
+                mode=resolved_mode,
+                capability_pack=capability_pack,
+                capability_policy=capability_policy,
+            )
         clarification = None
         cr = result.get("clarification_request")
         if cr:
             clarification = ClarificationData(
                 question=cr["question"], options=cr.get("options")
             )
+        await _persist_session_token_stats(
+            memory_store=memory_store,
+            session_key=session_key,
+            token_stats=result.get("token_stats"),
+        )
         return ChatResponse(
             session_key=session_key,
             response=result.get("final_answer") or "",
@@ -285,6 +537,12 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
             error=result.get("error"),
             token_stats=result.get("token_stats"),
             clarification=clarification,
+        )
+    except ValueError as exc:
+        logger.warning("chat_attachment_error", error=str(exc))
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=400,
+            content={"error": str(exc)},
         )
     except Exception as exc:
         logger.error("chat_invoke_error", error=str(exc))
@@ -299,13 +557,20 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
 @router.post("/stream")
 async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourceResponse:
     """SSE streaming endpoint: emits tool_call, tool_result, thinking, done, error events."""
-    session_key = request_body.session_key or str(uuid.uuid4())
     runtime = request.app.state.runtime
+    settings = request.app.state.settings
+    session_key = await _resolve_session_key(request_body, runtime=runtime, settings=settings)
     memory_store = runtime.memory_store
     max_iterations = request_body.max_iterations
 
     # Track active request for model switching protection
     runtime.increment_requests()
+
+    request_body = await _apply_session_model_override(
+        request_body,
+        session_key=session_key,
+        memory_store=memory_store,
+    )
 
     try:
         resolved_mode, graph, system_prompt, capability_pack, capability_policy = _resolve_execution(
@@ -344,11 +609,67 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
         return EventSourceResponse(approval_generator())
 
     async def event_generator() -> AsyncGenerator[dict, None]:  # type: ignore[type-arg]
-        from smartclaw.agent.graph import invoke
+        from smartclaw.agent.graph import invoke, invoke_multimodal
+        effective_message = request_body.message
+        attachments: list[AttachmentRecord] = []
+        use_multimodal = False
+        invoke_task_kwargs: dict[str, Any] = {}
 
         try:
+            attachments = await _resolve_request_attachments(
+                request_body,
+                session_key=session_key,
+                runtime=runtime,
+                settings=settings,
+            )
+            image_strategy, capabilities = _resolve_image_strategy(
+                runtime=runtime,
+                settings=settings,
+                request_body=request_body,
+                attachments=attachments,
+            )
+            if image_strategy in {"vision_preferred", "vision_only"}:
+                effective_message = _build_vision_user_message(
+                    request_body=request_body,
+                    attachments=attachments,
+                    settings=settings,
+                    capabilities=capabilities,
+                )
+                use_multimodal = True
+                invoke_task_kwargs = {
+                    "model_config": _effective_model_config(runtime, request_body.model),
+                    "session_key": session_key,
+                    "memory_store": memory_store,
+                    "system_prompt": system_prompt,
+                    "summarizer": runtime.summarizer,
+                    "context_engine": getattr(runtime, "context_engine", None),
+                }
+            else:
+                effective_message = _merge_attachment_context(
+                    attachments,
+                    settings=settings,
+                    user_message=request_body.message,
+                )
+                invoke_task_kwargs = {
+                    "max_iterations": max_iterations,
+                    "session_key": session_key,
+                    "memory_store": memory_store,
+                    "system_prompt": system_prompt,
+                    "summarizer": runtime.summarizer,
+                    "context_engine": getattr(runtime, "context_engine", None),
+                    "mode": resolved_mode,
+                    "capability_pack": capability_pack,
+                    "capability_policy": capability_policy,
+                }
             queue: asyncio.Queue = asyncio.Queue(maxsize=200)  # type: ignore[type-arg]
             handlers = _register_stream_handlers(queue)
+        except ValueError as exc:
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(exc)}, ensure_ascii=False),
+            }
+            runtime.decrement_requests()
+            return
         except Exception:
             # Fallback: queue/handler setup failed → simple thinking + done
             try:
@@ -359,19 +680,17 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                         ensure_ascii=False,
                     ),
                 }
-                result = await invoke(
-                    graph,
-                    request_body.message,
-                    max_iterations=max_iterations,
-                    session_key=session_key,
-                    memory_store=memory_store,
-                    system_prompt=system_prompt,
-                    summarizer=runtime.summarizer,
-                    context_engine=getattr(runtime, "context_engine", None),
-                    mode=resolved_mode,
-                    capability_pack=capability_pack,
-                    capability_policy=capability_policy,
-                )
+                if use_multimodal:
+                    result = await invoke_multimodal(
+                        effective_message,  # type: ignore[arg-type]
+                        **invoke_task_kwargs,
+                    )
+                else:
+                    result = await invoke(
+                        graph,
+                        effective_message,
+                        **invoke_task_kwargs,
+                    )
                 cr = result.get("clarification_request")
                 if cr:
                     yield {
@@ -391,6 +710,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                             "session_key": session_key,
                             "response": result.get("final_answer") or "",
                             "iterations": result.get("iteration", 0),
+                            "token_stats": result.get("token_stats"),
                         },
                         ensure_ascii=False,
                     ),
@@ -407,21 +727,21 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
             return
 
         try:
-            task = asyncio.create_task(
-                invoke(
-                    graph,
-                    request_body.message,
-                    max_iterations=max_iterations,
-                    session_key=session_key,
-                    memory_store=memory_store,
-                    system_prompt=system_prompt,
-                    summarizer=runtime.summarizer,
-                    context_engine=getattr(runtime, "context_engine", None),
-                    mode=resolved_mode,
-                    capability_pack=capability_pack,
-                    capability_policy=capability_policy,
+            if use_multimodal:
+                task = asyncio.create_task(
+                    invoke_multimodal(
+                        effective_message,  # type: ignore[arg-type]
+                        **invoke_task_kwargs,
+                    )
                 )
-            )
+            else:
+                task = asyncio.create_task(
+                    invoke(
+                        graph,
+                        effective_message,
+                        **invoke_task_kwargs,
+                    )
+                )
 
             # Main loop: read events from queue while invoke runs
             while not task.done():
@@ -454,6 +774,11 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                         ensure_ascii=False,
                     ),
                 }
+            await _persist_session_token_stats(
+                memory_store=memory_store,
+                session_key=session_key,
+                token_stats=result.get("token_stats"),
+            )
             yield {
                 "event": "done",
                 "data": json.dumps(
@@ -461,6 +786,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                         "session_key": session_key,
                         "response": result.get("final_answer") or "",
                         "iterations": result.get("iteration", 0),
+                        "token_stats": result.get("token_stats"),
                     },
                     ensure_ascii=False,
                 ),

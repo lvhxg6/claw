@@ -114,6 +114,41 @@ class CapabilityPackSettings(BaseSettings):
     global_dir: str = "~/.smartclaw/capability_packs"
 
 
+class UploadSettings(BaseSettings):
+    """Attachment upload and extraction configuration."""
+
+    enabled: bool = Field(default=True, description="Enable upload and attachment analysis APIs")
+    root_dir: str = Field(default="{workspace}/.smartclaw/uploads", description="Attachment storage root")
+    max_file_size_mb: int = Field(default=10, description="Maximum upload size in MB")
+    max_files_per_session: int = Field(default=8, description="Maximum attachments linked to a session")
+    max_attachment_chars: int = Field(default=4000, description="Maximum excerpt chars per attachment")
+    max_context_chars: int = Field(default=12000, description="Maximum total chars injected from attachments")
+    image_analysis_mode: str = Field(
+        default="ocr_only",
+        description="Image analysis mode: disabled | ocr_only | vision_preferred | vision_only",
+    )
+    ocr_tesseract_cmd: str = Field(default="tesseract", description="Path to tesseract binary")
+    ocr_languages: list[str] = Field(default_factory=lambda: ["eng"], description="OCR language list")
+    allowed_media_types: list[str] = Field(
+        default_factory=lambda: [
+            "text/plain",
+            "text/markdown",
+            "application/json",
+            "application/x-yaml",
+            "text/yaml",
+            "text/x-yaml",
+            "text/csv",
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+        ],
+        description="Allowed upload media types",
+    )
+
+
 class SubAgentSettings(BaseSettings):
     """Sub-agent configuration."""
 
@@ -216,6 +251,7 @@ class SmartClawSettings(BaseSettings):
     bootstrap: BootstrapSettings = Field(default_factory=BootstrapSettings)
     config: ConfigSettings = Field(default_factory=ConfigSettings)
     capability_packs: CapabilityPackSettings = Field(default_factory=CapabilityPackSettings)
+    uploads: UploadSettings = Field(default_factory=UploadSettings)
     sub_agent: SubAgentSettings = Field(default_factory=SubAgentSettings)
     multi_agent: MultiAgentSettings = Field(default_factory=MultiAgentSettings)
 

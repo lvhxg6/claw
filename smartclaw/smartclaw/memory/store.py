@@ -64,6 +64,29 @@ CREATE TABLE IF NOT EXISTS cooldown_state (
     failure_counts_json TEXT DEFAULT '{}'
 )"""
 
+_CREATE_ATTACHMENTS_TABLE = """\
+CREATE TABLE IF NOT EXISTS attachments (
+    asset_id TEXT PRIMARY KEY,
+    session_key TEXT,
+    filename TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'uploaded',
+    extract_status TEXT NOT NULL DEFAULT 'pending',
+    extract_text TEXT DEFAULT '',
+    extract_summary TEXT DEFAULT '',
+    error_message TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)"""
+
+_CREATE_ATTACHMENTS_SESSION_INDEX = """\
+CREATE INDEX IF NOT EXISTS idx_attachments_session
+    ON attachments(session_key, created_at DESC)"""
+
 
 class MemoryStore:
     """Async SQLite conversation memory store."""
@@ -86,6 +109,8 @@ class MemoryStore:
         await self._db.execute(_CREATE_SUMMARIES_TABLE)
         await self._db.execute(_CREATE_SESSION_CONFIG_TABLE)
         await self._db.execute(_CREATE_COOLDOWN_STATE_TABLE)
+        await self._db.execute(_CREATE_ATTACHMENTS_TABLE)
+        await self._db.execute(_CREATE_ATTACHMENTS_SESSION_INDEX)
         await self._db.commit()
         logger.info("memory_store_initialized", db_path=str(self._db_path))
 
@@ -237,6 +262,16 @@ class MemoryStore:
         await self._db.commit()
         logger.debug("summary_set", session_key=session_key)
 
+    async def delete_summary(self, session_key: str) -> None:
+        """Delete the summary row for *session_key*."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            "DELETE FROM summaries WHERE session_key = ?",
+            (session_key,),
+        )
+        await self._db.commit()
+        logger.debug("summary_deleted", session_key=session_key)
+
     # ------------------------------------------------------------------
     # Session Config
     # ------------------------------------------------------------------
@@ -282,6 +317,35 @@ class MemoryStore:
         await self._db.commit()
         logger.debug("session_config_set", session_key=session_key)
 
+    async def delete_session_config(self, session_key: str) -> None:
+        """Delete persisted config for *session_key*."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            "DELETE FROM session_config WHERE session_key = ?",
+            (session_key,),
+        )
+        await self._db.commit()
+        logger.debug("session_config_deleted", session_key=session_key)
+
+    async def delete_session(self, session_key: str) -> None:
+        """Delete all persisted message, summary, and config rows for a session."""
+        assert self._db is not None, "MemoryStore not initialized"
+        async with self._db.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM messages WHERE session_key = ?",
+                (session_key,),
+            )
+            await cur.execute(
+                "DELETE FROM summaries WHERE session_key = ?",
+                (session_key,),
+            )
+            await cur.execute(
+                "DELETE FROM session_config WHERE session_key = ?",
+                (session_key,),
+            )
+        await self._db.commit()
+        logger.debug("session_deleted", session_key=session_key)
+
     async def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return recent sessions with lightweight metadata for navigation UIs."""
         assert self._db is not None, "MemoryStore not initialized"
@@ -294,15 +358,19 @@ class MemoryStore:
                 SELECT session_key FROM summaries
                 UNION
                 SELECT session_key FROM session_config
+                UNION
+                SELECT session_key FROM attachments WHERE session_key IS NOT NULL
             )
             SELECT
                 sk.session_key,
                 COALESCE(msg.message_count, 0) AS message_count,
+                COALESCE(att.attachment_count, 0) AS attachment_count,
                 CASE
-                    WHEN msg.last_message_at IS NULL THEN COALESCE(sum.updated_at, cfg.updated_at)
-                    WHEN sum.updated_at IS NULL THEN COALESCE(msg.last_message_at, cfg.updated_at)
-                    WHEN cfg.updated_at IS NULL THEN COALESCE(msg.last_message_at, sum.updated_at)
-                    ELSE MAX(msg.last_message_at, sum.updated_at, cfg.updated_at)
+                    WHEN msg.last_message_at IS NULL THEN COALESCE(sum.updated_at, cfg.updated_at, att.last_attachment_at)
+                    WHEN sum.updated_at IS NULL THEN COALESCE(msg.last_message_at, cfg.updated_at, att.last_attachment_at)
+                    WHEN cfg.updated_at IS NULL THEN COALESCE(msg.last_message_at, sum.updated_at, att.last_attachment_at)
+                    WHEN att.last_attachment_at IS NULL THEN MAX(msg.last_message_at, sum.updated_at, cfg.updated_at)
+                    ELSE MAX(msg.last_message_at, sum.updated_at, cfg.updated_at, att.last_attachment_at)
                 END AS last_activity_at,
                 COALESCE(sum.summary, '') AS summary,
                 cfg.model_override
@@ -312,8 +380,17 @@ class MemoryStore:
                 FROM messages
                 GROUP BY session_key
             ) msg ON msg.session_key = sk.session_key
+            LEFT JOIN (
+                SELECT session_key, COUNT(*) AS attachment_count, MAX(created_at) AS last_attachment_at
+                FROM attachments
+                WHERE session_key IS NOT NULL
+                GROUP BY session_key
+            ) att ON att.session_key = sk.session_key
             LEFT JOIN summaries sum ON sum.session_key = sk.session_key
             LEFT JOIN session_config cfg ON cfg.session_key = sk.session_key
+            WHERE COALESCE(msg.message_count, 0) > 0
+               OR COALESCE(att.attachment_count, 0) > 0
+               OR COALESCE(sum.summary, '') != ''
             ORDER BY last_activity_at DESC, sk.session_key DESC
             LIMIT ?
             """,
@@ -322,15 +399,18 @@ class MemoryStore:
         rows = await cursor.fetchall()
         sessions: list[dict[str, Any]] = []
         for row in rows:
-            session_key, message_count, updated_at, summary, model_override = row
+            session_key, message_count, attachment_count, updated_at, summary, model_override = row
             title, preview = await self._get_session_title_and_preview(session_key)
+            display_count = int(message_count or 0)
+            if display_count <= 0 and int(attachment_count or 0) > 0:
+                display_count = int(attachment_count or 0)
             sessions.append(
                 {
                     "session_key": session_key,
                     "title": title or session_key,
                     "preview": preview or summary or "",
                     "updated_at": updated_at,
-                    "message_count": int(message_count or 0),
+                    "message_count": display_count,
                     "model_override": model_override,
                 }
             )
@@ -395,6 +475,114 @@ class MemoryStore:
         await self._db.execute(
             "DELETE FROM cooldown_state WHERE profile_id = ?",
             (profile_id,),
+        )
+        await self._db.commit()
+
+    # ------------------------------------------------------------------
+    # Attachments
+    # ------------------------------------------------------------------
+
+    async def upsert_attachment(self, record: dict[str, Any]) -> None:
+        """Insert or update an attachment record."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            """
+            INSERT INTO attachments (
+                asset_id, session_key, filename, media_type, kind, storage_path,
+                size_bytes, sha256, status, extract_status, extract_text,
+                extract_summary, error_message, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(asset_id) DO UPDATE SET
+                session_key = excluded.session_key,
+                filename = excluded.filename,
+                media_type = excluded.media_type,
+                kind = excluded.kind,
+                storage_path = excluded.storage_path,
+                size_bytes = excluded.size_bytes,
+                sha256 = excluded.sha256,
+                status = excluded.status,
+                extract_status = excluded.extract_status,
+                extract_text = excluded.extract_text,
+                extract_summary = excluded.extract_summary,
+                error_message = excluded.error_message,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                record["asset_id"],
+                record.get("session_key"),
+                record["filename"],
+                record["media_type"],
+                record["kind"],
+                record["storage_path"],
+                int(record["size_bytes"]),
+                record["sha256"],
+                record.get("status", "uploaded"),
+                record.get("extract_status", "pending"),
+                record.get("extract_text", ""),
+                record.get("extract_summary", ""),
+                record.get("error_message", ""),
+            ),
+        )
+        await self._db.commit()
+
+    async def get_attachment(self, asset_id: str) -> dict[str, Any] | None:
+        """Return an attachment record, or None if missing."""
+        assert self._db is not None, "MemoryStore not initialized"
+        cursor = await self._db.execute(
+            """
+            SELECT asset_id, session_key, filename, media_type, kind, storage_path,
+                   size_bytes, sha256, status, extract_status, extract_text,
+                   extract_summary, error_message, created_at, updated_at
+            FROM attachments
+            WHERE asset_id = ?
+            """,
+            (asset_id,),
+        )
+        row = await cursor.fetchone()
+        return _attachment_row_to_dict(row)
+
+    async def get_attachments(self, asset_ids: list[str]) -> list[dict[str, Any]]:
+        """Return attachment records preserving input order for existing ids."""
+        assert self._db is not None, "MemoryStore not initialized"
+        results: list[dict[str, Any]] = []
+        for asset_id in asset_ids:
+            record = await self.get_attachment(asset_id)
+            if record is not None:
+                results.append(record)
+        return results
+
+    async def list_attachments(self, session_key: str) -> list[dict[str, Any]]:
+        """Return all attachments linked to a session."""
+        assert self._db is not None, "MemoryStore not initialized"
+        cursor = await self._db.execute(
+            """
+            SELECT asset_id, session_key, filename, media_type, kind, storage_path,
+                   size_bytes, sha256, status, extract_status, extract_text,
+                   extract_summary, error_message, created_at, updated_at
+            FROM attachments
+            WHERE session_key = ?
+            ORDER BY created_at DESC, asset_id DESC
+            """,
+            (session_key,),
+        )
+        rows = await cursor.fetchall()
+        return [record for row in rows if (record := _attachment_row_to_dict(row)) is not None]
+
+    async def delete_attachment(self, asset_id: str) -> None:
+        """Delete an attachment metadata record."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            "DELETE FROM attachments WHERE asset_id = ?",
+            (asset_id,),
+        )
+        await self._db.commit()
+
+    async def delete_attachments_for_session(self, session_key: str) -> None:
+        """Delete all attachment metadata records linked to a session."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            "DELETE FROM attachments WHERE session_key = ?",
+            (session_key,),
         )
         await self._db.commit()
 
@@ -499,3 +687,42 @@ def _shorten_text(text: str, limit: int) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: max(1, limit - 1)] + "…"
+
+
+def _attachment_row_to_dict(row: Any) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    (
+        asset_id,
+        session_key,
+        filename,
+        media_type,
+        kind,
+        storage_path,
+        size_bytes,
+        sha256,
+        status,
+        extract_status,
+        extract_text,
+        extract_summary,
+        error_message,
+        created_at,
+        updated_at,
+    ) = row
+    return {
+        "asset_id": asset_id,
+        "session_key": session_key,
+        "filename": filename,
+        "media_type": media_type,
+        "kind": kind,
+        "storage_path": storage_path,
+        "size_bytes": int(size_bytes or 0),
+        "sha256": sha256,
+        "status": status,
+        "extract_status": extract_status,
+        "extract_text": extract_text or "",
+        "extract_summary": extract_summary or "",
+        "error_message": error_message or "",
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }

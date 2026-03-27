@@ -6,64 +6,420 @@
 <title>SmartClaw Workspace</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
+  :root {
+    --bg: #202123;
+    --bg-elevated: #171717;
+    --panel: #212121;
+    --panel-soft: #1a1a1a;
+    --panel-strong: #141414;
+    --border: #303030;
+    --border-soft: #262626;
+    --text: #ececec;
+    --text-secondary: #c8c8c8;
+    --text-muted: #8d8d8d;
+    --accent: #ffffff;
+    --accent-soft: rgba(255, 255, 255, 0.08);
+    --success: #22c55e;
+    --danger: #ef4444;
+    --shadow-lg: 0 22px 64px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.18);
+    --content-width: 860px;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0c0c0d; color: #e5e7eb; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #212121;
+    color: var(--text);
+    overflow: hidden;
+  }
   button, input, select, textarea { font: inherit; }
   .app-shell { height: 100%; display: flex; flex-direction: column; }
-  .topbar { height: 46px; background: #141517; border-bottom: 1px solid #212329; display: flex; align-items: center; gap: 8px; padding: 0 12px; flex-shrink: 0; }
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #fff; font-size: 13px; }
-  .brand-dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; }
-  .topbar-meta { color: #818792; font-size: 11px; }
+  .topbar { display: none; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: #fff; font-size: 14px; letter-spacing: -0.01em; }
+  .brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14); }
+  .topbar-meta { color: var(--text-muted); font-size: 12px; }
   .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-  .badge { background: #17181c; color: #848a95; border: 1px solid #23252b; border-radius: 999px; padding: 2px 8px; font-size: 10px; line-height: 1.5; }
+  .badge {
+    background: rgba(255, 255, 255, 0.05);
+    color: #b0b0b0;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 10px;
+    line-height: 1.4;
+    max-width: 180px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
   .badge.hidden { display: none; }
   .ghost-btn, .primary-btn, .mini-btn { border: none; cursor: pointer; transition: 0.15s ease; }
-  .ghost-btn { background: #181a1e; color: #c6cad2; border: 1px solid #272a30; border-radius: 10px; padding: 6px 10px; font-size: 11px; }
-  .ghost-btn:hover { background: #23252b; }
-  .primary-btn { background: #2563eb; color: #fff; border-radius: 12px; padding: 0 15px; height: 40px; }
-  .primary-btn:hover:not(:disabled) { background: #1d4ed8; }
+  .ghost-btn {
+    background: rgba(255, 255, 255, 0.04);
+    color: #d4d4d4;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 6px 11px;
+    font-size: 11px;
+  }
+  .ghost-btn:hover { background: rgba(255, 255, 255, 0.08); border-color: #4a4a4a; }
+  .primary-btn {
+    background: #ffffff;
+    color: #111111;
+    border-radius: 999px;
+    padding: 0 16px;
+    height: 38px;
+    min-width: 68px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    box-shadow: none;
+  }
+  .primary-btn:hover:not(:disabled) { background: #f0f0f0; }
   .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .mini-btn { background: #181a1e; color: #aeb4be; border: 1px solid #262930; border-radius: 8px; padding: 4px 8px; font-size: 10px; }
-  .mini-btn:hover { background: #272930; }
-  .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 320px; }
-  .workspace.inspect-collapsed { grid-template-columns: 220px minmax(0, 1fr) 0; }
-  .sidebar { border-right: 1px solid #212329; background: #101113; display: flex; flex-direction: column; min-height: 0; }
-  .sidebar-head { padding: 10px 10px 8px; border-bottom: 1px solid #1b1d22; display: flex; align-items: center; gap: 8px; }
-  .sidebar-title { font-size: 12px; font-weight: 600; color: #fff; }
-  .sidebar-search { padding: 8px 10px; border-bottom: 1px solid #1b1d22; }
-  .sidebar-search input { width: 100%; height: 32px; border-radius: 10px; border: 1px solid #25282e; background: #141519; color: #e5e7eb; padding: 0 10px; font-size: 11px; }
-  .sidebar-search input:focus { outline: none; border-color: #3b82f6; }
-  .session-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 7px 10px; }
-  .session-item { width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 8px 9px; margin-bottom: 6px; color: #d1d5db; cursor: pointer; }
-  .session-item:hover { background: #141519; border-color: #1f2228; }
-  .session-item.active { background: #131b29; border-color: #28446f; box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08); }
-  .session-title-row { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
-  .session-title { flex: 1; font-size: 11px; font-weight: 600; color: #eef2f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .session-time { font-size: 10px; color: #69707b; flex-shrink: 0; }
-  .session-preview { font-size: 10px; color: #848b96; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .session-tags { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
-  .session-tag { font-size: 9px; color: #8fb7ff; background: #121926; border: 1px solid #22334d; border-radius: 999px; padding: 1px 6px; }
-  .session-empty { color: #5f6570; text-align: center; padding: 28px 16px; font-size: 13px; }
-  .sidebar-foot { padding: 9px 10px; border-top: 1px solid #1b1d22; color: #646b75; font-size: 10px; }
-  .chat-shell { min-width: 0; display: flex; flex-direction: column; min-height: 0; background: radial-gradient(circle at top, #141416 0%, #0c0c0d 55%); }
-  .chat-head { padding: 10px 16px; border-bottom: 1px solid #1b1d22; display: flex; align-items: center; gap: 12px; }
-  .chat-head-main { min-width: 0; }
-  .chat-title { font-size: 14px; font-weight: 600; color: #fff; }
-  .chat-subtitle { font-size: 10px; color: #727882; margin-top: 3px; }
-  .chat-head-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-  .chat-canvas { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 10px; }
-  .welcome-card { display: none; }
-  .msg { max-width: min(720px, 82%); padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.55; word-break: break-word; }
-  .msg.user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
-  .msg.assistant { align-self: flex-start; background: #17181c; border: 1px solid #262830; color: #e5e7eb; border-bottom-left-radius: 4px; }
-  .msg.system { align-self: center; background: #16171a; border: 1px solid #2a2c31; color: #8f96a1; font-size: 12px; padding: 8px 12px; }
+  .mini-btn {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .mini-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 272px minmax(0, 1fr); position: relative; }
+  .sidebar {
+    border-right: 1px solid var(--border-soft);
+    background: #171717;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+  }
+  .sidebar-rail {
+    width: 52px;
+    padding: 8px 6px 10px;
+    border-right: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .rail-logo-btn,
+  .rail-btn,
+  .rail-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #d5d9df;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.15s ease;
+  }
+  .rail-logo-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #f3f4f6;
+  }
+  .rail-btn:hover,
+  .rail-avatar:hover,
+  .rail-logo-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .rail-btn svg,
+  .rail-logo-btn svg,
+  .rail-avatar svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .rail-nav { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: center; }
+  .rail-spacer { flex: 1; }
+  .sidebar-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .sidebar-head { padding: 10px 12px 10px; border-bottom: 1px solid var(--border-soft); display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .sidebar-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sidebar-title { font-size: 13px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+  .sidebar-head-actions { display:flex; align-items:center; gap:8px; }
+  .sidebar-search { padding: 12px 14px; border-top: 1px solid var(--border-soft); }
+  .sidebar-search input {
+    width: 100%;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #202123;
+    color: var(--text);
+    padding: 0 12px;
+    font-size: 12px;
+  }
+  .sidebar-search input:focus { outline: none; border-color: #4d4d4d; }
+  .session-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px 14px; }
+  .session-group { margin-bottom: 12px; }
+  .session-group-title {
+    font-size: 11px;
+    color: #8f8f8f;
+    letter-spacing: 0.02em;
+    padding: 4px 8px 8px;
+  }
+  .session-item {
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    margin-bottom: 4px;
+    color: #d1d5db;
+    transition: 0.15s ease;
+  }
+  .session-item:hover { background: rgba(255, 255, 255, 0.04); }
+  .session-item.active {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+  }
+  .session-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .session-main {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: inherit;
+  }
+  .session-main-title {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+  }
+  .session-main-body {
+    display: block;
+  }
+  .session-title { flex: 1; font-size: 12px; font-weight: 500; color: #ececec; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+  .session-preview { font-size: 11px; color: #9ea4ad; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+  .session-tags { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .session-tag { font-size: 10px; color: #d5d5d5; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 2px 7px; }
+  .session-actions { display: flex; align-items: center; gap: 4px; opacity: 0; transition: 0.15s ease; }
+  .session-item:hover .session-actions,
+  .session-item.active .session-actions { opacity: 1; }
+  .session-action {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #7f8792;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: 0.15s ease;
+  }
+  .session-action:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--border); color: #eef2f7; }
+  .session-action.danger:hover { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+  .session-empty { color: #5f6570; text-align: center; padding: 40px 18px; font-size: 13px; }
+  .sidebar-foot { padding: 11px 14px; border-top: 1px solid var(--border-soft); color: #646b75; font-size: 11px; }
+  .chat-shell { min-width: 0; display: flex; flex-direction: column; min-height: 0; background: #212121; position: relative; }
+  .chat-head {
+    height: 52px;
+    padding: 0 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #212121;
+  }
+  .chat-head-main { min-width: 0; display: flex; align-items: center; gap: 14px; }
+  .sidebar-collapse-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #cfd4dc;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.15s ease;
+  }
+  .sidebar-collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .sidebar-collapse-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .chat-model-slot {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .chat-model-select {
+    height: 36px;
+    min-width: 164px;
+    max-width: 220px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #303030;
+    color: #f2f2f2;
+    padding: 0 34px 0 14px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, #bfbfbf 50%),
+      linear-gradient(135deg, #bfbfbf 50%, transparent 50%);
+    background-position:
+      calc(100% - 16px) 15px,
+      calc(100% - 11px) 15px;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+  }
+  .chat-model-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.14);
+    background-color: #353535;
+  }
+  .chat-head-copy { display: none; }
+  .chat-title { font-size: 16px; font-weight: 600; color: #f2f2f2; letter-spacing: -0.02em; max-width: 640px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-subtitle { display: none; }
+  .chat-stats,
+  .chat-stats.empty { display: none; }
+  .chat-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #b5bdca;
+    font-size: 10px;
+    letter-spacing: 0.01em;
+  }
+  .chat-stat-chip strong {
+    color: #eef3fb;
+    font-weight: 600;
+  }
+  .chat-head-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .chat-stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .welcome-card {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+  .chat-shell.home-mode .welcome-card {
+    opacity: 1;
+  }
+  .welcome-inner {
+    width: min(100%, 720px);
+    padding: 0 24px 84px;
+    text-align: center;
+  }
+  .welcome-title {
+    font-size: 44px;
+    line-height: 1.08;
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    color: #f4f4f4;
+  }
+  .welcome-subtitle {
+    margin-top: 12px;
+    font-size: 15px;
+    color: #9a9a9a;
+  }
+  .chat-canvas {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 28px 32px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    align-items: stretch;
+  }
+  .msg {
+    width: min(100%, var(--content-width));
+    margin: 0 auto;
+    padding: 0;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.72;
+    word-break: break-word;
+    box-shadow: none;
+  }
+  .msg.user {
+    display: flex;
+    justify-content: flex-end;
+    align-self: center;
+    color: #fff;
+  }
+  .msg.assistant {
+    align-self: center;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    border-radius: 0;
+    max-width: min(100%, var(--content-width));
+  }
+  .msg-bubble {
+    max-width: min(100%, 720px);
+    border-radius: 18px;
+    padding: 12px 16px;
+  }
+  .msg.user .msg-bubble {
+    background: #2f2f2f;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom-right-radius: 10px;
+  }
+  .assistant-block {
+    width: min(100%, 720px);
+    padding-right: 24px;
+  }
+  .msg.assistant .md-content,
+  .msg.assistant .msg-text {
+    display: block;
+    width: 100%;
+  }
+  .msg.system { align-self: center; width: auto; max-width: 720px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: #97a0ad; font-size: 12px; padding: 10px 14px; box-shadow: none; }
   .msg.error { align-self: flex-start; background: #2a1718; border: 1px solid #5a2628; color: #fecaca; }
-  .msg.tool-call { align-self: flex-start; background: #162116; border: 1px solid #284a29; color: #86efac; font-size: 12px; max-width: 90%; }
-  .msg.tool-result { align-self: flex-start; background: #141a29; border: 1px solid #283a62; color: #93c5fd; font-size: 12px; max-width: 90%; }
-  .msg.clarification { align-self: flex-start; background: #161d2d; border: 1px solid #2f4a7a; color: #dbeafe; max-width: min(760px, 82%); }
-  .msg-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
-  .msg-meta { font-size: 11px; color: #5b616b; margin-top: 6px; }
+  .msg.tool-call { align-self: flex-start; background: #162116; border: 1px solid #284a29; color: #86efac; font-size: 12px; max-width: min(100%, var(--content-width)); }
+  .msg.tool-result { align-self: flex-start; background: #141a29; border: 1px solid #283a62; color: #93c5fd; font-size: 12px; max-width: min(100%, var(--content-width)); }
+  .msg.clarification { align-self: flex-start; background: #161d2d; border: 1px solid #2f4a7a; color: #dbeafe; width: min(100%, 760px); }
+  .msg-label { font-size: 11px; color: #7d93b8; margin-bottom: 4px; }
+  .msg-meta { font-size: 11px; color: #6b7280; margin-top: 8px; }
   .cursor { display: inline-block; width: 2px; height: 14px; background: #60a5fa; animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
   @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
   .md-content { white-space: normal; }
@@ -73,36 +429,261 @@
   .md-content code { background: #22242a; padding: 1px 4px; border-radius: 4px; }
   .md-content pre { background: #111214; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
   .clarification-title { font-size: 12px; font-weight: 700; color: #93c5fd; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .clarification-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .clarification-actions button { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-  .clarification-actions button.secondary { background: #272930; color: #d1d5db; }
-  .clarification-custom { display: flex; gap: 8px; margin-top: 10px; }
-  .clarification-custom input { flex: 1; height: 36px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; padding: 0 10px; }
-  .composer { padding: 10px 16px 14px; border-top: 1px solid #1b1d22; background: linear-gradient(180deg, rgba(12, 12, 13, 0) 0%, #101113 16%, #101113 100%); display: flex; justify-content: center; }
-  .composer-shell { width: min(100%, 820px); max-width: 820px; margin: 0 auto; background: #141518; border: 1px solid #22252a; border-radius: 16px; padding: 10px; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24); }
-  .composer-textarea-wrap { display: flex; gap: 10px; align-items: flex-end; }
-  #msg-input { flex: 1; min-height: 60px; max-height: 168px; background: transparent; border: none; resize: none; color: #e5e7eb; font-size: 13px; line-height: 1.55; outline: none; }
-  #msg-input::placeholder { color: #626975; }
-  .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+  .clarification-options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .clarification-choice { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #2f4a7a; background: #1b2740; color: #e8f0ff; cursor: pointer; text-align: left; }
+  .clarification-choice:hover { background: #223050; border-color: #44669d; }
+  .clarification-choice.secondary { background: #1a202c; border-color: #384456; color: #d6dbe5; }
+  .clarification-choice.secondary:hover { background: #222a37; border-color: #526175; }
+  .clarification-index { flex-shrink: 0; width: 20px; color: #93c5fd; font-size: 12px; font-weight: 700; }
+  .clarification-choice.secondary .clarification-index { color: #a8b4c7; }
+  .clarification-choice-text { font-size: 12px; line-height: 1.5; }
+  .clarification-custom-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #334155; background: #111827; }
+  .clarification-custom-row input { flex: 1; height: 34px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; padding: 0 10px; }
+  .clarification-custom-row input:focus { outline: none; border-color: #60a5fa; }
+  .clarification-inline-submit { height: 34px; border: 1px solid #2b65d9; background: #2563eb; color: #fff; border-radius: 8px; padding: 0 11px; cursor: pointer; }
+  .attachment-list {
+    display: flex;
+    gap: 10px;
+    margin: 0 0 10px;
+    overflow-x: auto;
+    padding: 0 0 2px;
+  }
+  .attachment-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 320px;
+    max-width: 360px;
+    padding: 8px 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #2d2d2d;
+    color: #dbe2eb;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .attachment-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: #f2f2f2;
+    color: #151515;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .attachment-thumb.image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .attachment-chip.unsupported { border-color: #5b4b24; background: #231d12; color: #f8e6b3; }
+  .attachment-chip.failed { border-color: #5e2c2c; background: #261616; color: #fecaca; }
+  .attachment-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .attachment-topline { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .attachment-name { max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #e5e7eb; font-size: 13px; font-weight: 600; }
+  .attachment-kind { color: #9aa3af; font-size: 11px; letter-spacing: 0; flex-shrink: 0; }
+  .attachment-status { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 600; border: 1px solid #2f3b52; color: #bfdbfe; background: #142033; flex-shrink: 0; }
+  .attachment-chip.unsupported .attachment-status { border-color: #6a5628; color: #f8e6b3; background: #2b2112; }
+  .attachment-chip.failed .attachment-status { border-color: #733737; color: #fecaca; background: #311919; }
+  .attachment-meta {
+    color: #9c9c9c;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 230px;
+  }
+  .attachment-detail-label { color: #6b7280; margin-right: 4px; }
+  .attachment-remove {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: #f3f3f3;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+  }
+  .attachment-remove:hover { background: rgba(255,255,255,0.14); color: #ffffff; }
+  .composer {
+    padding: 16px 24px 22px;
+    background: linear-gradient(180deg, rgba(33, 33, 33, 0) 0%, rgba(33, 33, 33, 0.9) 24%, rgba(33, 33, 33, 1) 100%);
+    display: flex;
+    justify-content: center;
+  }
+  .composer-shell {
+    width: min(100%, 760px);
+    max-width: 760px;
+    margin: 0 auto;
+    background: #2a2a2a;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 28px;
+    padding: 10px;
+    box-shadow: none;
+  }
+  .composer-textarea-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 8px 8px 8px;
+    position: relative;
+  }
+  .composer-plus-wrap {
+    position: relative;
+    flex-shrink: 0;
+    align-self: center;
+    margin-bottom: 0;
+  }
+  .composer-plus-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #343434;
+    color: #f2f2f2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .composer-plus-btn:hover { background: #3c3c3c; }
+  .attachment-menu {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 10px);
+    width: 220px;
+    padding: 8px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #2a2a2a;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.26);
+    display: none;
+    z-index: 12;
+  }
+  .attachment-menu.open { display: block; }
+  .attachment-menu-item {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: #ececec;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .attachment-menu-item:hover { background: rgba(255, 255, 255, 0.06); }
+  .attachment-menu-icon { width: 16px; text-align: center; color: #bdbdbd; }
+  #msg-input {
+    flex: 1;
+    min-height: 24px;
+    max-height: 180px;
+    background: transparent;
+    border: none;
+    resize: none;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.55;
+    outline: none;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  #msg-input::placeholder { color: #8b8b8b; }
+  .composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
   .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .toolbar-select { height: 32px; border-radius: 10px; border: 1px solid #2a2e35; background: #17191d; color: #e5e7eb; padding: 0 11px; min-width: 138px; font-size: 11px; }
+  .toolbar-select {
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid #3a3a3a;
+    background: #232323;
+    color: var(--text);
+    padding: 0 12px;
+    min-width: 148px;
+    font-size: 12px;
+  }
   .toolbar-select:focus, .toolbar-input:focus { outline: none; border-color: #3b82f6; }
-  .toolbar-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #2a2e35; background: #16181c; color: #cfd4dc; border-radius: 999px; padding: 5px 10px; cursor: pointer; font-size: 11px; }
-  .toolbar-chip.active { border-color: #3b82f6; color: #93c5fd; }
-  .composer-advanced { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #262830; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .toolbar-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    border: 1px solid #3a3a3a;
+    background: #232323;
+    color: #d0d0d0;
+    border-radius: 999px;
+    padding: 0 12px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .toolbar-chip.active { border-color: #5b5b5b; color: #ffffff; background: #2d2d2d; }
+  .toolbar-chip.hidden { display: none; }
+  .composer-advanced { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #323232; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .composer-advanced.open { display: grid; }
   .toolbar-field { display: flex; flex-direction: column; gap: 4px; }
-  .toolbar-field label { font-size: 11px; color: #7b818b; text-transform: uppercase; letter-spacing: 0.04em; }
-  .toolbar-input { height: 32px; border-radius: 10px; border: 1px solid #2a2e35; background: #17191d; color: #e5e7eb; padding: 0 11px; font-size: 11px; }
-  .composer-hint { margin-top: 8px; color: #6b7280; font-size: 11px; }
-  .inspector { border-left: 1px solid #212329; background: #101113; display: flex; flex-direction: column; min-height: 0; }
-  .workspace.inspect-collapsed .inspector { display: none; }
-  .inspector-head { padding: 10px 10px 8px; border-bottom: 1px solid #1b1d22; display: flex; align-items: center; gap: 10px; }
+  .toolbar-field label { font-size: 11px; color: #848484; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toolbar-input { height: 34px; border-radius: 12px; border: 1px solid #3a3a3a; background: #232323; color: var(--text); padding: 0 12px; font-size: 12px; }
+  .composer-hint { display: none; }
+  .inspector-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(7, 9, 12, 0.36);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .workspace.inspect-open .inspector-backdrop { opacity: 1; pointer-events: auto; }
+  .inspector {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: min(360px, calc(100vw - 28px));
+    border: 1px solid var(--border-soft);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(24, 29, 36, 0.96) 0%, rgba(18, 22, 28, 0.98) 100%);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
+    transform: translateX(calc(100% + 18px));
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+    z-index: 20;
+  }
+  .workspace.inspect-open .inspector {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .inspector-head { padding: 14px 12px 10px; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; gap: 10px; }
   .inspector-title { font-size: 13px; font-weight: 600; color: #fff; }
-  .inspector-tabs { display: flex; gap: 2px; padding: 7px; border-bottom: 1px solid #1b1d22; }
-  .inspector-tab { flex: 1; background: transparent; border: none; color: #6b7280; padding: 7px 5px; border-radius: 10px; cursor: pointer; font-size: 11px; }
-  .inspector-tab.active { background: #191b20; color: #93c5fd; }
-  .inspector-content { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+  .inspector-tabs { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--border-soft); }
+  .inspector-tab { flex: 1; background: transparent; border: none; color: #6b7280; padding: 8px 6px; border-radius: 10px; cursor: pointer; font-size: 11px; }
+  .inspector-tab.active { background: rgba(255, 255, 255, 0.04); color: #93c5fd; }
+  .inspector-content { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
   .event-card, .tool-card, .summary-card, .execution-item, .decision-card { background: #16171b; border: 1px solid #262830; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
@@ -111,7 +692,7 @@
   .event-body, .execution-item-text, .tool-desc, .summary-card, .decision-body { font-size: 12px; color: #a8adb6; white-space: pre-wrap; word-break: break-word; }
   .tool-name { color: #93c5fd; }
   .empty { text-align: center; padding: 22px 12px; color: #5f6570; font-size: 13px; }
-  .execution-section { background: #141518; border: 1px solid #22252a; border-radius: 12px; padding: 9px 10px; margin-bottom: 8px; }
+  .execution-section { background: rgba(20, 23, 28, 0.96); border: 1px solid #242a33; border-radius: 14px; padding: 10px 11px; margin-bottom: 10px; }
   .execution-section-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; user-select: none; }
   .execution-section-title { font-size: 12px; font-weight: 700; color: #93c5fd; text-transform: uppercase; letter-spacing: 0.05em; }
   .execution-toggle { color: #6b7280; font-size: 12px; }
@@ -128,9 +709,25 @@
   .execution-raw-card { background: #16171b; border: 1px solid #262830; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
   .execution-raw-payload { max-height: 88px; overflow: hidden; cursor: pointer; white-space: pre-wrap; word-break: break-all; color: #9ca3af; font-size: 12px; }
   .execution-raw-payload.expanded { max-height: none; }
+  .workspace.sidebar-collapsed { grid-template-columns: 52px minmax(0, 1fr); }
+  .workspace.sidebar-collapsed .sidebar-pane { display: none; }
+  .workspace.sidebar-collapsed .sidebar { border-right: 1px solid var(--border-soft); }
   @media (max-width: 1200px) {
-    .workspace { grid-template-columns: 206px minmax(0, 1fr) 304px; }
-    .workspace.inspect-collapsed { grid-template-columns: 206px minmax(0, 1fr) 0; }
+    .workspace { grid-template-columns: 256px minmax(0, 1fr); }
+  }
+  @media (max-width: 980px) {
+    .workspace { grid-template-columns: 0 minmax(0, 1fr); }
+    .sidebar,
+    .inspector-backdrop,
+    .inspector { display: none; }
+    .chat-head,
+    .chat-canvas,
+    .composer { padding-left: 16px; padding-right: 16px; }
+    .msg,
+    .msg.user,
+    .msg.clarification { width: min(100%, 100%); }
+    .composer-shell { width: 100%; }
+    .composer-advanced.open { grid-template-columns: 1fr; }
   }
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-thumb { background: #2c2f36; border-radius: 999px; }
@@ -139,65 +736,138 @@
 </head>
 <body>
 <div class="app-shell">
-  <div class="topbar">
-    <div class="brand"><span class="brand-dot"></span><span>SmartClaw</span></div>
-    <div class="topbar-meta" id="status-text">connecting...</div>
-    <div class="topbar-right">
-      <span class="badge" id="tools-count-badge">0 tools</span>
-      <span class="badge hidden" id="session-badge">no session</span>
-      <button class="ghost-btn" id="toggle-inspector-btn" onclick="toggleInspector()">调试面板</button>
-    </div>
-  </div>
-  <div class="workspace inspect-collapsed" id="workspace">
+  <div class="workspace" id="workspace">
     <aside class="sidebar">
-      <div class="sidebar-head">
-        <div class="sidebar-title">会话</div>
-        <button class="mini-btn" onclick="startNewSession()">新建会话</button>
+      <div class="sidebar-rail">
+        <button class="rail-logo-btn" type="button" title="SmartClaw" onclick="toggleSidebarPane()">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 8V5a1 1 0 0 1 1.7-.7l1.6 1.6a1 1 0 0 0 1.4 0l1.6-1.6A1 1 0 0 1 17 5v3"></path>
+            <path d="M6 10c0 5.5 2.2 8 6 10 3.8-2 6-4.5 6-10"></path>
+            <path d="M8.5 11.5h7"></path>
+          </svg>
+        </button>
+        <div class="rail-nav">
+          <button class="rail-btn" type="button" title="新聊天" onclick="startNewSession()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14"></path>
+              <path d="M5 12h14"></path>
+            </svg>
+          </button>
+          <button class="rail-btn" type="button" title="搜索会话" onclick="focusSessionSearch()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6"></circle>
+              <path d="M20 20l-3.5-3.5"></path>
+            </svg>
+          </button>
+          <button class="rail-btn" type="button" title="添加附件" onclick="openAttachmentPicker()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M16.5 6.5l-6.8 6.8a3 3 0 1 0 4.2 4.2l7.1-7.1a5 5 0 0 0-7.1-7.1L6.4 10.7"></path>
+            </svg>
+          </button>
+          <button class="rail-btn" type="button" title="设置" onclick="toggleAdvancedSettings()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="4" y1="6" x2="14" y2="6"></line>
+              <line x1="10" y1="18" x2="20" y2="18"></line>
+              <circle cx="17" cy="6" r="2"></circle>
+              <circle cx="7" cy="18" r="2"></circle>
+            </svg>
+          </button>
+          <button class="rail-btn" type="button" title="调试面板" onclick="toggleInspector()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 3h6"></path>
+              <path d="M10 9h4"></path>
+              <rect x="6" y="7" width="12" height="12" rx="3"></rect>
+              <path d="M8 3v4"></path>
+              <path d="M16 3v4"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="rail-spacer"></div>
+        <button class="rail-avatar" type="button" title="当前会话">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.2"></circle>
+            <path d="M6.5 19a6 6 0 0 1 11 0"></path>
+          </svg>
+        </button>
       </div>
-      <div class="sidebar-search">
-        <input id="session-search" placeholder="搜索会话">
+      <div class="sidebar-pane">
+        <div class="sidebar-head">
+          <div class="sidebar-title-row">
+            <div class="sidebar-title">SmartClaw</div>
+            <div class="sidebar-head-actions">
+              <button class="sidebar-collapse-btn" type="button" title="收起侧栏" onclick="toggleSidebarPane(true)">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="4" y="5" width="16" height="14" rx="2"></rect>
+                  <path d="M9 5v14"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="sidebar-search">
+          <input id="session-search" placeholder="搜索会话">
+        </div>
+        <div class="session-list" id="session-list">
+          <div class="session-empty">暂无会话</div>
+        </div>
+        <div class="sidebar-foot" id="sidebar-foot">准备就绪</div>
       </div>
-      <div class="session-list" id="session-list">
-        <div class="session-empty">暂无会话</div>
-      </div>
-      <div class="sidebar-foot" id="sidebar-foot">准备就绪</div>
     </aside>
 
     <main class="chat-shell">
       <div class="chat-head">
         <div class="chat-head-main">
-          <div class="chat-title" id="chat-title">新会话</div>
-          <div class="chat-subtitle" id="chat-subtitle">创建一个新会话开始对话</div>
+          <div class="chat-model-slot">
+            <select class="chat-model-select" id="model-select" title="模型">
+              <option value="">加载中...</option>
+            </select>
+          </div>
+          <div class="chat-head-copy">
+            <div class="chat-title" id="chat-title">新会话</div>
+            <div class="chat-subtitle" id="chat-subtitle">创建一个新会话开始对话</div>
+            <div class="chat-stats empty" id="chat-stats"></div>
+          </div>
         </div>
         <div class="chat-head-right">
-          <span class="badge" id="mode-badge">mode:auto</span>
-          <button class="ghost-btn" onclick="refreshSessions()">刷新会话</button>
+          <span class="badge hidden" id="mode-badge">mode:auto</span>
         </div>
       </div>
-      <div class="chat-canvas" id="messages"></div>
+      <div class="chat-stage">
+        <div class="welcome-card" id="welcome-card">
+          <div class="welcome-inner">
+            <div class="welcome-title">你今天在想些什么？</div>
+            <div class="welcome-subtitle">上传文档或图片，或者直接输入任务，SmartClaw 会按当前能力与模式继续执行。</div>
+          </div>
+        </div>
+        <div class="chat-canvas" id="messages"></div>
+      </div>
       <div class="composer">
         <div class="composer-shell">
+          <input id="attachment-input" type="file" multiple hidden>
+          <div class="attachment-list" id="attachment-list"></div>
           <div class="composer-textarea-wrap">
+            <div class="composer-plus-wrap">
+              <button class="composer-plus-btn" id="attachment-trigger" type="button" onclick="toggleAttachmentMenu(event)">+</button>
+              <div class="attachment-menu" id="attachment-menu">
+                <button class="attachment-menu-item" type="button" onclick="openAttachmentPicker()">
+                  <span class="attachment-menu-icon">📎</span>
+                  <span>添加图片和文件</span>
+                </button>
+              </div>
+            </div>
             <textarea id="msg-input" placeholder="输入你的任务，支持多阶段检查、治理和加固流程..." rows="1"></textarea>
-            <button class="primary-btn" id="send-btn" onclick="sendMessage()">发送</button>
           </div>
           <div class="composer-toolbar">
-            <div class="toolbar-left">
-              <select class="toolbar-select" id="model-select" title="模型">
-                <option value="">加载中...</option>
-              </select>
+            <div class="toolbar-left"></div>
+            <div class="toolbar-right"></div>
+          </div>
+          <div class="composer-advanced" id="composer-advanced">
+            <div class="toolbar-field">
+              <label for="capability-pack-select">Capability Pack</label>
               <select class="toolbar-select" id="capability-pack-select" title="Capability Pack">
                 <option value="">none</option>
               </select>
-              <button class="toolbar-chip" id="advanced-toggle" onclick="toggleAdvancedSettings()">
-                <span>高级设置</span>
-              </button>
             </div>
-            <div class="toolbar-right">
-              <button class="mini-btn" onclick="clearComposer()">清空输入</button>
-            </div>
-          </div>
-          <div class="composer-advanced" id="composer-advanced">
             <div class="toolbar-field">
               <label for="mode-select">Mode</label>
               <select class="toolbar-select" id="mode-select">
@@ -220,6 +890,7 @@
       </div>
     </main>
 
+    <div class="inspector-backdrop" id="inspector-backdrop" onclick="toggleInspector(false)"></div>
     <aside class="inspector" id="inspector">
       <div class="inspector-head">
         <div class="inspector-title">Inspector</div>
@@ -300,15 +971,20 @@ let streamEl = null;
 let inspectorOpen = false;
 let availableModels = [];
 let currentModel = "";
+let modelCapabilityMap = {};
+let imageAnalysisMode = "ocr_only";
 let capabilityPacks = [];
 let capabilityPackMap = {};
 let sessions = [];
 let sessionSearchTerm = "";
+let sessionTitleOverrides = loadSessionTitleOverrides();
 let activeInspectorTab = "execution";
 let pendingClarification = null;
 let lastRequestBody = null;
 let awaitingClarificationDone = false;
 let currentSessionMeta = null;
+let uploadedAttachments = [];
+let sessionStats = null;
 let executionSections = {
   overview: true,
   plan: true,
@@ -334,6 +1010,7 @@ function createExecutionState() {
   return {
     status: "idle",
     mode: "auto",
+    imageRoute: "none",
     scenarioType: "",
     taskProfile: "",
     capabilityPack: "",
@@ -363,10 +1040,27 @@ async function init() {
   renderExecutionState();
   renderExecutionPanels();
   renderSessionList();
+  renderAttachmentList();
   updateSettingsHint();
+  showWelcomeCard();
 }
 
 function bindStaticEvents() {
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && inspectorOpen) {
+      toggleInspector(false);
+    }
+    if (event.key === "Escape") {
+      closeAttachmentMenu();
+    }
+  });
+  document.addEventListener("click", event => {
+    const menu = document.getElementById("attachment-menu");
+    const trigger = document.getElementById("attachment-trigger");
+    if (!menu || !trigger) return;
+    if (menu.contains(event.target) || trigger.contains(event.target)) return;
+    closeAttachmentMenu();
+  });
   document.getElementById("msg-input").addEventListener("keydown", event => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -381,6 +1075,7 @@ function bindStaticEvents() {
   document.getElementById("mode-select").addEventListener("change", updateSettingsHint);
   document.getElementById("scenario-input").addEventListener("input", updateSettingsHint);
   document.getElementById("task-profile-input").addEventListener("input", updateSettingsHint);
+  document.getElementById("attachment-input").addEventListener("change", handleAttachmentSelection);
   document.getElementById("capability-pack-select").addEventListener("change", () => {
     applyCapabilityPackDefaults();
     updateSettingsHint();
@@ -389,15 +1084,16 @@ function bindStaticEvents() {
 }
 
 async function checkHealth() {
+  const statusText = document.getElementById("status-text");
+  const sidebarFoot = document.getElementById("sidebar-foot");
   try {
     const response = await fetch(API + "/health");
     const data = await response.json();
-    document.getElementById("status-text").textContent = "ready · v" + data.version;
-    document.getElementById("tools-count-badge").textContent = data.tools_count + " tools";
-    document.getElementById("sidebar-foot").textContent = "工作区已连接";
+    if (statusText) statusText.textContent = "ready · v" + data.version;
+    if (sidebarFoot) sidebarFoot.textContent = "工作区已连接";
   } catch (error) {
-    document.getElementById("status-text").textContent = "offline";
-    document.getElementById("sidebar-foot").textContent = "连接失败";
+    if (statusText) statusText.textContent = "offline";
+    if (sidebarFoot) sidebarFoot.textContent = "连接失败";
   }
 }
 
@@ -408,6 +1104,8 @@ async function loadModels() {
     const data = await response.json();
     currentModel = data.primary || "";
     availableModels = data.available || [];
+    modelCapabilityMap = data.capabilities || {};
+    imageAnalysisMode = data.image_analysis_mode || "ocr_only";
     select.innerHTML = "";
     availableModels.forEach(model => {
       const option = document.createElement("option");
@@ -418,6 +1116,7 @@ async function loadModels() {
     });
   } catch (error) {
     select.innerHTML = "<option value=\"\">加载失败</option>";
+    modelCapabilityMap = {};
   }
 }
 
@@ -472,9 +1171,10 @@ async function refreshSessions() {
 function renderSessionList() {
   const container = document.getElementById("session-list");
   const visibleSessions = sessions.filter(item => {
+    const effectiveTitle = getEffectiveSessionTitle(item);
     if (!sessionSearchTerm) return true;
     return [
-      item.title || "",
+      effectiveTitle,
       item.preview || "",
       item.session_key || "",
       item.model_override || "",
@@ -486,20 +1186,76 @@ function renderSessionList() {
     return;
   }
 
-  container.innerHTML = visibleSessions.map(item => {
-    const active = sessionKey === item.session_key ? " active" : "";
-    const modelTag = item.model_override ? "<span class=\"session-tag\">" + esc(item.model_override) + "</span>" : "";
-    return (
-      "<button class=\"session-item" + active + "\" onclick=\"openSession('" + escAttr(item.session_key) + "')\">" +
-        "<div class=\"session-title-row\">" +
-          "<div class=\"session-title\">" + esc(item.title || item.session_key) + "</div>" +
-          "<div class=\"session-time\">" + esc(formatSessionTime(item.updated_at)) + "</div>" +
+  const groups = groupSessionsForDisplay(visibleSessions);
+  container.innerHTML = groups.map(group =>
+    "<div class=\"session-group\">" +
+      "<div class=\"session-group-title\">" + esc(group.label) + "</div>" +
+      group.items.map(item => renderSessionItem(item)).join("") +
+    "</div>"
+  ).join("");
+}
+
+function renderSessionItem(item) {
+  const active = sessionKey === item.session_key ? " active" : "";
+  const modelTag = item.model_override ? "<span class=\"session-tag\">" + esc(item.model_override) + "</span>" : "";
+  const effectiveTitle = getEffectiveSessionTitle(item);
+  const previewText = getCompactSessionPreview(item);
+  return (
+    "<div class=\"session-item" + active + "\">" +
+      "<div class=\"session-title-row\">" +
+        "<button class=\"session-main session-main-title\" type=\"button\" onclick=\"openSession('" + escAttr(item.session_key) + "')\">" +
+          "<div class=\"session-title\">" + esc(effectiveTitle) + "</div>" +
+        "</button>" +
+        "<div class=\"session-time\">" + esc(formatSessionTime(item.updated_at)) + "</div>" +
+        "<div class=\"session-actions\">" +
+          "<button class=\"session-action\" type=\"button\" title=\"重命名\" onclick=\"renameSession(event, '" + escAttr(item.session_key) + "')\">✎</button>" +
+          "<button class=\"session-action danger\" type=\"button\" title=\"删除\" onclick=\"deleteSessionItem(event, '" + escAttr(item.session_key) + "')\">✕</button>" +
         "</div>" +
-        "<div class=\"session-preview\">" + esc(item.preview || "暂无摘要") + "</div>" +
+      "</div>" +
+      "<button class=\"session-main session-main-body\" type=\"button\" onclick=\"openSession('" + escAttr(item.session_key) + "')\">" +
+        "<div class=\"session-preview\">" + esc(previewText) + "</div>" +
         "<div class=\"session-tags\">" + modelTag + "<span class=\"session-tag\">" + esc(String(item.message_count || 0)) + " msgs</span></div>" +
-      "</button>"
-    );
-  }).join("");
+      "</button>" +
+    "</div>"
+  );
+}
+
+function getCompactSessionPreview(item) {
+  const source = String(item.preview || "").replace(/\s+/g, " ").trim();
+  if (!source) return "暂无摘要";
+  let text = source
+    .replace(/^\[Attachments?\]\s*-\s*/i, "")
+    .replace(/^#+\s*/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .replace(/[|]/g, " ")
+    .trim();
+  if (!text) return "暂无摘要";
+  if (text === item.title) return "继续当前会话";
+  const stops = ["。", "！", "？", ".", "!", "?", "·"];
+  let cutoff = -1;
+  for (const stop of stops) {
+    const idx = text.indexOf(stop);
+    if (idx > 0 && (cutoff === -1 || idx < cutoff)) cutoff = idx;
+  }
+  if (cutoff > 0) text = text.slice(0, cutoff);
+  const compact = text.trim();
+  if (compact.length <= 24) return compact;
+  return compact.slice(0, 24) + "…";
+}
+
+function groupSessionsForDisplay(items) {
+  const groups = [
+    { key: "today", label: "今天", items: [] },
+    { key: "yesterday", label: "昨天", items: [] },
+    { key: "earlier", label: "更早", items: [] },
+  ];
+  items.forEach(item => {
+    const bucket = getSessionTimeBucket(item.updated_at);
+    const group = groups.find(entry => entry.key === bucket) || groups[2];
+    group.items.push(item);
+  });
+  return groups.filter(group => group.items.length);
 }
 
 function formatSessionTime(value) {
@@ -515,22 +1271,56 @@ function formatSessionTime(value) {
   });
 }
 
+function getSessionTimeBucket(value) {
+  if (!value) return "earlier";
+  const normalized = String(value).replace(" ", "T");
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "earlier";
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const sessionDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  if (sessionDay.getTime() === today.getTime()) return "today";
+  if (sessionDay.getTime() === yesterday.getTime()) return "yesterday";
+  return "earlier";
+}
+
 function startNewSession() {
   sessionKey = null;
   currentSessionMeta = null;
+  sessionStats = null;
+  uploadedAttachments = [];
   pendingClarification = null;
   lastRequestBody = null;
   awaitingClarificationDone = false;
   executionView = createExecutionView();
   executionState = createExecutionState();
   clearMessages();
+  showWelcomeCard();
   autoResizeInput();
   updateSessionUI();
   updateChatHeader();
   renderExecutionState();
   renderExecutionPanels();
+  renderAttachmentList();
   renderSessionList();
   loadSummary();
+  updateSettingsHint();
+}
+
+function focusSessionSearch() {
+  const input = document.getElementById("session-search");
+  if (!input) return;
+  input.focus();
+  input.select();
+}
+
+function toggleSidebarPane(force) {
+  const workspace = document.getElementById("workspace");
+  if (!workspace) return;
+  const nextState = typeof force === "boolean" ? force : !workspace.classList.contains("sidebar-collapsed");
+  workspace.classList.toggle("sidebar-collapsed", nextState);
 }
 
 async function openSession(nextSessionKey) {
@@ -545,8 +1335,11 @@ async function openSession(nextSessionKey) {
   renderExecutionState();
   renderExecutionPanels();
   await loadSessionHistory();
+  await loadSessionAttachments();
+  await loadSessionStats();
   await loadSummary();
   renderSessionList();
+  updateSettingsHint();
 }
 
 function syncCurrentSessionMeta() {
@@ -555,6 +1348,68 @@ function syncCurrentSessionMeta() {
     document.getElementById("model-select").value = currentSessionMeta.model_override;
   }
   updateChatHeader();
+}
+
+function loadSessionTitleOverrides() {
+  try {
+    const raw = window.localStorage.getItem("smartclaw.sessionTitleOverrides");
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function persistSessionTitleOverrides() {
+  try {
+    window.localStorage.setItem("smartclaw.sessionTitleOverrides", JSON.stringify(sessionTitleOverrides));
+  } catch (error) {}
+}
+
+function getEffectiveSessionTitle(item) {
+  if (!item) return "";
+  const override = sessionTitleOverrides[item.session_key];
+  return override || item.title || item.session_key || "未命名会话";
+}
+
+function renameSession(event, targetSessionKey) {
+  event.stopPropagation();
+  const target = sessions.find(item => item.session_key === targetSessionKey) || { session_key: targetSessionKey, title: "未命名会话" };
+  const currentTitle = getEffectiveSessionTitle(target);
+  const nextTitle = window.prompt("输入新的会话标题", currentTitle);
+  if (nextTitle === null) return;
+  const trimmed = String(nextTitle || "").trim();
+  if (!trimmed) {
+    delete sessionTitleOverrides[targetSessionKey];
+  } else {
+    sessionTitleOverrides[targetSessionKey] = trimmed;
+  }
+  persistSessionTitleOverrides();
+  renderSessionList();
+  if (sessionKey === targetSessionKey) updateChatHeader();
+}
+
+async function deleteSessionItem(event, targetSessionKey) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!window.confirm("确认删除这个会话吗？")) return;
+  try {
+    const response = await fetch(API + "/api/sessions/" + encodeURIComponent(targetSessionKey), { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+  } catch (error) {
+    addMsg("error", "删除会话失败: " + (error && error.message ? error.message : "unknown"));
+    return;
+  }
+  delete sessionTitleOverrides[targetSessionKey];
+  persistSessionTitleOverrides();
+  sessions = sessions.filter(item => item.session_key !== targetSessionKey);
+  if (sessionKey === targetSessionKey) {
+    startNewSession();
+  }
+  renderSessionList();
+  await refreshSessions();
 }
 
 async function loadSessionHistory() {
@@ -566,6 +1421,14 @@ async function loadSessionHistory() {
   } catch (error) {
     addMsg("error", "加载会话历史失败");
   }
+}
+
+async function loadSessionAttachments() {
+  // Composer only shows pending attachments for the next send.
+  // Session-bound attachments remain persisted server-side but are not rehydrated here.
+  uploadedAttachments = [];
+  renderAttachmentList();
+  updateSettingsHint();
 }
 
 function renderHistoryMessages(messages) {
@@ -640,30 +1503,53 @@ function updateSettingsHint() {
   const scenario = document.getElementById("scenario-input").value.trim();
   const taskProfile = document.getElementById("task-profile-input").value.trim();
   const pack = capabilityPackMap[packName];
+  const imageRoute = resolveImageRouteHint();
   const hints = ["mode=" + mode];
   if (packName) hints.push("capability_pack=" + packName);
   if (scenario) hints.push("scenario=" + scenario);
   if (taskProfile) hints.push("task_profile=" + taskProfile);
+  hints.push("image_route=" + imageRoute);
   if (pack && pack.preferred_mode) hints.push("pack prefers " + pack.preferred_mode);
   if (pack && pack.approval_required) hints.push("requires approval");
   if (pack && pack.schema_enforced) hints.push("schema enforced");
   if (pack && pack.description) hints.push(pack.description);
   document.getElementById("settings-hint").textContent = hints.join(" · ");
-  document.getElementById("mode-badge").textContent = "mode:" + mode;
+  const modeBadge = document.getElementById("mode-badge");
+  modeBadge.textContent = "mode:" + mode;
+  modeBadge.classList.toggle("hidden", mode === "auto");
 }
 
 function toggleAdvancedSettings() {
-  const button = document.getElementById("advanced-toggle");
   const panel = document.getElementById("composer-advanced");
+  if (!panel) return;
   const open = !panel.classList.contains("open");
   panel.classList.toggle("open", open);
-  button.classList.toggle("active", open);
 }
 
-function toggleInspector() {
-  inspectorOpen = !inspectorOpen;
-  document.getElementById("workspace").classList.toggle("inspect-collapsed", !inspectorOpen);
-  document.getElementById("toggle-inspector-btn").textContent = inspectorOpen ? "收起调试" : "调试面板";
+function resolveSelectedModelRef() {
+  return document.getElementById("model-select").value || currentModel || "";
+}
+
+function hasImageAttachments() {
+  return uploadedAttachments.some(item => String(item.media_type || "").startsWith("image/"));
+}
+
+function resolveImageRouteHint() {
+  if (!hasImageAttachments()) return "none";
+  const modelRef = resolveSelectedModelRef();
+  const capabilities = modelCapabilityMap[modelRef] || {};
+  const supportsVision = Boolean(capabilities.supports_vision);
+  const mode = String(imageAnalysisMode || "ocr_only").toLowerCase();
+  if (mode === "disabled") return "disabled";
+  if (mode === "ocr_only") return "ocr";
+  if (mode === "vision_only") return supportsVision ? "vision" : "blocked";
+  if (mode === "vision_preferred") return supportsVision ? "vision" : "ocr";
+  return "ocr";
+}
+
+function toggleInspector(forceValue) {
+  inspectorOpen = typeof forceValue === "boolean" ? forceValue : !inspectorOpen;
+  document.getElementById("workspace").classList.toggle("inspect-open", inspectorOpen);
 }
 
 function switchTab(name) {
@@ -849,6 +1735,7 @@ function renderExecutionState() {
   document.getElementById("execution-state").innerHTML =
     execRow("status", executionState.status) +
     execRow("mode", executionState.mode || "auto") +
+    execRow("image route", executionState.imageRoute || "none") +
     execRow("scenario", executionState.scenarioType || "—") +
     execRow("task profile", executionState.taskProfile || "—") +
     execRow("capability pack", executionState.capabilityPack || "—") +
@@ -1021,14 +1908,24 @@ async function sendMessage() {
   const input = document.getElementById("msg-input");
   const message = input.value.trim();
   if (!message || isStreaming) return;
+  const requestBody = buildRequestBody(message);
+  const hadPendingAttachments = Array.isArray(requestBody.attachment_ids) && requestBody.attachment_ids.length > 0;
   input.value = "";
   autoResizeInput();
-  await sendRequest(buildRequestBody(message), { addUserMessage: true });
+  if (hadPendingAttachments) {
+    uploadedAttachments = [];
+    renderAttachmentList();
+    updateSettingsHint();
+  }
+  await sendRequest(requestBody, { addUserMessage: true });
 }
 
 function buildRequestBody(message, overrides) {
   const body = { message: message };
   if (sessionKey) body.session_key = sessionKey;
+  if (uploadedAttachments.length) {
+    body.attachment_ids = uploadedAttachments.map(item => item.asset_id);
+  }
   const model = document.getElementById("model-select").value || "";
   if (model) body.model = model;
   const mode = document.getElementById("mode-select").value || "auto";
@@ -1042,15 +1939,140 @@ function buildRequestBody(message, overrides) {
   return { ...body, ...(overrides || {}) };
 }
 
+function triggerAttachmentUpload() {
+  if (isStreaming) return;
+  document.getElementById("attachment-input").click();
+}
+
+function toggleAttachmentMenu(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (isStreaming) return;
+  const menu = document.getElementById("attachment-menu");
+  if (!menu) return;
+  menu.classList.toggle("open");
+}
+
+function closeAttachmentMenu() {
+  const menu = document.getElementById("attachment-menu");
+  if (menu) menu.classList.remove("open");
+}
+
+function openAttachmentPicker() {
+  const input = document.getElementById("attachment-input");
+  input.setAttribute("accept", ".txt,.md,.json,.yaml,.yml,.csv,.pdf,.docx,.xlsx,image/*");
+  closeAttachmentMenu();
+  triggerAttachmentUpload();
+}
+
+async function handleAttachmentSelection(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = "";
+  closeAttachmentMenu();
+  if (!files.length) return;
+  for (const file of files) {
+    await uploadAttachment(file);
+  }
+}
+
+async function uploadAttachment(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (sessionKey) formData.append("session_key", sessionKey);
+
+  try {
+    const response = await fetch(API + "/api/uploads", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      addMsg("error", "附件上传失败: " + (data.detail || response.status));
+      return;
+    }
+    if (data.session_key && !sessionKey) {
+      sessionKey = data.session_key;
+      updateSessionUI();
+      updateChatHeader();
+    }
+    uploadedAttachments.unshift(data);
+    renderAttachmentList();
+    await refreshSessions();
+    syncCurrentSessionMeta();
+    updateSettingsHint();
+  } catch (error) {
+    addMsg("error", "附件上传失败: " + error.message);
+  }
+}
+
+function renderAttachmentList() {
+  const container = document.getElementById("attachment-list");
+  if (!uploadedAttachments.length) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = uploadedAttachments.map(item => {
+    const status = String(item.extract_status || "pending");
+    const css = status === "unsupported" ? " unsupported" : (status === "failed" ? " failed" : "");
+    const kindLabel = String(item.kind || item.media_type || "attachment");
+    const metaText = item.error_message || item.extract_summary || "";
+    const meta = metaText
+      ? "<div class=\"attachment-meta\">" + esc(metaText) + "</div>"
+      : "";
+    const thumb = buildAttachmentThumb(item);
+    return (
+      "<div class=\"attachment-chip" + css + "\">" +
+        thumb +
+        "<div class=\"attachment-main\">" +
+          "<div class=\"attachment-topline\">" +
+            "<span class=\"attachment-name\" title=\"" + escAttr(item.filename || "") + "\">" + esc(item.filename || "") + "</span>" +
+          "</div>" +
+          "<div class=\"attachment-kind\">" + esc(kindLabel) + "</div>" +
+          meta +
+        "</div>" +
+        "<button class=\"attachment-remove\" onclick=\"removeAttachment('" + escAttr(item.asset_id) + "')\">×</button>" +
+      "</div>"
+    );
+  }).join("");
+}
+
+function buildAttachmentThumb(item) {
+  const mediaType = String(item.media_type || "");
+  if (mediaType.startsWith("image/")) {
+    const assetUrl = API + "/api/uploads/" + encodeURIComponent(item.asset_id) + "/content";
+    return "<div class=\"attachment-thumb image\"><img src=\"" + escAttr(assetUrl) + "\" alt=\"" + escAttr(item.filename || "image") + "\"></div>";
+  }
+  const icon = String(item.kind || "").toLowerCase() === "table" ? "▦" : "📄";
+  return "<div class=\"attachment-thumb\">" + esc(icon) + "</div>";
+}
+
+function getAttachmentStatusLabel(status) {
+  if (status === "success") return "已提取";
+  if (status === "unsupported") return "暂不支持";
+  if (status === "failed") return "提取失败";
+  return "处理中";
+}
+
+async function removeAttachment(assetId) {
+  try {
+    await fetch(API + "/api/uploads/" + encodeURIComponent(assetId), { method: "DELETE" });
+  } catch (error) {}
+  uploadedAttachments = uploadedAttachments.filter(item => item.asset_id !== assetId);
+  renderAttachmentList();
+  updateSettingsHint();
+}
+
 async function sendRequest(body, options) {
   const opts = options || {};
   const text = body.message || "";
+  let doneReceived = false;
   awaitingClarificationDone = false;
   pendingClarification = null;
   lastRequestBody = { ...body };
   executionView = createExecutionView();
   executionState = createExecutionState();
   executionState.mode = body.mode || "auto";
+  executionState.imageRoute = resolveImageRouteHint();
   executionState.scenarioType = body.scenario_type || "";
   executionState.taskProfile = body.task_profile || "";
   executionState.capabilityPack = body.capability_pack || "";
@@ -1107,6 +2129,7 @@ async function sendRequest(body, options) {
           const raw = line.slice(5).trim();
           if (!raw) continue;
           try {
+            if (currentEvent === "done") doneReceived = true;
             handleEvent(currentEvent, JSON.parse(raw));
           } catch (error) {}
         }
@@ -1119,7 +2142,13 @@ async function sendRequest(body, options) {
   } finally {
     setStreaming(false);
     streamEl = null;
+    if (doneReceived) {
+      uploadedAttachments = [];
+      renderAttachmentList();
+      updateSettingsHint();
+    }
     await refreshSessions();
+    await loadSessionAttachments();
     if (sessionKey) await persistSessionModel();
   }
 }
@@ -1154,6 +2183,13 @@ function handleEvent(type, data) {
   }
   if (type === "done") {
     const answer = data.response || data.final_answer || "";
+    if (data.token_stats) {
+      sessionStats = {
+        ...(sessionStats || {}),
+        last_token_stats: data.token_stats,
+      };
+      renderSessionStats();
+    }
     if (data.session_key) {
       sessionKey = data.session_key;
       updateSessionUI();
@@ -1176,6 +2212,9 @@ function handleEvent(type, data) {
       renderExecutionState();
     }
     updateChatHeader();
+    if (sessionKey) {
+      void loadSessionStats();
+    }
     return;
   }
   if (type === "error") {
@@ -1201,16 +2240,25 @@ function renderClarificationCard(data) {
   const title = isApprovalClarification(data) ? "执行审批" : "需要确认";
   let html = "<div class=\"clarification-title\">" + esc(title) + "</div>";
   html += "<div>" + esc(data.question || "请确认下一步") + "</div>";
-  html += "<div class=\"clarification-actions\">";
-  options.forEach(option => {
+  html += "<div class=\"clarification-options\">";
+  options.forEach((option, index) => {
     const normalized = String(option).toLowerCase();
     const secondary = normalized === "cancel" ? " secondary" : "";
-    html += "<button class=\"" + secondary.trim() + "\" data-option=\"" + esc(option) + "\">" + esc(getClarificationOptionLabel(option)) + "</button>";
+    html +=
+      "<button class=\"clarification-choice" + secondary + "\" data-option=\"" + esc(option) + "\">" +
+        "<span class=\"clarification-index\">" + esc(String(index + 1) + ".") + "</span>" +
+        "<span class=\"clarification-choice-text\">" + esc(getClarificationOptionLabel(option)) + "</span>" +
+      "</button>";
   });
-  html += "</div>";
   if (!isApprovalClarification(data)) {
-    html += "<div class=\"clarification-custom\"><input id=\"clarification-custom-input\" placeholder=\"其他输入\"><button id=\"clarification-custom-submit\">提交</button></div>";
+    html +=
+      "<div class=\"clarification-custom-row\">" +
+        "<span class=\"clarification-index\">" + esc(String(options.length + 1) + ".") + "</span>" +
+        "<input id=\"clarification-custom-input\" placeholder=\"其他输入\">" +
+        "<button class=\"clarification-inline-submit\" id=\"clarification-custom-submit\">提交</button>" +
+      "</div>";
   }
+  html += "</div>";
   card.innerHTML = html;
   document.getElementById("messages").appendChild(card);
   document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
@@ -1218,11 +2266,21 @@ function renderClarificationCard(data) {
     button.onclick = () => handleClarificationAction(button.getAttribute("data-option"));
   });
   const customButton = card.querySelector("#clarification-custom-submit");
+  const customInput = card.querySelector("#clarification-custom-input");
   if (customButton) {
     customButton.onclick = () => {
       const value = card.querySelector("#clarification-custom-input").value.trim();
       if (value) handleClarificationAction(value);
     };
+  }
+  if (customInput) {
+    customInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const value = customInput.value.trim();
+        if (value) handleClarificationAction(value);
+      }
+    });
   }
 }
 
@@ -1265,13 +2323,16 @@ async function handleClarificationAction(value) {
 
 function setStreaming(value) {
   isStreaming = value;
-  document.getElementById("send-btn").disabled = value;
+  const sendBtn = document.getElementById("send-btn");
+  if (sendBtn) sendBtn.disabled = value;
   document.getElementById("msg-input").disabled = value;
   document.getElementById("model-select").disabled = value;
   document.getElementById("capability-pack-select").disabled = value;
   document.getElementById("mode-select").disabled = value;
   document.getElementById("scenario-input").disabled = value;
   document.getElementById("task-profile-input").disabled = value;
+  document.getElementById("attachment-trigger").disabled = value;
+  document.getElementById("attachment-input").disabled = value;
 }
 
 function addMsg(type, text, streaming, renderMarkdown) {
@@ -1280,6 +2341,8 @@ function addMsg(type, text, streaming, renderMarkdown) {
   const element = document.createElement("div");
   element.className = "msg " + type + (streaming ? " streaming" : "");
   if (type === "assistant") {
+    const shell = document.createElement("div");
+    shell.className = "assistant-block";
     const content = document.createElement("span");
     content.className = renderMarkdown ? "md-content" : "msg-text";
     if (renderMarkdown && typeof marked !== "undefined") {
@@ -1287,12 +2350,18 @@ function addMsg(type, text, streaming, renderMarkdown) {
     } else {
       content.textContent = text;
     }
-    element.appendChild(content);
+    shell.appendChild(content);
     if (streaming) {
       const cursor = document.createElement("span");
       cursor.className = "cursor";
-      element.appendChild(cursor);
+      shell.appendChild(cursor);
     }
+    element.appendChild(shell);
+  } else if (type === "user") {
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+    bubble.textContent = text;
+    element.appendChild(bubble);
   } else if (type === "tool-call" || type === "tool-result") {
     element.innerHTML = "<div class=\"msg-label\">" + esc(type === "tool-call" ? "TOOL CALL" : "TOOL RESULT") + "</div><pre>" + esc(text) + "</pre>";
   } else {
@@ -1345,20 +2414,64 @@ async function loadSummary() {
   }
 }
 
+async function loadSessionStats() {
+  if (!sessionKey) {
+    sessionStats = null;
+    renderSessionStats();
+    return;
+  }
+  try {
+    const response = await fetch(API + "/api/sessions/" + encodeURIComponent(sessionKey) + "/stats");
+    sessionStats = response.ok ? await response.json() : null;
+  } catch (error) {
+    sessionStats = null;
+  }
+  renderSessionStats();
+}
+
+function renderSessionStats() {
+  const container = document.getElementById("chat-stats");
+  if (!container) return;
+  if (!sessionStats) {
+    container.classList.add("empty");
+    container.innerHTML = "";
+    return;
+  }
+  const usagePercent = Number(sessionStats.context_usage_ratio || 0) * 100;
+  const lastTokens = sessionStats.last_token_stats || {};
+  const chips = [
+    statChip("上下文估算", formatCompactNumber(sessionStats.context_tokens_est || 0)),
+    statChip("窗口占比", usagePercent > 0 ? usagePercent.toFixed(1) + "%" : "0%"),
+    statChip("最近一次 Token", lastTokens.total_tokens ? formatCompactNumber(lastTokens.total_tokens) : "—"),
+    statChip("附件", String(sessionStats.attachment_count || 0)),
+  ];
+  container.classList.remove("empty");
+  container.innerHTML = chips.join("");
+}
+
+function statChip(label, value) {
+  return "<span class=\"chat-stat-chip\"><span>" + esc(label) + "</span><strong>" + esc(value) + "</strong></span>";
+}
+
+function formatCompactNumber(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return "0";
+  if (numeric >= 10000) return (numeric / 1000).toFixed(1).replace(/\\.0$/, "") + "k";
+  return String(Math.round(numeric));
+}
+
 function updateSessionUI() {
   const shortKey = sessionKey ? shortSessionKey(sessionKey) : "no session";
-  const sessionBadge = document.getElementById("session-badge");
-  sessionBadge.textContent = shortKey;
-  sessionBadge.classList.toggle("hidden", !sessionKey);
   document.getElementById("inspector-session-badge").textContent = shortKey;
   executionState.session = sessionKey ? shortKey : "—";
 }
 
 function updateChatHeader() {
-  document.getElementById("chat-title").textContent = currentSessionMeta ? currentSessionMeta.title : "新会话";
+  document.getElementById("chat-title").textContent = currentSessionMeta ? getEffectiveSessionTitle(currentSessionMeta) : "新会话";
   document.getElementById("chat-subtitle").textContent = currentSessionMeta
     ? ((currentSessionMeta.preview || "继续当前会话") + (currentSessionMeta.updated_at ? " · " + formatSessionTime(currentSessionMeta.updated_at) : ""))
     : "创建一个新会话开始对话";
+  renderSessionStats();
   updateSessionUI();
 }
 
@@ -1367,12 +2480,15 @@ function clearMessages() {
 }
 
 function showWelcomeCard() {
-  return;
+  document.querySelector(".chat-shell").classList.add("home-mode");
+  const card = document.getElementById("welcome-card");
+  if (card) card.style.display = "flex";
 }
 
 function hideWelcomeCard() {
+  document.querySelector(".chat-shell").classList.remove("home-mode");
   const card = document.getElementById("welcome-card");
-  if (card) card.remove();
+  if (card) card.style.display = "";
 }
 
 function clearComposer() {
@@ -1382,8 +2498,8 @@ function clearComposer() {
 
 function autoResizeInput() {
   const input = document.getElementById("msg-input");
-  input.style.height = "60px";
-  input.style.height = Math.min(input.scrollHeight, 168) + "px";
+  input.style.height = "24px";
+  input.style.height = Math.min(Math.max(input.scrollHeight, 24), 168) + "px";
 }
 
 function shortSessionKey(value) {

@@ -98,3 +98,18 @@ class TestClose:
         await store.initialize()
         await store.close()
         await store.close()  # Should not raise
+
+
+class TestSessionListing:
+    """Tests for session list filtering."""
+
+    async def test_list_sessions_excludes_empty_config_only_sessions(self, tmp_path: Path) -> None:
+        """Config-only placeholder sessions should not appear in the sidebar list."""
+        store = MemoryStore(db_path=str(tmp_path / "test.db"))
+        await store.initialize()
+        try:
+            await store.set_session_config("empty-config", model_override="kimi/kimi-k2.5")
+            sessions = await store.list_sessions()
+            assert sessions == []
+        finally:
+            await store.close()

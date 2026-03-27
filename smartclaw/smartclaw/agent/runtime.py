@@ -22,6 +22,7 @@ from smartclaw.capabilities.governance import build_runtime_policy
 from smartclaw.capabilities.models import CapabilityResolution
 from smartclaw.capabilities.registry import CapabilityPackRegistry
 from smartclaw.observability.logging import get_logger
+from smartclaw.providers.capabilities import ModelCapabilities, resolve_model_capabilities
 from smartclaw.providers.config import ModelConfig
 from smartclaw.providers.factory import ProviderFactory
 from smartclaw.tools.registry import ToolRegistry, create_system_tools
@@ -137,6 +138,21 @@ class AgentRuntime:
     def create_graph(self, model_ref: str | None = None, *, mode: str | None = None) -> Any:
         """Create a request-scoped graph with consistent wiring."""
         return self.create_request_graph(model_ref=model_ref, mode=mode)
+
+    def resolve_model_capabilities(
+        self,
+        model_ref: str | None = None,
+        *,
+        capability_override: dict[str, Any] | None = None,
+        request_override: dict[str, Any] | None = None,
+    ) -> ModelCapabilities:
+        """Resolve provider/model capabilities for the effective request model."""
+        effective_model_ref = model_ref or self.model_config.primary
+        return resolve_model_capabilities(
+            model_ref=effective_model_ref,
+            capability_override=capability_override,
+            request_override=request_override,
+        )
 
     def resolve_capability_pack(
         self,

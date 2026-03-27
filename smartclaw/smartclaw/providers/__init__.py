@@ -9,8 +9,11 @@ Public API:
     FallbackCandidate — candidate provider/model/profile_id for fallback
     CooldownTracker  — per-provider exponential-backoff cooldown
     parse_model_ref  — split "provider/model" strings
+    ModelCapabilities — normalized capability flags for provider/model pairs
+    resolve_model_capabilities — capability lookup with override precedence
 """
 
+from smartclaw.providers.capabilities import ModelCapabilities, resolve_model_capabilities
 from smartclaw.providers.config import AuthProfile, ModelConfig, ProviderSpec, parse_model_ref
 from smartclaw.providers.factory import ProviderFactory
 from smartclaw.providers.fallback import CooldownTracker, FallbackCandidate, FallbackChain
@@ -20,8 +23,10 @@ __all__ = [
     "CooldownTracker",
     "FallbackCandidate",
     "FallbackChain",
+    "ModelCapabilities",
     "ModelConfig",
     "ProviderFactory",
     "ProviderSpec",
     "parse_model_ref",
+    "resolve_model_capabilities",
 ]

@@ -47,6 +47,14 @@ class ProviderSpec(BaseSettings):
         default=None,
         description="Extra keyword arguments passed to the LangChain class constructor",
     )
+    supports_vision: bool | None = Field(
+        default=None,
+        description="Optional provider-level default for image input support",
+    )
+    model_capabilities: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Optional exact-match per-model capability overrides",
+    )
 
 
 class AuthProfile(BaseSettings):
