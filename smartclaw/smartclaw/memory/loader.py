@@ -239,13 +239,206 @@ class MemoryLoader:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
     def load_memory_dir(self) -> list[MemoryFile]:
-        """Scan memory/ directory for all .md files.
+        """Scan memory/ directory for all .md files recursively.
+        
+        Scans the `<workspace>/memory/` directory recursively for all `.md` files.
+        Tracks total size and stops loading when the 50MB limit is exceeded.
         
         Returns:
-            List of MemoryFile objects.
+            List of MemoryFile objects with path, mtime, size, and content.
+            
+        Notes:
+            - Recursively scans all subdirectories
+            - Total directory size is limited to 50MB (MAX_MEMORY_DIR_SIZE)
+            - When limit is exceeded, logs warning and skips remaining files
+            - Handles permission errors and other OS errors gracefully
+            - Files are sorted by path for deterministic ordering
+            - Logs INFO when scanning completes with file count and total size
         """
-        # TODO: Implement in task 2.7
-        return []
+        if not self._enabled:
+            logger.debug("memory_loader_disabled", workspace=str(self._workspace_dir))
+            return []
+
+        memory_dir = self._workspace_dir / "memory"
+        
+        if not memory_dir.exists():
+            logger.debug(
+                "memory_dir_not_found",
+                path=str(memory_dir),
+            )
+            return []
+
+        if not memory_dir.is_dir():
+            logger.warning(
+                "memory_dir_not_directory",
+                path=str(memory_dir),
+            )
+            return []
+
+        # Collect all .md files recursively
+        md_files: list[Path] = []
+        try:
+            md_files = self._scan_md_files_recursive(memory_dir)
+        except PermissionError:
+            logger.warning(
+                "memory_dir_permission_denied",
+                path=str(memory_dir),
+            )
+            return []
+        except OSError as e:
+            logger.warning(
+                "memory_dir_scan_error",
+                path=str(memory_dir),
+                error=str(e),
+            )
+            return []
+
+        if not md_files:
+            logger.debug(
+                "memory_dir_no_md_files",
+                path=str(memory_dir),
+            )
+            return []
+
+        # Sort files by path for deterministic ordering
+        md_files.sort(key=lambda p: str(p))
+
+        # Load files with size limit tracking
+        memory_files: list[MemoryFile] = []
+        total_size = 0
+        skipped_count = 0
+        limit_exceeded = False
+
+        for file_path in md_files:
+            # Get file stats
+            try:
+                stat = file_path.stat()
+                file_size = stat.st_size
+                file_mtime = stat.st_mtime
+            except PermissionError:
+                logger.warning(
+                    "memory_file_permission_denied",
+                    path=str(file_path),
+                )
+                continue
+            except OSError as e:
+                logger.warning(
+                    "memory_file_stat_error",
+                    path=str(file_path),
+                    error=str(e),
+                )
+                continue
+
+            # Check if adding this file would exceed the limit
+            if total_size + file_size > MAX_MEMORY_DIR_SIZE:
+                if not limit_exceeded:
+                    # Log warning only once when limit is first exceeded
+                    logger.warning(
+                        "memory_dir_size_limit_exceeded",
+                        path=str(memory_dir),
+                        current_size=total_size,
+                        file_size=file_size,
+                        max_size=MAX_MEMORY_DIR_SIZE,
+                        skipping_file=str(file_path),
+                    )
+                    limit_exceeded = True
+                skipped_count += 1
+                continue
+
+            # Read file content
+            try:
+                content = file_path.read_text(encoding="utf-8")
+            except PermissionError:
+                logger.warning(
+                    "memory_file_read_permission_denied",
+                    path=str(file_path),
+                )
+                continue
+            except UnicodeDecodeError:
+                logger.warning(
+                    "memory_file_decode_error",
+                    path=str(file_path),
+                )
+                continue
+            except OSError as e:
+                logger.warning(
+                    "memory_file_read_error",
+                    path=str(file_path),
+                    error=str(e),
+                )
+                continue
+
+            # Create MemoryFile object
+            memory_file = MemoryFile(
+                path=str(file_path),
+                mtime=file_mtime,
+                size=file_size,
+                content=content,
+            )
+            memory_files.append(memory_file)
+            total_size += file_size
+
+        # Log summary
+        if skipped_count > 0:
+            logger.warning(
+                "memory_dir_files_skipped",
+                path=str(memory_dir),
+                skipped_count=skipped_count,
+                loaded_count=len(memory_files),
+                total_size=total_size,
+            )
+        
+        logger.info(
+            "memory_dir_loaded",
+            path=str(memory_dir),
+            file_count=len(memory_files),
+            total_size=total_size,
+        )
+
+        return memory_files
+
+    def _scan_md_files_recursive(self, directory: Path) -> list[Path]:
+        """Recursively scan directory for .md files.
+        
+        Args:
+            directory: The directory to scan.
+            
+        Returns:
+            List of Path objects for all .md files found.
+            
+        Raises:
+            PermissionError: If directory cannot be accessed.
+            OSError: If other OS error occurs during scanning.
+        """
+        md_files: list[Path] = []
+        
+        try:
+            for item in directory.iterdir():
+                if item.is_file() and item.suffix.lower() == ".md":
+                    md_files.append(item)
+                elif item.is_dir():
+                    # Recursively scan subdirectories
+                    try:
+                        md_files.extend(self._scan_md_files_recursive(item))
+                    except PermissionError:
+                        logger.warning(
+                            "memory_subdir_permission_denied",
+                            path=str(item),
+                        )
+                        # Continue scanning other directories
+                    except OSError as e:
+                        logger.warning(
+                            "memory_subdir_scan_error",
+                            path=str(item),
+                            error=str(e),
+                        )
+                        # Continue scanning other directories
+        except PermissionError:
+            raise
+        except OSError:
+            raise
+
+        return md_files
 
     def chunk_markdown(self, content: str, file_path: str) -> list[MemoryChunk]:
         """Chunk Markdown content by tokens.

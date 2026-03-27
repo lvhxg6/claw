@@ -14,6 +14,7 @@ from smartclaw.memory.loader import (
     MemoryChunk,
     MemoryFile,
     MAX_MEMORY_FILE_SIZE,
+    MAX_MEMORY_DIR_SIZE,
 )
 
 
@@ -529,3 +530,287 @@ class TestChunkMarkdown:
             assert len(chunk.hash) == 16
             assert chunk.start_line >= 1
             assert chunk.end_line >= chunk.start_line
+
+
+class TestLoadMemoryDir:
+    """Tests for load_memory_dir() method."""
+
+    def test_load_memory_dir_not_exists(self, tmp_path: Path) -> None:
+        """Should return empty list when memory/ directory does not exist."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert result == []
+
+    def test_load_memory_dir_empty(self, tmp_path: Path) -> None:
+        """Should return empty list when memory/ directory is empty."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert result == []
+
+    def test_load_memory_dir_single_file(self, tmp_path: Path) -> None:
+        """Should load single .md file from memory/ directory."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        content = "# Test Memory\n\nSome content here."
+        (memory_dir / "test.md").write_text(content)
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 1
+        assert result[0].content == content
+        assert result[0].path == str(memory_dir / "test.md")
+        assert result[0].size == len(content.encode("utf-8"))
+        assert result[0].mtime > 0
+
+    def test_load_memory_dir_multiple_files(self, tmp_path: Path) -> None:
+        """Should load multiple .md files from memory/ directory."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "file1.md").write_text("# File 1")
+        (memory_dir / "file2.md").write_text("# File 2")
+        (memory_dir / "file3.md").write_text("# File 3")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 3
+        contents = {f.content for f in result}
+        assert "# File 1" in contents
+        assert "# File 2" in contents
+        assert "# File 3" in contents
+
+    def test_load_memory_dir_recursive(self, tmp_path: Path) -> None:
+        """Should recursively scan subdirectories for .md files."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "root.md").write_text("# Root")
+        
+        subdir1 = memory_dir / "subdir1"
+        subdir1.mkdir()
+        (subdir1 / "sub1.md").write_text("# Sub 1")
+        
+        subdir2 = memory_dir / "subdir2"
+        subdir2.mkdir()
+        (subdir2 / "sub2.md").write_text("# Sub 2")
+        
+        nested = subdir1 / "nested"
+        nested.mkdir()
+        (nested / "nested.md").write_text("# Nested")
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 4
+        contents = {f.content for f in result}
+        assert "# Root" in contents
+        assert "# Sub 1" in contents
+        assert "# Sub 2" in contents
+        assert "# Nested" in contents
+
+    def test_load_memory_dir_only_md_files(self, tmp_path: Path) -> None:
+        """Should only load .md files, ignoring other file types."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "valid.md").write_text("# Valid")
+        (memory_dir / "readme.txt").write_text("Not markdown")
+        (memory_dir / "data.json").write_text('{"key": "value"}')
+        (memory_dir / "script.py").write_text("print('hello')")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 1
+        assert result[0].content == "# Valid"
+
+    def test_load_memory_dir_case_insensitive_extension(self, tmp_path: Path) -> None:
+        """Should load .MD files (case-insensitive extension)."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "lower.md").write_text("# Lower")
+        (memory_dir / "upper.MD").write_text("# Upper")
+        (memory_dir / "mixed.Md").write_text("# Mixed")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 3
+        contents = {f.content for f in result}
+        assert "# Lower" in contents
+        assert "# Upper" in contents
+        assert "# Mixed" in contents
+
+    def test_load_memory_dir_disabled(self, tmp_path: Path) -> None:
+        """Should return empty list when loader is disabled."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "test.md").write_text("# Test")
+        loader = MemoryLoader(workspace_dir=str(tmp_path), enabled=False)
+        
+        result = loader.load_memory_dir()
+        
+        assert result == []
+
+    def test_load_memory_dir_unicode_content(self, tmp_path: Path) -> None:
+        """Should handle Unicode content correctly."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        content = "# 中文标题\n\n这是中文内容。\n\n日本語テキスト。"
+        (memory_dir / "unicode.md").write_text(content, encoding="utf-8")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 1
+        assert result[0].content == content
+
+    def test_load_memory_dir_sorted_by_path(self, tmp_path: Path) -> None:
+        """Should return files sorted by path for deterministic ordering."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "z_last.md").write_text("# Z")
+        (memory_dir / "a_first.md").write_text("# A")
+        (memory_dir / "m_middle.md").write_text("# M")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 3
+        paths = [f.path for f in result]
+        assert paths == sorted(paths)
+
+    def test_load_memory_dir_not_a_directory(self, tmp_path: Path) -> None:
+        """Should return empty list when memory is a file, not a directory."""
+        # Create a file named 'memory' instead of a directory
+        (tmp_path / "memory").write_text("I am a file")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert result == []
+
+    def test_load_memory_dir_empty_file(self, tmp_path: Path) -> None:
+        """Should handle empty .md files."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "empty.md").write_text("")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 1
+        assert result[0].content == ""
+        assert result[0].size == 0
+
+
+class TestLoadMemoryDirSizeLimit:
+    """Tests for memory/ directory size limit (50MB)."""
+
+    def test_load_memory_dir_within_limit(self, tmp_path: Path) -> None:
+        """Should load all files when total size is within limit."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        # Create several small files
+        for i in range(10):
+            (memory_dir / f"file{i}.md").write_text(f"# File {i}\n" + "x" * 1000)
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        assert len(result) == 10
+
+    def test_load_memory_dir_exceeds_limit_stops_loading(self, tmp_path: Path) -> None:
+        """Should stop loading files when 50MB limit is exceeded."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        
+        # Create files that will exceed the limit
+        # Each file is ~10MB, so after 5 files we exceed 50MB
+        file_size = 10 * 1024 * 1024  # 10MB
+        content = "x" * file_size
+        
+        for i in range(7):  # 7 files * 10MB = 70MB > 50MB limit
+            (memory_dir / f"file{i:02d}.md").write_text(content)
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        # Should load only files up to 50MB limit
+        total_size = sum(f.size for f in result)
+        assert total_size <= MAX_MEMORY_DIR_SIZE
+        # Should have loaded 5 files (50MB) and skipped the rest
+        assert len(result) == 5
+
+    def test_load_memory_dir_size_limit_boundary(self, tmp_path: Path) -> None:
+        """Should handle files at the exact boundary of the limit."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        
+        # Create files that exactly fill the limit
+        file_size = MAX_MEMORY_DIR_SIZE // 2
+        content = "x" * file_size
+        
+        (memory_dir / "file1.md").write_text(content)
+        (memory_dir / "file2.md").write_text(content)
+        (memory_dir / "file3.md").write_text("# Small file")  # This should be skipped
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        # Should load exactly 2 files (filling the limit)
+        assert len(result) == 2
+        total_size = sum(f.size for f in result)
+        assert total_size <= MAX_MEMORY_DIR_SIZE
+
+    def test_load_memory_dir_single_large_file_exceeds_limit(self, tmp_path: Path) -> None:
+        """Should skip file if it alone exceeds the limit."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        
+        # Create a file larger than 50MB
+        large_content = "x" * (MAX_MEMORY_DIR_SIZE + 1024)
+        (memory_dir / "huge.md").write_text(large_content)
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        # Should skip the huge file
+        assert len(result) == 0
+
+    def test_load_memory_dir_mixed_sizes_respects_limit(self, tmp_path: Path) -> None:
+        """Should load files in order until limit is reached."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        
+        # Create files with different sizes
+        # Files are sorted by path, so a_small loads first
+        # a_small (1KB) + b_medium (~50MB - 2KB) = ~50MB - 1KB, leaving room for nothing more
+        small_size = 1000
+        medium_size = MAX_MEMORY_DIR_SIZE - small_size - 100  # Leave 100 bytes margin
+        extra_size = 200  # This will exceed the limit
+        
+        (memory_dir / "a_small.md").write_text("x" * small_size)
+        (memory_dir / "b_medium.md").write_text("x" * medium_size)
+        (memory_dir / "c_extra.md").write_text("x" * extra_size)  # Should be skipped
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.load_memory_dir()
+        
+        # Should load a_small and b_medium, skip c_extra
+        assert len(result) == 2
+        paths = [f.path for f in result]
+        assert any("a_small.md" in p for p in paths)
+        assert any("b_medium.md" in p for p in paths)
+        # Verify c_extra was skipped
+        assert not any("c_extra.md" in p for p in paths)
