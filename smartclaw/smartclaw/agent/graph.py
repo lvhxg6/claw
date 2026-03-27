@@ -322,6 +322,7 @@ async def invoke(
         "summary": None,
         "sub_agent_depth": None,
         "token_stats": None,
+        "clarification_request": None,
     }
 
     # P2A: trigger agent:start hook and emit agent.run diagnostic event

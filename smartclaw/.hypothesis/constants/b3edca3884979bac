@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/gateway/routers/health.py
-# hypothesis_version: 6.148.8
-
-[200, 503, '/health', '/ready', '0.1.0', 'health', 'not ready', 'ok', 'ready', 'status']

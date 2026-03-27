@@ -29,7 +29,8 @@ class TestCreateSystemTools:
         assert "exec_command" in names
         assert "web_search" in names
         assert "web_fetch" in names
-        assert registry.count == 8
+        assert "ask_clarification" in names
+        assert registry.count == 9
 
     def test_all_tools_are_base_tool(self, tmp_path: pathlib.Path) -> None:
         registry = create_system_tools(workspace=str(tmp_path))
@@ -58,4 +59,4 @@ class TestCombinedToolList:
 
         all_tools = system_reg.get_all()
         assert all(isinstance(t, BaseTool) for t in all_tools)
-        assert len(all_tools) >= 8  # At least the 8 system tools
+        assert len(all_tools) >= 9  # At least the 9 system tools

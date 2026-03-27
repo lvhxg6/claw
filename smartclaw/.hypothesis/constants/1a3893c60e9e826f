@@ -1,4 +1,4 @@
 # file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/web_fetch.py
-# hypothesis_version: 6.151.9
+# hypothesis_version: 6.148.8
 
 [1024, 50000, '<[^>]+>', 'User-Agent', '[^\\S\\n]+', '\\n{3,}', 'application/json', 'content-type', 'http', 'https', 'text/html', 'web_fetch']

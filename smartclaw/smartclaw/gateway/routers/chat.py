@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from smartclaw.gateway.models import ChatRequest, ChatResponse
+from smartclaw.gateway.models import ChatRequest, ChatResponse, ClarificationData
 from smartclaw.hooks.events import HookEvent
 
 logger = structlog.get_logger(component="gateway.chat")
@@ -142,6 +142,18 @@ def _format_sse(evt_dict: dict) -> dict | None:  # type: ignore[type-arg]
             ),
         }
 
+    if hp == "clarification":
+        return {
+            "event": "clarification",
+            "data": json.dumps(
+                {
+                    "question": evt_dict.get("question", ""),
+                    "options": evt_dict.get("options"),
+                },
+                ensure_ascii=False,
+            ),
+        }
+
     # llm:after, agent:end, unknown → skip
     return None
 
@@ -219,12 +231,19 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
             summarizer=runtime.summarizer,
             context_engine=getattr(runtime, "context_engine", None),
         )
+        clarification = None
+        cr = result.get("clarification_request")
+        if cr:
+            clarification = ClarificationData(
+                question=cr["question"], options=cr.get("options")
+            )
         return ChatResponse(
             session_key=session_key,
             response=result.get("final_answer") or "",
             iterations=result.get("iteration", 0),
             error=result.get("error"),
             token_stats=result.get("token_stats"),
+            clarification=clarification,
         )
     except Exception as exc:
         logger.error("chat_invoke_error", error=str(exc))
@@ -282,6 +301,18 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     summarizer=runtime.summarizer,
                     context_engine=getattr(runtime, "context_engine", None),
                 )
+                cr = result.get("clarification_request")
+                if cr:
+                    yield {
+                        "event": "clarification",
+                        "data": json.dumps(
+                            {
+                                "question": cr["question"],
+                                "options": cr.get("options"),
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
                 yield {
                     "event": "done",
                     "data": json.dumps(
@@ -337,6 +368,18 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
 
             # Final event
             result = task.result()
+            cr = result.get("clarification_request")
+            if cr:
+                yield {
+                    "event": "clarification",
+                    "data": json.dumps(
+                        {
+                            "question": cr["question"],
+                            "options": cr.get("options"),
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
             yield {
                 "event": "done",
                 "data": json.dumps(

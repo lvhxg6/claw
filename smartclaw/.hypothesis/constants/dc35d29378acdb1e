@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/browser/page_parser.py
-# hypothesis_version: 6.148.8
-
-['(empty)', 'RootWebArea', 'WebArea', '\\[nth=(\\d+)\\]', '\\[ref=(e\\d+)\\]', 'application', 'article', 'button', 'cell', 'checkbox', 'children', 'columnheader', 'combobox', 'depth', 'directory', 'document', 'generic', 'grid', 'gridcell', 'group', 'has_children', 'heading', 'ignored', 'link', 'list', 'listbox', 'listitem', 'main', 'menu', 'menubar', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'name', 'navigation', 'none', 'nth', 'option', 'presentation', 'radio', 'ref', 'region', 'role', 'row', 'rowgroup', 'rowheader', 'searchbox', 'slider', 'spinbutton', 'switch', 'tab', 'table', 'tablist', 'textbox', 'toolbar', 'tree', 'treegrid', 'treeitem']

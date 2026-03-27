@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/skills/native_command.py
-# hypothesis_version: 6.148.8
-
-[10000, '(no output)', 'Input', 'Use async', '[-_]', '\\{(\\w+)\\}', 'boolean', 'exec', 'integer', 'replace', 'script', 'shell', 'string']

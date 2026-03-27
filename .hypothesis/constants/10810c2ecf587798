@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/loader.py
+# hypothesis_version: 6.148.8
+
+[512, 1024, 'MEMORY.md', 'memory.loader', 'memory.md', 'memory_md_loaded', 'memory_md_not_found', 'memory_md_read_error', 'memory_md_truncated', 'r', 'utf-8']

@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/gateway/routers/chat.py
-# hypothesis_version: 6.148.8
-
-[1.0, 200, 256, 400, 500, '/api/chat', '/stream', 'agent:end', 'agent:start', 'args', 'chat', 'chat_invoke_error', 'chat_stream_error', 'current', 'data', 'done', 'duration_ms', 'error', 'event', 'final_answer', 'gateway.chat', 'hook_point', 'iteration', 'iterations', 'llm:after', 'llm:before', 'max', 'max_iterations', 'message_count', 'reasoning', 'response', 'result', 'session_key', 'started', 'status', 'success', 'thinking', 'tool:after', 'tool:before', 'tool_args', 'tool_call', 'tool_call_id', 'tool_name', 'tool_result']

@@ -2074,3 +2074,682 @@ class TestBootstrapFileCacheConsistencyEdgeCases:
         assert result.mtime == fs_mtime, (
             f"Cached mtime ({result.mtime}) should match filesystem mtime ({fs_mtime})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Property 8: SOUL.md 提示词位置
+# ---------------------------------------------------------------------------
+
+
+class TestSoulPromptPositionProperties:
+    """Property-based tests for SOUL.md prompt position (Property 8).
+    
+    **Validates: Requirements 2.7**
+    
+    Requirements 2.7 states:
+    - THE BootstrapLoader SHALL 在加载 SOUL.md 时，将内容作为系统提示词的第一部分，
+      优先级高于默认 SYSTEM_PROMPT
+    
+    Property 8 from design.md:
+    - 对于任意 SOUL.md 内容 S，get_soul_content() 返回的内容等于 S
+    - SOUL.md 内容应用于系统提示词的开头位置
+    """
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_get_soul_content_returns_exact_content(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8: get_soul_content() returns exact SOUL.md content
+        
+        For any SOUL.md content S, get_soul_content() should return
+        exactly S without any modification.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return exact content
+        assert result == soul_content, (
+            f"get_soul_content() should return exact SOUL.md content. "
+            f"Expected: {soul_content[:100]}... Got: {result[:100]}..."
+        )
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_get_soul_content_returns_empty_when_no_file(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8: get_soul_content() returns empty string when SOUL.md doesn't exist
+        
+        For any workspace without SOUL.md, get_soul_content() should return
+        an empty string, allowing the default SYSTEM_PROMPT to be used.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories (no SOUL.md file)
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return empty string
+        assert result == "", (
+            f"get_soul_content() should return empty string when SOUL.md doesn't exist, "
+            f"but got: {result[:100]}..."
+        )
+
+    @given(
+        workspace_soul=_bootstrap_content,
+        global_soul=_bootstrap_content,
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_get_soul_content_prefers_workspace_over_global(
+        self,
+        tmp_path: Path,
+        workspace_soul: str,
+        global_soul: str,
+    ) -> None:
+        """Property 8: get_soul_content() prefers workspace SOUL.md over global
+        
+        For any SOUL.md content, when both workspace and global versions exist,
+        get_soul_content() should return the workspace version.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Ensure contents are different
+        assume(workspace_soul != global_soul)
+        
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md in both directories
+        (workspace_dir / "SOUL.md").write_text(workspace_soul, encoding="utf-8")
+        (global_dir / "SOUL.md").write_text(global_soul, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return workspace version
+        assert result == workspace_soul, (
+            f"get_soul_content() should return workspace SOUL.md content, "
+            f"not global content"
+        )
+
+    @given(global_soul=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_get_soul_content_falls_back_to_global(
+        self,
+        tmp_path: Path,
+        global_soul: str,
+    ) -> None:
+        """Property 8: get_soul_content() falls back to global when workspace missing
+        
+        For any SOUL.md content in global directory, when workspace doesn't have
+        SOUL.md, get_soul_content() should return the global version.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md only in global directory
+        (global_dir / "SOUL.md").write_text(global_soul, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return global version
+        assert result == global_soul, (
+            f"get_soul_content() should fall back to global SOUL.md content"
+        )
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_is_idempotent(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8: get_soul_content() is idempotent
+        
+        For any SOUL.md content S, multiple calls to get_soul_content()
+        should always return the same result.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content multiple times
+        results = [loader.get_soul_content() for _ in range(5)]
+        
+        # All results should be identical
+        assert all(r == soul_content for r in results), (
+            "get_soul_content() should be idempotent - all calls should return same content"
+        )
+
+    @given(
+        soul_content=st.text(
+            alphabet=st.characters(
+                whitelist_categories=("L", "N", "P", "S", "Z"),
+                whitelist_characters="\n\t -#*_[](){}中文日本語한국어🚀🎉",
+            ),
+            min_size=10,
+            max_size=500,
+        ).map(lambda s: f"# SOUL 人格定义\n\n{s}"),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_preserves_unicode(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8: get_soul_content() preserves Unicode content
+        
+        For any SOUL.md content with Unicode characters (Chinese, Japanese,
+        Korean, emojis, etc.), get_soul_content() should preserve all
+        characters exactly.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file with Unicode content
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should preserve all Unicode characters
+        assert result == soul_content, (
+            f"get_soul_content() should preserve Unicode content exactly"
+        )
+
+    @given(
+        soul_content=st.text(
+            alphabet=st.characters(
+                whitelist_categories=("L", "N", "P", "S", "Z"),
+                whitelist_characters="\n\t -#*_[](){}",
+            ),
+            min_size=1,
+            max_size=100,
+        ).map(lambda s: f"# Agent Personality\n\n{s}\n\n"),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_preserves_whitespace(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8: get_soul_content() preserves whitespace
+        
+        For any SOUL.md content with various whitespace (newlines, tabs,
+        trailing spaces), get_soul_content() should preserve all whitespace
+        exactly as written.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should preserve all whitespace
+        assert result == soul_content, (
+            f"get_soul_content() should preserve whitespace exactly"
+        )
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_consistent_with_load_file(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8: get_soul_content() is consistent with load_file(SOUL)
+        
+        For any SOUL.md content S, get_soul_content() should return the same
+        content as load_file(BootstrapFileType.SOUL).content.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get content via both methods
+        getter_result = loader.get_soul_content()
+        load_result = loader.load_file(BootstrapFileType.SOUL)
+        
+        # Both should return the same content
+        assert load_result is not None
+        assert getter_result == load_result.content, (
+            "get_soul_content() should return same content as load_file(SOUL).content"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Edge case tests for Property 8
+# ---------------------------------------------------------------------------
+
+
+class TestSoulPromptPositionEdgeCases:
+    """Edge case tests for SOUL.md prompt position (Property 8).
+    
+    **Validates: Requirements 2.7**
+    """
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_empty_soul_file_returns_empty_string(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8 (edge case): Empty SOUL.md returns empty string
+        
+        For an empty SOUL.md file, get_soul_content() should return
+        an empty string.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create empty SOUL.md file
+        (workspace_dir / "SOUL.md").write_text("", encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return empty string
+        assert result == "", (
+            "get_soul_content() should return empty string for empty SOUL.md"
+        )
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_with_disabled_loader(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8 (edge case): get_soul_content() returns empty when loader disabled
+        
+        For any SOUL.md content, when the loader is disabled (enabled=False),
+        get_soul_content() should return an empty string.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create disabled loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+            enabled=False,
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return empty string when disabled
+        assert result == "", (
+            "get_soul_content() should return empty string when loader is disabled"
+        )
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_after_cache_invalidation(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8 (edge case): get_soul_content() works after cache invalidation
+        
+        For any SOUL.md content, after invalidating the cache,
+        get_soul_content() should still return the correct content.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file
+        (workspace_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content (populates cache)
+        result1 = loader.get_soul_content()
+        assert result1 == soul_content
+        
+        # Invalidate cache
+        loader.invalidate_cache(BootstrapFileType.SOUL)
+        
+        # Get SOUL content again
+        result2 = loader.get_soul_content()
+        
+        # Should still return correct content
+        assert result2 == soul_content, (
+            "get_soul_content() should work correctly after cache invalidation"
+        )
+
+    @given(
+        original_soul=_bootstrap_content,
+        updated_soul=_bootstrap_content,
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_soul_content_reflects_file_updates(
+        self,
+        tmp_path: Path,
+        original_soul: str,
+        updated_soul: str,
+    ) -> None:
+        """Property 8 (edge case): get_soul_content() reflects file updates
+        
+        For any SOUL.md content, when the file is updated,
+        get_soul_content() should return the updated content.
+        
+        **Validates: Requirements 2.7**
+        """
+        import time
+        
+        # Ensure contents are different
+        assume(original_soul != updated_soul)
+        
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create SOUL.md file with original content
+        soul_path = workspace_dir / "SOUL.md"
+        soul_path.write_text(original_soul, encoding="utf-8")
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get original SOUL content
+        result1 = loader.get_soul_content()
+        assert result1 == original_soul
+        
+        # Wait and update file
+        time.sleep(0.01)
+        soul_path.write_text(updated_soul, encoding="utf-8")
+        
+        # Get updated SOUL content
+        result2 = loader.get_soul_content()
+        
+        # Should return updated content
+        assert result2 == updated_soul, (
+            "get_soul_content() should reflect file updates"
+        )
+
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    @given(soul_content=_bootstrap_content)
+    def test_soul_content_with_no_workspace_dir(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8 (edge case): get_soul_content() works with no workspace_dir
+        
+        For any SOUL.md content in global directory, when workspace_dir is None,
+        get_soul_content() should return the global content.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create only global directory
+        unique_id = uuid.uuid4().hex[:8]
+        global_dir = tmp_path / f"global_{unique_id}"
+        global_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create SOUL.md in global directory
+        (global_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+        
+        # Create loader without workspace_dir
+        loader = BootstrapLoader(
+            workspace_dir=None,
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return global content
+        assert result == soul_content, (
+            "get_soul_content() should return global content when workspace_dir is None"
+        )
+
+    @given(soul_content=_bootstrap_content)
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_oversized_soul_returns_empty_string(
+        self,
+        tmp_path: Path,
+        soul_content: str,
+    ) -> None:
+        """Property 8 (edge case): Oversized SOUL.md returns empty string
+        
+        For a SOUL.md file exceeding the size limit (512KB),
+        get_soul_content() should return an empty string.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create oversized SOUL.md file
+        oversized_content = "# SOUL\n" + ("x" * MAX_BOOTSTRAP_FILE_SIZE)
+        (workspace_dir / "SOUL.md").write_text(oversized_content, encoding="utf-8")
+        
+        # Verify file is oversized
+        assert (workspace_dir / "SOUL.md").stat().st_size > MAX_BOOTSTRAP_FILE_SIZE
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should return empty string for oversized file
+        assert result == "", (
+            "get_soul_content() should return empty string for oversized SOUL.md"
+        )
+
+    @given(
+        global_soul=_bootstrap_content,
+        excess_bytes=st.integers(min_value=1, max_value=1024),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_oversized_workspace_soul_falls_back_to_global(
+        self,
+        tmp_path: Path,
+        global_soul: str,
+        excess_bytes: int,
+    ) -> None:
+        """Property 8 (edge case): Oversized workspace SOUL.md falls back to global
+        
+        For a workspace SOUL.md exceeding the size limit but a valid global
+        SOUL.md, get_soul_content() should return the global content.
+        
+        **Validates: Requirements 2.7**
+        """
+        # Create unique directories
+        workspace_dir, global_dir = _create_unique_dirs(tmp_path)
+        
+        # Create oversized SOUL.md in workspace
+        ws_header = "# Workspace SOUL (too large)\n"
+        ws_header_bytes = len(ws_header.encode("utf-8"))
+        ws_padding = MAX_BOOTSTRAP_FILE_SIZE - ws_header_bytes + excess_bytes
+        ws_content = ws_header + ("w" * ws_padding)
+        (workspace_dir / "SOUL.md").write_text(ws_content, encoding="utf-8")
+        
+        # Create valid SOUL.md in global
+        (global_dir / "SOUL.md").write_text(global_soul, encoding="utf-8")
+        
+        # Verify sizes
+        assert (workspace_dir / "SOUL.md").stat().st_size > MAX_BOOTSTRAP_FILE_SIZE
+        assert (global_dir / "SOUL.md").stat().st_size <= MAX_BOOTSTRAP_FILE_SIZE
+        
+        # Create loader
+        loader = BootstrapLoader(
+            workspace_dir=str(workspace_dir),
+            global_dir=str(global_dir),
+        )
+        
+        # Get SOUL content
+        result = loader.get_soul_content()
+        
+        # Should fall back to global content
+        assert result == global_soul, (
+            "get_soul_content() should fall back to global when workspace SOUL.md is oversized"
+        )

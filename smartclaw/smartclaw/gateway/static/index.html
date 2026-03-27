@@ -90,6 +90,22 @@
   .small-btn { background: #1e1e1e; border: 1px solid #333; color: #666; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
   .small-btn:hover { background: #2a2a2a; color: #ccc; }
   #summary-text { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 10px; font-size: 13px; color: #aaa; min-height: 80px; white-space: pre-wrap; margin: 8px; }
+  .decision-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px 10px; font-size: 12px; margin-bottom: 4px; border-left: 3px solid #2a2a2a; }
+  .decision-card.tool_call { border-color: #2d4a2d; }
+  .decision-card.final_answer { border-color: #2d2d4a; }
+  .decision-card.supervisor_route { border-color: #4a2d4a; }
+  .decision-card .dc-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+  .decision-card .dc-time { color: #444; font-size: 11px; }
+  .decision-card .dc-iter { color: #888; font-size: 11px; font-weight: 600; }
+  .decision-card .dc-type { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; }
+  .decision-card.tool_call .dc-type { color: #86efac; background: #1a2a1a; }
+  .decision-card.final_answer .dc-type { color: #93c5fd; background: #1a1a2a; }
+  .decision-card.supervisor_route .dc-type { color: #c084fc; background: #2a1a2a; }
+  .decision-card .dc-input { color: #aaa; font-size: 12px; margin-top: 4px; white-space: pre-wrap; word-break: break-all; }
+  .decision-card .dc-input-label { color: #666; font-size: 11px; margin-top: 4px; }
+  .decision-card .dc-reasoning { color: #666; font-size: 12px; margin-top: 4px; white-space: pre-wrap; word-break: break-all; max-height: 3.9em; line-height: 1.3em; overflow: hidden; cursor: pointer; }
+  .decision-card .dc-reasoning.exp { max-height: none; }
+  .decision-card .dc-reasoning-label { color: #555; font-size: 11px; margin-top: 4px; cursor: pointer; }
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
@@ -121,11 +137,13 @@
   <div class="debug-panel">
     <div class="tabs">
       <div class="tab active" onclick="switchTab('hooks')">🪝 Hooks</div>
+      <div class="tab" onclick="switchTab('decisions')">🧠 Decisions</div>
       <div class="tab" onclick="switchTab('tools')">🔧 Tools</div>
       <div class="tab" onclick="switchTab('history')">📜 History</div>
       <div class="tab" onclick="switchTab('summary')">📝 Summary</div>
     </div>
     <div class="tab-content active" id="tab-hooks"><div class="empty-msg" id="hooks-empty">等待 hook 事件...</div></div>
+    <div class="tab-content" id="tab-decisions"><div class="empty-msg" id="decisions-empty">等待决策事件...</div></div>
     <div class="tab-content" id="tab-tools"></div>
     <div class="tab-content" id="tab-history"><div class="empty-msg">暂无历史</div></div>
     <div class="tab-content" id="tab-summary"><div id="summary-text" style="color:#444">暂无摘要</div></div>
@@ -136,6 +154,7 @@ const API = '';
 let sessionKey = null;
 let isStreaming = false;
 let hookES = null;
+let decisionES = null;
 let streamEl = null;
 let currentModel = '';
 let availableModels = [];
@@ -145,6 +164,7 @@ async function init() {
   await loadModels();
   await loadTools();
   connectHooks();
+  connectDecisions();
 }
 
 async function checkHealth() {
@@ -264,6 +284,73 @@ function addHook(d) {
   el.querySelector('.hd').onclick = function() { this.classList.toggle('exp'); };
   c.insertBefore(el, c.firstChild);
   while (c.children.length > 80) c.removeChild(c.lastChild);
+}
+
+function connectDecisions() {
+  if (decisionES) decisionES.close();
+  decisionES = new EventSource(API + '/api/debug/decision-events');
+  decisionES.onmessage = function(e) {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.ping) return;
+      if (!d.decision_type) return;
+      addDecision(d);
+    } catch(err) {}
+  };
+  decisionES.onerror = function() { setTimeout(connectDecisions, 3000); };
+}
+
+function addDecision(d) {
+  const c = document.getElementById('tab-decisions');
+  const empty = document.getElementById('decisions-empty');
+  if (empty) empty.remove();
+  const dt = d.decision_type || 'unknown';
+  const iter = d.iteration || 0;
+  const ts = d.timestamp ? new Date(d.timestamp).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+  const typeLabels = { tool_call: '→ Tool Call', final_answer: '→ Final Answer', supervisor_route: '→ Route: ' + (d.target_agent || '?') };
+  const typeLabel = typeLabels[dt] || dt;
+  const inputSummary = d.input_summary || '';
+  const reasoning = d.reasoning || '';
+  const toolCalls = d.tool_calls || [];
+
+  const el = document.createElement('div');
+  el.className = 'decision-card ' + dt;
+
+  let html = '<div class="dc-header">';
+  html += '<span class="dc-time">' + esc(ts) + '</span>';
+  html += '<span class="dc-iter">Iter ' + iter + '</span>';
+  html += '<span class="dc-type">' + esc(typeLabel) + '</span>';
+  html += '</div>';
+
+  if (inputSummary) {
+    html += '<div class="dc-input-label">Input:</div>';
+    html += '<div class="dc-input">' + esc(inputSummary.substring(0, 200)) + (inputSummary.length > 200 ? '...' : '') + '</div>';
+  }
+
+  if (toolCalls.length > 0) {
+    html += '<div class="dc-input-label">Tools:</div>';
+    toolCalls.forEach(function(tc) {
+      html += '<div class="dc-input" style="color:#86efac">' + esc(tc.tool_name || '') + '(' + esc(JSON.stringify(tc.tool_args || {})) + ')</div>';
+    });
+  }
+
+  if (reasoning) {
+    html += '<div class="dc-reasoning-label">Reasoning ▾</div>';
+    html += '<div class="dc-reasoning">' + esc(reasoning) + '</div>';
+  }
+
+  el.innerHTML = html;
+
+  const reasoningEl = el.querySelector('.dc-reasoning');
+  if (reasoningEl) {
+    const toggleFn = function() { reasoningEl.classList.toggle('exp'); };
+    reasoningEl.onclick = toggleFn;
+    const labelEl = el.querySelector('.dc-reasoning-label');
+    if (labelEl) labelEl.onclick = toggleFn;
+  }
+
+  c.insertBefore(el, c.firstChild);
+  while (c.children.length > 100) c.removeChild(c.lastChild);
 }
 
 async function sendMessage() {
@@ -481,7 +568,7 @@ async function loadSummary() {
 }
 
 function switchTab(name) {
-  const names = ['hooks', 'tools', 'history', 'summary'];
+  const names = ['hooks', 'decisions', 'tools', 'history', 'summary'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   names.forEach(n => {
     const el = document.getElementById('tab-' + n);

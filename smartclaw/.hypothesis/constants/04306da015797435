@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/nodes.py
-# hypothesis_version: 6.148.8
-
-['action', 'agent.nodes', 'args', 'end', 'error', 'final_answer', 'id', 'iteration', 'max_iterations', 'messages', 'name', 'reasoning_node done', 'reasoning_node error', 'reasoning_node start']

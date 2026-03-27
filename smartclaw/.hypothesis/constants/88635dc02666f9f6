@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/skills/watcher.py
+# hypothesis_version: 6.148.8
+
+[5.0, 1000.0, 250, 1000, '.git', '.idea', '.venv', '.vscode', '__pycache__', 'node_modules', 'skill.md', 'skill.yaml', 'skills', 'skills.watcher', 'skills_reload_failed', 'venv', '~/.smartclaw/skills']

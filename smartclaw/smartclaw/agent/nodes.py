@@ -12,8 +12,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from smartclaw.agent.loop_detector import LoopDetector, LoopStatus
 from smartclaw.agent.state import AgentState
 from smartclaw.observability.logging import get_logger
 
@@ -179,6 +180,57 @@ async def reasoning_node(
             content = response.content if isinstance(response.content, str) else str(response.content)
             result["final_answer"] = content
 
+        # Decision capture: record the LLM decision for observability
+        try:
+            from smartclaw.observability.decision_record import (
+                DecisionRecord,
+                DecisionType,
+                _utc_now_iso,
+            )
+            from smartclaw.observability import decision_collector
+
+            # Extract input_summary from the last message with content
+            _input_summary = ""
+            for _m in reversed(messages):
+                if hasattr(_m, "content") and isinstance(_m.content, str):
+                    _input_summary = _m.content[:512]
+                    break
+
+            # Extract reasoning: prefer thinking/reasoning_content from
+            # additional_kwargs (GLM-5, Kimi K2.5 thinking mode), fall back
+            # to response.content if not available.
+            _reasoning = ""
+            _additional = getattr(response, "additional_kwargs", {}) or {}
+            _thinking = _additional.get("reasoning_content") or _additional.get("thinking")
+            if _thinking and isinstance(_thinking, str):
+                _reasoning = _thinking[:2048]
+            elif isinstance(response.content, str):
+                _reasoning = response.content[:2048]
+
+            # Determine decision_type and tool_calls
+            if response.tool_calls:
+                _dt = DecisionType.TOOL_CALL
+                _tc = [
+                    {"tool_name": tc["name"], "tool_args": tc.get("args", {})}
+                    for tc in response.tool_calls
+                ]
+            else:
+                _dt = DecisionType.FINAL_ANSWER
+                _tc = []
+
+            _record = DecisionRecord(
+                timestamp=_utc_now_iso(),
+                iteration=iteration,
+                decision_type=_dt,
+                input_summary=_input_summary,
+                reasoning=_reasoning,
+                tool_calls=_tc,
+                session_key=session_key or state.get("session_key"),
+            )
+            await decision_collector.add(_record)
+        except Exception:
+            pass  # Silent failure — must not disrupt agent main flow
+
         return result
 
     except Exception as exc:
@@ -255,6 +307,7 @@ async def action_node(
     *,
     tools_by_name: dict[str, BaseTool] | None = None,
     tool_result_guard: Any | None = None,
+    loop_detector: LoopDetector | None = None,
 ) -> dict[str, Any]:
     """Action node: execute tool calls from the last AIMessage.
 
@@ -262,6 +315,7 @@ async def action_node(
         state: Current agent state.
         tools_by_name: Mapping of tool name → BaseTool instance.
         tool_result_guard: Optional ToolResultGuard instance for L1 truncation.
+        loop_detector: Optional LoopDetector instance for loop detection.
 
     Returns:
         Dict with ``messages`` containing one ToolMessage per tool call.
@@ -279,7 +333,7 @@ async def action_node(
     if last_ai is None:
         return {"messages": []}
 
-    tool_messages: list[ToolMessage] = []
+    tool_messages: list[ToolMessage | HumanMessage] = []
     clarification_request = None
     for tool_call in last_ai.tool_calls:
         tool_name = tool_call["name"]
@@ -363,6 +417,36 @@ async def action_node(
             tool_messages.append(
                 ToolMessage(content=content, tool_call_id=tool_call_id)
             )
+
+            # Loop detection: record tool call after successful execution
+            if loop_detector is not None:
+                loop_status = loop_detector.record(tool_name, tool_args)
+                if loop_status == LoopStatus.STOP:
+                    error_msg = (
+                        f"Loop detected: tool '{tool_name}' has been called "
+                        f"with the same arguments too many times. "
+                        f"Stopping to prevent infinite loop."
+                    )
+                    logger.warning("action_node loop_stop", tool=tool_name)
+                    result_dict: dict[str, Any] = {
+                        "messages": tool_messages,
+                        "error": error_msg,
+                    }
+                    if clarification_request is not None:
+                        result_dict["clarification_request"] = clarification_request
+                    return result_dict
+                elif loop_status == LoopStatus.WARN:
+                    logger.warning("action_node loop_warn", tool=tool_name)
+                    tool_messages.append(
+                        HumanMessage(
+                            content=(
+                                "[System Warning] Repetitive behavior detected: "
+                                f"tool '{tool_name}' has been called with the same "
+                                "arguments multiple times. Please try a different "
+                                "approach or different parameters to make progress."
+                            )
+                        )
+                    )
         except Exception as exc:
             _tool_duration_ms = (time.monotonic() - _tool_start) * 1000.0
             error_msg = str(exc)
@@ -423,6 +507,10 @@ def should_continue(state: AgentState) -> str:
 
     # Check for final_answer
     if state.get("final_answer") is not None:
+        return "end"
+
+    # Check for clarification_request
+    if state.get("clarification_request") is not None:
         return "end"
 
     messages = state.get("messages", [])

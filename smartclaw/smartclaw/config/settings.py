@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 from smartclaw.browser.engine import BrowserConfig
 from smartclaw.mcp.config import MCPConfig
-from smartclaw.providers.config import ModelConfig
+from smartclaw.providers.config import ModelConfig, ProviderSpec
 
 
 class LoggingSettings(BaseSettings):
@@ -44,6 +44,40 @@ class MemorySettings(BaseSettings):
     keep_recent: int = 5
     summarize_token_percent: int = 70
     context_window: int = 128_000
+    # L1: ToolResultGuard
+    tool_result_max_chars: int = 30000
+    tool_result_head_chars: int = 12000
+    tool_result_tail_chars: int = 8000
+    tool_overrides: dict[str, dict[str, int]] = Field(default_factory=dict)
+    # L2: SessionPruner
+    soft_trim_threshold: float = 0.5
+    hard_clear_threshold: float = 0.7
+    pruner_keep_recent: int = 5
+    pruner_keep_head: int = 2
+    tool_allow_list: list[str] = Field(default_factory=list)
+    tool_deny_list: list[str] = Field(default_factory=list)
+    # L4: Multi-stage compaction
+    chunk_max_tokens: int = 4000
+    part_max_tokens: int = 2000
+
+    # Memory enhancement: MEMORY.md and memory/ directory support
+    memory_file_enabled: bool = Field(default=True, description="Enable MEMORY.md loading")
+    memory_dir_enabled: bool = Field(default=True, description="Enable memory/ directory indexing")
+    chunk_tokens: int = Field(default=512, description="Chunk size in tokens")
+    chunk_overlap: int = Field(default=64, description="Chunk overlap in tokens")
+    max_file_size: int = Field(default=2 * 1024 * 1024, description="Max single file size (2MB)")
+    max_dir_size: int = Field(default=50 * 1024 * 1024, description="Max directory total size (50MB)")
+
+    # Vector search configuration
+    embedding_provider: str = Field(default="auto", description="Embedding provider: auto | openai | ollama | none")
+    vector_weight: float = Field(default=0.7, description="Vector search weight")
+    text_weight: float = Field(default=0.3, description="BM25 search weight")
+    top_k: int = Field(default=5, description="Number of results to return")
+
+    # Fact extraction configuration
+    auto_extract: bool = Field(default=False, description="Enable automatic fact extraction")
+    max_facts: int = Field(default=100, description="Maximum number of facts to store")
+    fact_confidence_threshold: float = Field(default=0.7, description="Fact confidence threshold")
 
 
 class SkillsSettings(BaseSettings):
@@ -52,6 +86,24 @@ class SkillsSettings(BaseSettings):
     enabled: bool = True
     workspace_dir: str = "{workspace}/skills"
     global_dir: str = "~/.smartclaw/skills"
+
+    # Hot reload configuration
+    hot_reload: bool = Field(default=True, description="Enable skills hot reload")
+    debounce_ms: int = Field(default=250, description="Debounce time in milliseconds")
+
+
+class BootstrapSettings(BaseSettings):
+    """Bootstrap module configuration for SOUL.md, USER.md, TOOLS.md files."""
+
+    enabled: bool = Field(default=True, description="Enable bootstrap files loading")
+    max_file_size: int = Field(default=512 * 1024, description="Max single file size (512KB)")
+
+
+class ConfigSettings(BaseSettings):
+    """Config module configuration for hot reload."""
+
+    hot_reload: bool = Field(default=True, description="Enable config hot reload")
+    debounce_ms: int = Field(default=500, description="Debounce time in milliseconds")
 
 
 class SubAgentSettings(BaseSettings):
@@ -129,13 +181,25 @@ class SmartClawSettings(BaseSettings):
     model: ModelConfig = Field(default_factory=ModelConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
+    providers: list[ProviderSpec] = Field(
+        default_factory=list,
+        description="Custom ProviderSpec list for config-driven provider registration",
+    )
 
     # P1 fields
     memory: MemorySettings = Field(default_factory=MemorySettings)
     skills: SkillsSettings = Field(default_factory=SkillsSettings)
+    bootstrap: BootstrapSettings = Field(default_factory=BootstrapSettings)
+    config: ConfigSettings = Field(default_factory=ConfigSettings)
     sub_agent: SubAgentSettings = Field(default_factory=SubAgentSettings)
     multi_agent: MultiAgentSettings = Field(default_factory=MultiAgentSettings)
 
     # P2A fields
     gateway: GatewaySettings = Field(default_factory=GatewaySettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+
+    # L5 ContextEngine
+    context_engine: str = Field(
+        default="legacy",
+        description="Context engine name (registered in ContextEngineRegistry). Default: 'legacy'",
+    )

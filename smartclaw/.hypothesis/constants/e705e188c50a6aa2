@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/browser/screenshot.py
-# hypothesis_version: 6.148.8
-
-[100, 720, 1024, 1280, 'ascii', 'browser.screenshot', 'full_page', 'height', 'image/jpeg', 'image/png', 'jpeg', 'png', 'quality', 'type', 'width']

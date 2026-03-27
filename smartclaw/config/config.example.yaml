@@ -34,6 +34,29 @@ logging:
   file: null
 
 # ---------------------------------------------------------------------------
+# Providers — config-driven LLM provider registration
+# ---------------------------------------------------------------------------
+# Register custom providers without modifying ProviderFactory source code.
+# Each entry defines a ProviderSpec with the LangChain class path and API key env var.
+# Custom providers override built-in defaults (openai, anthropic, kimi) if same name.
+providers:
+  # Example: DeepSeek provider via OpenAI-compatible API
+  # - name: deepseek
+  #   class_path: "langchain_openai.ChatOpenAI"
+  #   env_key: "DEEPSEEK_API_KEY"
+  #   base_url: "https://api.deepseek.com/v1"
+  #   model_field: "model"
+  #   extra_params:
+  #     timeout: 60
+
+  # Example: Ollama local provider
+  # - name: ollama
+  #   class_path: "langchain_openai.ChatOpenAI"
+  #   env_key: "OLLAMA_API_KEY"
+  #   base_url: "http://localhost:11434/v1"
+  #   model_field: "model"
+
+# ---------------------------------------------------------------------------
 # Model — LLM provider and model configuration
 # ---------------------------------------------------------------------------
 model:
@@ -51,6 +74,67 @@ model:
 
   # Maximum tokens per LLM request
   max_tokens: 32768
+
+  # AuthProfile rotation: multiple API keys for the same provider
+  # auth_profiles:
+  #   - profile_id: "kimi-key-1"
+  #     provider: "kimi"
+  #     env_key: "KIMI_API_KEY_1"
+  #   - profile_id: "kimi-key-2"
+  #     provider: "kimi"
+  #     env_key: "KIMI_API_KEY_2"
+
+  # Prefer last successful AuthProfile within a session (default: false)
+  # session_sticky: false
+
+  # Dedicated model for context compaction (default: uses primary model)
+  # compaction_model: "openai/gpt-4o-mini"
+
+  # Identifier preservation during compaction: strict | custom | off
+  # identifier_policy: "strict"
+
+  # Custom identifier patterns (used when identifier_policy is "custom")
+  # identifier_patterns: []
+
+# ---------------------------------------------------------------------------
+# Memory — conversation history and context compression
+# ---------------------------------------------------------------------------
+memory:
+  enabled: true
+  db_path: "~/.smartclaw/memory.db"
+  summary_threshold: 20
+  keep_recent: 5
+  summarize_token_percent: 70
+  context_window: 128000
+
+  # L1: ToolResultGuard — tool result truncation at write time
+  tool_result_max_chars: 30000
+  tool_result_head_chars: 12000
+  tool_result_tail_chars: 8000
+  # Per-tool overrides (tool_name → {max_chars, head_chars, tail_chars})
+  # tool_overrides:
+  #   web_fetch:
+  #     max_chars: 50000
+  #     head_chars: 20000
+  #     tail_chars: 10000
+
+  # L2: SessionPruner — session-level message pruning before LLM call
+  soft_trim_threshold: 0.5    # fraction of context_window for soft-trim
+  hard_clear_threshold: 0.7   # fraction of context_window for hard-clear
+  pruner_keep_recent: 5       # tail messages to preserve
+  pruner_keep_head: 2         # head messages to preserve
+  # tool_allow_list: []       # tools whose results are never pruned
+  # tool_deny_list: []        # tools whose results are pruned first
+
+  # L4: Multi-stage compaction
+  chunk_max_tokens: 4000
+  part_max_tokens: 2000
+
+# ---------------------------------------------------------------------------
+# Context Engine — pluggable context management (L5)
+# ---------------------------------------------------------------------------
+# Available engines: "legacy" (default, wraps AutoSummarizer)
+context_engine: "legacy"
 
 # ---------------------------------------------------------------------------
 # Credentials — credential management settings

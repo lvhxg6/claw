@@ -1,4 +1,4 @@
 # file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/edit.py
-# hypothesis_version: 6.151.9
+# hypothesis_version: 6.148.8
 
 ['Content to append', 'File path to edit', 'Replacement text', 'a', 'append_file', 'edit_file', 'utf-8']

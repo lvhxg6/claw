@@ -51,7 +51,7 @@ class TestLLMFailureSkipsSummarization:
     """LLM call failure skips summarization, returns original messages."""
 
     async def test_llm_failure_returns_original(self, tmp_path: Path) -> None:
-        """When _call_llm_summarize returns None, messages are unchanged. (Req 2.9)"""
+        """When all LLM summarization fails, messages are unchanged. (Req 2.9)"""
         messages = _make_conversation(15)
 
         store = MemoryStore(db_path=str(tmp_path / "test.db"))
@@ -68,10 +68,13 @@ class TestLLMFailureSkipsSummarization:
             )
 
             with patch.object(
-                summarizer, "_call_llm_summarize", new_callable=AsyncMock
-            ) as mock_llm:
-                mock_llm.return_value = None  # Simulate failure
-                result = await summarizer.maybe_summarize("s1", messages)
+                summarizer, "_summarize_with_fallback", new_callable=AsyncMock
+            ) as mock_fallback:
+                mock_fallback.return_value = None  # Simulate total failure
+                with patch.object(
+                    summarizer, "_memory_flush", new_callable=AsyncMock
+                ):
+                    result = await summarizer.maybe_summarize("s1", messages)
 
             # Should return original messages unchanged
             assert result == messages
@@ -165,7 +168,7 @@ class TestIncrementalSummary:
     """Incremental summary includes old summary in LLM prompt."""
 
     async def test_incremental_summary_includes_old(self, tmp_path: Path) -> None:
-        """When existing summary exists, LLM prompt includes it. (Req 2.7)"""
+        """When existing summary exists, L4 compaction receives it as context. (Req 2.7)"""
         old_summary = "Previous context: user asked about Python."
         messages = _make_conversation(15)
 
@@ -184,21 +187,24 @@ class TestIncrementalSummary:
                 keep_recent=3,
             )
 
-            captured_prompt: str | None = None
+            captured_existing: str | None = None
 
-            async def capture_prompt(prompt: str) -> str | None:
-                nonlocal captured_prompt
-                captured_prompt = prompt
+            async def capture_fallback(session_key, msgs, existing_summary):
+                nonlocal captured_existing
+                captured_existing = existing_summary
                 return "New incremental summary."
 
             with patch.object(
-                summarizer, "_call_llm_summarize", side_effect=capture_prompt
+                summarizer, "_memory_flush", new_callable=AsyncMock
             ):
-                await summarizer.maybe_summarize("s1", messages)
+                with patch.object(
+                    summarizer, "_summarize_with_fallback", side_effect=capture_fallback
+                ):
+                    await summarizer.maybe_summarize("s1", messages)
 
-            # The prompt sent to LLM should contain the old summary
-            assert captured_prompt is not None
-            assert old_summary in captured_prompt
+            # The existing summary passed to _summarize_with_fallback should contain old summary
+            assert captured_existing is not None
+            assert old_summary in captured_existing
         finally:
             await store.close()
 
@@ -247,13 +253,16 @@ class TestTokenPercentageThreshold:
             )
 
             with patch.object(
-                summarizer, "_call_llm_summarize", new_callable=AsyncMock
-            ) as mock_llm:
-                mock_llm.return_value = "Token-triggered summary."
-                await summarizer.maybe_summarize("s1", messages)
+                summarizer, "_summarize_with_fallback", new_callable=AsyncMock
+            ) as mock_fallback:
+                mock_fallback.return_value = "Token-triggered summary."
+                with patch.object(
+                    summarizer, "_memory_flush", new_callable=AsyncMock
+                ):
+                    await summarizer.maybe_summarize("s1", messages)
 
-            # LLM should have been called (triggered by token threshold)
-            mock_llm.assert_called_once()
+            # Summarization should have been triggered
+            mock_fallback.assert_called_once()
         finally:
             await store.close()
 
@@ -274,12 +283,12 @@ class TestTokenPercentageThreshold:
             )
 
             with patch.object(
-                summarizer, "_call_llm_summarize", new_callable=AsyncMock
-            ) as mock_llm:
+                summarizer, "_summarize_with_fallback", new_callable=AsyncMock
+            ) as mock_fallback:
                 result = await summarizer.maybe_summarize("s1", messages)
 
             # Should NOT trigger
-            mock_llm.assert_not_called()
+            mock_fallback.assert_not_called()
             assert result == messages
         finally:
             await store.close()

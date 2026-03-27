@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/filesystem.py
-# hypothesis_version: 6.151.9
-
-[1048576, '(empty directory)', 'Content to write', 'File path to read', 'File path to write', 'Max bytes to read', 'list_directory', 'read_file', 'replace', 'write_file']

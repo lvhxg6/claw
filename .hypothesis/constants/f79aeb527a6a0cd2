@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/tools/clarification.py
+# hypothesis_version: 6.148.8
+
+['Use async _arun', 'ask_clarification', '可选的预定义选项列表，供用户选择', '向用户提出的澄清问题']

@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/gateway/hot_reload.py
-# hypothesis_version: 6.148.8
-
-[5.0, 'FastAPI', 'changed_fields', 'config.reloaded', 'config_file_changed', 'gateway.hot_reload', 'hot_reload_success', 'hot_reloader_started', 'hot_reloader_stopped', 'settings', 'success', 'utf-8']

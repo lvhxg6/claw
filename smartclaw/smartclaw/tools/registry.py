@@ -78,6 +78,7 @@ def create_system_tools(
         A ToolRegistry containing all system tool instances.
     """
     from smartclaw.security.path_policy import PathPolicy as _PathPolicy
+    from smartclaw.tools.clarification import AskClarificationTool
     from smartclaw.tools.edit import AppendFileTool, EditFileTool
     from smartclaw.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
     from smartclaw.tools.shell import ShellTool
@@ -96,5 +97,6 @@ def create_system_tools(
         ShellTool(),
         WebSearchTool(),
         WebFetchTool(),
+        AskClarificationTool(),
     ])
     return registry

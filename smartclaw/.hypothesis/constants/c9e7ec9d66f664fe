@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/skills/loader.py
-# hypothesis_version: 6.148.8
-
-[10000, '\n\n---\n\n', '  </skill>', '  <skill>', ':', '</skills>', '<skills>', 'SKILL.md', 'args', 'author', 'builtin', 'command', 'default', 'deny_patterns', 'description', 'entry_point', 'function', 'global', 'invalid_skill_md', 'invalid_skill_yaml', 'max_output_chars', 'name', 'parameters', 'skill.yaml', 'skills.loader', 'string', 'timeout', 'tools', 'type', 'utf-8', 'version', 'working_dir', 'workspace', '~/.smartclaw/skills']

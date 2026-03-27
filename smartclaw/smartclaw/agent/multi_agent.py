@@ -93,8 +93,66 @@ Your job:
    - To assign work: {{"agent": "<agent_name>"}}
    - To finish: {{"agent": "done", "answer": "<final synthesized answer>"}}
 
-If an agent reports a failure, you may reassign the task to another agent or
-synthesize a partial answer from available results.
+## Decision Tree
+
+Follow this decision tree to choose the right action:
+
+1. Single-agent task — the request maps to exactly one agent's expertise:
+   → Assign directly: {{"agent": "<name>"}}
+2. Multi-step sequential task — steps depend on each other:
+   → Assign the FIRST step now; after it completes, assign the next.
+3. Parallel independent tasks — multiple sub-tasks with NO dependencies:
+   → Assign one agent at a time in rapid succession. Prefer the agent whose
+     skill best matches each sub-task.
+4. Result synthesis — all sub-tasks are done:
+   → Combine agent results into a coherent answer and finish:
+     {{"agent": "done", "answer": "<synthesized answer>"}}
+
+## Batch Planning Guidance
+
+When the user's request contains multiple independent sub-tasks that can be
+handled by different agents without waiting for each other, plan a batch:
+- Identify each independent sub-task.
+- Map each sub-task to the best-fit agent.
+- Assign them one by one (each response is a single JSON object).
+- After all agents report back, synthesize the final answer.
+
+## Examples
+
+### Good Examples
+
+Example 1 — Single agent, clear match:
+  User: "Summarize the Q3 sales report."
+  Response: {{"agent": "researcher"}}
+  Why: The task is a single research/summarization job; assign directly.
+
+Example 2 — Synthesis after agents finish:
+  User: "Compare product A and product B."
+  (After researcher returns results for both products)
+  Response: {{"agent": "done", "answer": "Product A excels in X, while B leads in Y..."}}
+  Why: Both sub-results are available; synthesize and finish.
+
+### Bad Examples
+
+Example 1 — Wrong: finishing without agent work:
+  User: "Analyze our competitor's pricing strategy."
+  Wrong response: {{"agent": "done", "answer": "I think prices are high."}}
+  Why: No agent was used; the supervisor should NOT answer directly.
+
+Example 2 — Wrong: assigning to a non-existent agent:
+  User: "Translate this document to French."
+  Wrong response: {{"agent": "translator"}}
+  Why: Only assign to agents listed in "Available agents" above.
+
+## Failure Handling
+
+- Agent returns an error → Reassign the same sub-task to another capable agent.
+  If no alternative agent exists, note the failure and continue with remaining tasks.
+- Agent returns an incomplete result → Assign a follow-up task to the same or
+  another agent to fill in the gaps.
+- All agents fail → Synthesize whatever partial results are available, clearly
+  state which parts failed and why, then finish:
+  {{"agent": "done", "answer": "<partial results + failure explanation>"}}
 
 Current agent results so far:
 {agent_results}
@@ -263,6 +321,41 @@ class MultiAgentCoordinator:
             # Parse supervisor decision
             decision = self._parse_supervisor_decision(content)
             current_agent = decision.get("agent", "done")
+
+            # Decision capture: record the supervisor routing decision
+            try:
+                from smartclaw.observability.decision_record import (
+                    DecisionRecord,
+                    DecisionType,
+                    _utc_now_iso,
+                )
+                from smartclaw.observability import decision_collector
+
+                if current_agent == "done":
+                    _dt = DecisionType.FINAL_ANSWER
+                    _target = None
+                else:
+                    _dt = DecisionType.SUPERVISOR_ROUTE
+                    _target = current_agent
+
+                _input_summary = ""
+                if messages:
+                    _last_msg = messages[-1]
+                    if hasattr(_last_msg, "content") and isinstance(_last_msg.content, str):
+                        _input_summary = _last_msg.content[:512]
+
+                _record = DecisionRecord(
+                    timestamp=_utc_now_iso(),
+                    iteration=total_iters,
+                    decision_type=_dt,
+                    input_summary=_input_summary,
+                    reasoning=content[:2048],
+                    target_agent=_target,
+                    session_key=None,
+                )
+                await decision_collector.add(_record)
+            except Exception:
+                pass  # Silent failure — must not disrupt agent main flow
 
             if current_agent == "done":
                 answer = decision.get("answer", "Task completed.")

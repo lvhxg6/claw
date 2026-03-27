@@ -556,8 +556,68 @@ class MemoryLoader:
     def build_memory_context(self) -> str:
         """Build memory context string for system prompt injection.
         
+        Loads content from MEMORY.md and memory/ directory files, then
+        combines them into a formatted context string suitable for
+        injection into the system prompt.
+        
         Returns:
-            Formatted memory context string.
+            Formatted memory context string with section headers.
+            Returns empty string if:
+            - Memory loading is disabled
+            - No memory content is available (no MEMORY.md and no memory/ files)
+            
+        Notes:
+            - MEMORY.md content is placed in a "Long-term Memory" section
+            - memory/ directory files are placed in a "Memory Files" section
+            - Each memory file from the directory includes its relative path
+            - The format is designed for clear separation in system prompts
         """
-        # TODO: Implement in task 2.10
-        return ""
+        if not self._enabled:
+            logger.debug("memory_context_disabled", workspace=str(self._workspace_dir))
+            return ""
+
+        context_parts: list[str] = []
+
+        # Load MEMORY.md content
+        memory_md_content = self.load_memory_md()
+        if memory_md_content:
+            context_parts.append("## Long-term Memory\n")
+            context_parts.append(memory_md_content.strip())
+            context_parts.append("")  # Empty line for separation
+
+        # Load memory/ directory files
+        memory_files = self.load_memory_dir()
+        if memory_files:
+            context_parts.append("## Memory Files\n")
+            for memory_file in memory_files:
+                # Get relative path from workspace for cleaner display
+                try:
+                    rel_path = Path(memory_file.path).relative_to(self._workspace_dir)
+                except ValueError:
+                    # If path is not relative to workspace, use the full path
+                    rel_path = Path(memory_file.path)
+                
+                context_parts.append(f"### {rel_path}\n")
+                context_parts.append(memory_file.content.strip())
+                context_parts.append("")  # Empty line for separation
+
+        # If no content was loaded, return empty string
+        if not context_parts:
+            logger.debug(
+                "memory_context_empty",
+                workspace=str(self._workspace_dir),
+            )
+            return ""
+
+        # Build final context string
+        context = "\n".join(context_parts).strip()
+        
+        logger.info(
+            "memory_context_built",
+            workspace=str(self._workspace_dir),
+            context_length=len(context),
+            has_memory_md=memory_md_content is not None,
+            memory_file_count=len(memory_files),
+        )
+
+        return context

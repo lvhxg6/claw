@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/browser/cdp.py
-# hypothesis_version: 6.148.8
-
-[10.0, 'Runtime.evaluate', 'browser.cdp', 'cdp_evaluate_js', 'cdp_execute', 'cdp_session_created', 'cdp_session_creating', 'cdp_session_detached', 'data', 'exceptionDetails', 'expression', 'result', 'returnByValue', 'text', 'value']

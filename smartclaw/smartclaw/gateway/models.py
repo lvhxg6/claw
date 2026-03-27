@@ -12,11 +12,18 @@ class ChatRequest(BaseModel):
     model: str | None = Field(default=None, description="Optional model reference in 'provider/model' format")
 
 
+class ClarificationData(BaseModel):
+    question: str
+    options: list[str] | None = None
+
+
 class ChatResponse(BaseModel):
     session_key: str
     response: str
     iterations: int
     error: str | None = None
+    token_stats: dict[str, int] | None = None
+    clarification: ClarificationData | None = None
 
 
 class SSEEvent(BaseModel):
@@ -44,3 +51,9 @@ class SessionHistoryResponse(BaseModel):
 class SessionSummaryResponse(BaseModel):
     session_key: str
     summary: str
+
+
+class SessionConfigRequest(BaseModel):
+    """Request body for PUT /api/sessions/{key}/config."""
+
+    model: str | None = Field(default=None, description="Model override in 'provider/model' format")

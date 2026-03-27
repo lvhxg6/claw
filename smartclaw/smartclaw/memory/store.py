@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import aiosqlite
 import structlog
@@ -45,6 +46,23 @@ CREATE TABLE IF NOT EXISTS summaries (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )"""
 
+_CREATE_SESSION_CONFIG_TABLE = """\
+CREATE TABLE IF NOT EXISTS session_config (
+    session_key TEXT PRIMARY KEY,
+    model_override TEXT,
+    config_json TEXT DEFAULT '{}',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)"""
+
+_CREATE_COOLDOWN_STATE_TABLE = """\
+CREATE TABLE IF NOT EXISTS cooldown_state (
+    profile_id TEXT PRIMARY KEY,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    cooldown_end_utc TEXT NOT NULL,
+    last_failure_utc TEXT NOT NULL,
+    failure_counts_json TEXT DEFAULT '{}'
+)"""
+
 
 class MemoryStore:
     """Async SQLite conversation memory store."""
@@ -65,6 +83,8 @@ class MemoryStore:
         await self._db.execute(_CREATE_MESSAGES_TABLE)
         await self._db.execute(_CREATE_MESSAGES_INDEX)
         await self._db.execute(_CREATE_SUMMARIES_TABLE)
+        await self._db.execute(_CREATE_SESSION_CONFIG_TABLE)
+        await self._db.execute(_CREATE_COOLDOWN_STATE_TABLE)
         await self._db.commit()
         logger.info("memory_store_initialized", db_path=str(self._db_path))
 
@@ -215,6 +235,115 @@ class MemoryStore:
         )
         await self._db.commit()
         logger.debug("summary_set", session_key=session_key)
+
+    # ------------------------------------------------------------------
+    # Session Config
+    # ------------------------------------------------------------------
+
+    async def get_session_config(self, session_key: str) -> dict[str, Any] | None:
+        """Return session config dict, or None if not found."""
+        assert self._db is not None, "MemoryStore not initialized"
+        cursor = await self._db.execute(
+            "SELECT model_override, config_json FROM session_config WHERE session_key = ?",
+            (session_key,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        model_override, config_json = row
+        result: dict[str, Any] = {"model_override": model_override}
+        if config_json:
+            try:
+                result["config"] = json.loads(config_json)
+            except (json.JSONDecodeError, TypeError):
+                result["config"] = {}
+        return result
+
+    async def set_session_config(
+        self,
+        session_key: str,
+        model_override: str | None = None,
+        config_json: str | None = None,
+    ) -> None:
+        """Upsert session config."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            """
+            INSERT INTO session_config (session_key, model_override, config_json, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(session_key) DO UPDATE
+                SET model_override = excluded.model_override,
+                    config_json = excluded.config_json,
+                    updated_at = excluded.updated_at
+            """,
+            (session_key, model_override, config_json or "{}"),
+        )
+        await self._db.commit()
+        logger.debug("session_config_set", session_key=session_key)
+
+    # ------------------------------------------------------------------
+    # Cooldown State
+    # ------------------------------------------------------------------
+
+    async def get_cooldown_states(self) -> list[dict[str, Any]]:
+        """Return all cooldown state records."""
+        assert self._db is not None, "MemoryStore not initialized"
+        cursor = await self._db.execute(
+            "SELECT profile_id, error_count, cooldown_end_utc, "
+            "last_failure_utc, failure_counts_json FROM cooldown_state"
+        )
+        rows = await cursor.fetchall()
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            profile_id, error_count, cooldown_end_utc, last_failure_utc, fc_json = row
+            failure_counts: dict[str, int] = {}
+            if fc_json:
+                try:
+                    failure_counts = json.loads(fc_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            results.append({
+                "profile_id": profile_id,
+                "error_count": error_count,
+                "cooldown_end_utc": cooldown_end_utc,
+                "last_failure_utc": last_failure_utc,
+                "failure_counts": failure_counts,
+            })
+        return results
+
+    async def set_cooldown_state(
+        self,
+        profile_id: str,
+        error_count: int,
+        cooldown_end_utc: str,
+        last_failure_utc: str,
+        failure_counts_json: str,
+    ) -> None:
+        """Upsert a cooldown state record."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            """
+            INSERT INTO cooldown_state
+                (profile_id, error_count, cooldown_end_utc, last_failure_utc, failure_counts_json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(profile_id) DO UPDATE
+                SET error_count = excluded.error_count,
+                    cooldown_end_utc = excluded.cooldown_end_utc,
+                    last_failure_utc = excluded.last_failure_utc,
+                    failure_counts_json = excluded.failure_counts_json
+            """,
+            (profile_id, error_count, cooldown_end_utc, last_failure_utc, failure_counts_json),
+        )
+        await self._db.commit()
+
+    async def delete_cooldown_state(self, profile_id: str) -> None:
+        """Delete a cooldown state record."""
+        assert self._db is not None, "MemoryStore not initialized"
+        await self._db.execute(
+            "DELETE FROM cooldown_state WHERE profile_id = ?",
+            (profile_id,),
+        )
+        await self._db.commit()
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -120,10 +120,13 @@ async def test_summarization_trigger_threshold(tmp_path: Path, data: st.DataObje
         )
 
         with patch.object(
-            summarizer, "_call_llm_summarize", new_callable=AsyncMock
-        ) as mock_llm:
-            mock_llm.return_value = _FIXED_SUMMARY
-            result = await summarizer.maybe_summarize("s1", messages)
+            summarizer, "_summarize_with_fallback", new_callable=AsyncMock
+        ) as mock_fallback:
+            mock_fallback.return_value = _FIXED_SUMMARY
+            with patch.object(
+                summarizer, "_memory_flush", new_callable=AsyncMock
+            ):
+                result = await summarizer.maybe_summarize("s1", messages)
 
         if should_trigger:
             # LLM should have been called (summarization triggered)
@@ -134,7 +137,7 @@ async def test_summarization_trigger_threshold(tmp_path: Path, data: st.DataObje
         else:
             # Should NOT have triggered — messages returned unchanged
             assert result == messages
-            mock_llm.assert_not_called()
+            mock_fallback.assert_not_called()
     finally:
         await store.close()
 
@@ -181,12 +184,15 @@ async def test_keep_recent_after_summarization(tmp_path: Path, data: st.DataObje
         )
 
         with patch.object(
-            summarizer, "_call_llm_summarize", new_callable=AsyncMock
-        ) as mock_llm:
-            mock_llm.return_value = _FIXED_SUMMARY
-            await summarizer.maybe_summarize("s1", messages)
+            summarizer, "_summarize_with_fallback", new_callable=AsyncMock
+        ) as mock_fallback:
+            mock_fallback.return_value = _FIXED_SUMMARY
+            with patch.object(
+                summarizer, "_memory_flush", new_callable=AsyncMock
+            ):
+                await summarizer.maybe_summarize("s1", messages)
 
-        if mock_llm.called:
+        if mock_fallback.called:
             # Verify truncate_history was called with keep_recent
             history = await store.get_history("s1")
             assert len(history) == keep_recent

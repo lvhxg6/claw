@@ -7,264 +7,264 @@
 ## 任务列表
 
 - [ ] 1. 配置扩展与数据模型
-  - [ ] 1.1 扩展 SmartClawSettings 配置类
+  - [x] 1.1 扩展 SmartClawSettings 配置类
     - 在 `smartclaw/config/settings.py` 中添加 `MemorySettings`、`BootstrapSettings`、`SkillsSettings`、`ConfigSettings` 配置类
     - 添加所有新增配置项：`memory.enabled`、`memory.chunk_tokens`、`bootstrap.enabled`、`skills.hot_reload` 等
     - _Requirements: 1.5, 2.6, 3.7, 3.8, 4.8, 5.4, 5.5, 6.5, 6.8, 7.6, 7.7_
-  - [ ] 1.2 编写配置类单元测试
+  - [x] 1.2 编写配置类单元测试
     - 测试配置默认值、类型验证、边界条件
     - _Requirements: 1.5, 2.6, 3.7, 4.8_
 
-- [ ] 2. MemoryLoader 记忆加载器实现
-  - [ ] 2.1 创建 MemoryLoader 核心类
+- [x] 2. MemoryLoader 记忆加载器实现
+  - [x] 2.1 创建 MemoryLoader 核心类
     - 创建 `smartclaw/memory/loader.py`
     - 实现 `MemoryChunk`、`MemoryFile` 数据类
     - 实现 `load_memory_md()` 方法，支持大小写不敏感文件名查找
     - 实现文件大小限制（2MB）和截断逻辑
     - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
-  - [ ] 2.2 编写 Property 1 属性测试：MEMORY.md 文件发现优先级
+  - [x] 2.2 编写 Property 1 属性测试：MEMORY.md 文件发现优先级
     - **Property 1: MEMORY.md 文件发现优先级**
     - **Validates: Requirements 1.1**
-  - [ ] 2.3 编写 Property 2 属性测试：记忆文件大小限制
+  - [x] 2.3 编写 Property 2 属性测试：记忆文件大小限制
     - **Property 2: 记忆文件大小限制**
     - **Validates: Requirements 1.3**
-  - [ ] 2.4 实现 Markdown 分块功能
+  - [x] 2.4 实现 Markdown 分块功能
     - 实现 `chunk_markdown()` 方法，按 tokens 分块
     - 实现 `compute_hash()` 方法，计算 SHA-256 前 16 位
     - 支持配置 `chunk_tokens` 和 `chunk_overlap`
     - _Requirements: 5.2, 5.3, 5.4, 5.5_
-  - [ ] 2.5 编写 Property 15 属性测试：Markdown 分块一致性
+  - [x] 2.5 编写 Property 15 属性测试：Markdown 分块一致性
     - **Property 15: Markdown 分块一致性**
     - **Validates: Requirements 5.2**
-  - [ ] 2.6 编写 Property 16 属性测试：分块哈希唯一性
+  - [x] 2.6 编写 Property 16 属性测试：分块哈希唯一性
     - **Property 16: 分块哈希唯一性**
     - **Validates: Requirements 5.3**
-  - [ ] 2.7 实现 memory/ 目录扫描
+  - [x] 2.7 实现 memory/ 目录扫描
     - 实现 `load_memory_dir()` 方法，递归扫描 `.md` 文件
     - 实现目录大小限制（50MB）
     - _Requirements: 5.1, 5.7, 5.8_
-  - [ ] 2.8 编写 Property 14 属性测试：memory/ 目录递归扫描
+  - [x] 2.8 编写 Property 14 属性测试：memory/ 目录递归扫描
     - **Property 14: memory/ 目录递归扫描**
     - **Validates: Requirements 5.1**
-  - [ ] 2.9 编写 Property 17 属性测试：memory/ 目录大小限制
+  - [x] 2.9 编写 Property 17 属性测试：memory/ 目录大小限制
     - **Property 17: memory/ 目录大小限制**
     - **Validates: Requirements 5.7**
-  - [ ] 2.10 实现 build_memory_context() 方法
+  - [x] 2.10 实现 build_memory_context() 方法
     - 构建记忆上下文字符串，用于注入系统提示词
     - _Requirements: 1.4_
-  - [ ] 2.11 编写 Property 3 属性测试：记忆内容注入位置
+  - [x] 2.11 编写 Property 3 属性测试：记忆内容注入位置
     - **Property 3: 记忆内容注入位置**
     - **Validates: Requirements 1.4**
-  - [ ] 2.12 编写 Property 4 属性测试：记忆加载配置开关
+  - [x] 2.12 编写 Property 4 属性测试：记忆加载配置开关
     - **Property 4: 记忆加载配置开关**
     - **Validates: Requirements 1.5**
 
-- [ ] 3. Checkpoint - 确保 MemoryLoader 测试通过
+- [x] 3. Checkpoint - 确保 MemoryLoader 测试通过
   - 运行 `pytest tests/memory/test_loader*.py -v`
   - 确保所有测试通过，如有问题请询问用户
 
-- [ ] 4. BootstrapLoader 引导文件加载器实现
-  - [ ] 4.1 创建 BootstrapLoader 核心类
+- [x] 4. BootstrapLoader 引导文件加载器实现
+  - [x] 4.1 创建 BootstrapLoader 核心类
     - 创建 `smartclaw/bootstrap/loader.py`
     - 实现 `BootstrapFileType` 枚举和 `BootstrapFile` 数据类
     - 实现多级目录查找（workspace > global）
     - 实现文件大小限制（512KB）
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.9_
-  - [ ] 4.2 编写 Property 5 属性测试：Bootstrap 文件优先级覆盖
+  - [x] 4.2 编写 Property 5 属性测试：Bootstrap 文件优先级覆盖
     - **Property 5: Bootstrap 文件优先级覆盖**
     - **Validates: Requirements 2.1, 2.3**
-  - [ ] 4.3 编写 Property 6 属性测试：Bootstrap 文件大小限制
+  - [x] 4.3 编写 Property 6 属性测试：Bootstrap 文件大小限制
     - **Property 6: Bootstrap 文件大小限制**
     - **Validates: Requirements 2.4**
-  - [ ] 4.4 实现文件缓存机制
+  - [x] 4.4 实现文件缓存机制
     - 基于 mtime 判断是否需要重新加载
     - 实现 `invalidate_cache()` 方法
     - _Requirements: 2.5_
-  - [ ] 4.5 编写 Property 7 属性测试：Bootstrap 文件缓存一致性
+  - [x] 4.5 编写 Property 7 属性测试：Bootstrap 文件缓存一致性
     - **Property 7: Bootstrap 文件缓存一致性**
     - **Validates: Requirements 2.5**
-  - [ ] 4.6 实现 get_soul_content()、get_user_content()、get_tools_content() 方法
+  - [x] 4.6 实现 get_soul_content()、get_user_content()、get_tools_content() 方法
     - SOUL.md 内容作为系统提示词第一部分
     - USER.md 内容注入用户上下文部分
     - TOOLS.md 内容注入工具描述部分
     - _Requirements: 2.7, 2.8_
-  - [ ] 4.7 编写 Property 8 属性测试：SOUL.md 提示词位置
+  - [x] 4.7 编写 Property 8 属性测试：SOUL.md 提示词位置
     - **Property 8: SOUL.md 提示词位置**
     - **Validates: Requirements 2.7**
 
-- [ ] 5. Checkpoint - 确保 BootstrapLoader 测试通过
+- [x] 5. Checkpoint - 确保 BootstrapLoader 测试通过
   - 运行 `pytest tests/bootstrap/test_loader*.py -v`
   - 确保所有测试通过，如有问题请询问用户
 
-- [ ] 6. SkillsWatcher 技能文件监听器实现
-  - [ ] 6.1 创建 SkillsWatcher 核心类
+- [x] 6. SkillsWatcher 技能文件监听器实现
+  - [x] 6.1 创建 SkillsWatcher 核心类
     - 创建 `smartclaw/skills/watcher.py`
     - 使用 watchdog 库监听 SKILL.md 文件变化
     - 实现 `_SkillsEventHandler` 事件处理器
     - 监听 workspace 和 global 两个目录
     - _Requirements: 3.1, 3.2_
-  - [ ] 6.2 实现防抖机制
+  - [x] 6.2 实现防抖机制
     - 使用 threading.Timer 实现防抖
     - 支持配置 `debounce_ms`（默认 250ms）
     - _Requirements: 3.3, 3.8_
-  - [ ] 6.3 编写 Property 9 属性测试：文件监听器防抖行为
+  - [x] 6.3 编写 Property 9 属性测试：文件监听器防抖行为
     - **Property 9: 文件监听器防抖行为**
     - **Validates: Requirements 3.3, 4.2**
-  - [ ] 6.4 实现版本号管理
+  - [x] 6.4 实现版本号管理
     - 实现 `_bump_version()` 方法，基于时间戳保证单调递增
     - 实现 `get_version()` 方法
     - _Requirements: 3.4_
-  - [ ] 6.5 编写 Property 10 属性测试：Skills 版本号单调递增
+  - [x] 6.5 编写 Property 10 属性测试：Skills 版本号单调递增
     - **Property 10: Skills 版本号单调递增**
     - **Validates: Requirements 3.4**
-  - [ ] 6.6 实现忽略目录过滤
+  - [x] 6.6 实现忽略目录过滤
     - 忽略 `.git`、`__pycache__`、`venv`、`.venv`、`node_modules`、`.idea`、`.vscode`
     - _Requirements: 3.5_
-  - [ ] 6.7 编写 Property 11 属性测试：忽略目录过滤
+  - [x] 6.7 编写 Property 11 属性测试：忽略目录过滤
     - **Property 11: 忽略目录过滤**
     - **Validates: Requirements 3.5**
-  - [ ] 6.8 实现错误回退机制
+  - [x] 6.8 实现错误回退机制
     - 重载失败时保持上一个有效版本
     - 记录 ERROR 级别日志
     - _Requirements: 3.10_
-  - [ ] 6.9 编写 Property 12 属性测试：监听器错误回退
+  - [x] 6.9 编写 Property 12 属性测试：监听器错误回退
     - **Property 12: 监听器错误回退**
     - **Validates: Requirements 3.10, 4.5**
-  - [ ] 6.10 集成 SkillsLoader
+  - [x] 6.10 集成 SkillsLoader
     - 在检测到变化时调用 `SkillsLoader.reload()` 方法
     - 记录 INFO 级别日志
     - _Requirements: 3.6, 3.9_
 
-- [ ] 7. Checkpoint - 确保 SkillsWatcher 测试通过
+- [x] 7. Checkpoint - 确保 SkillsWatcher 测试通过
   - 运行 `pytest tests/skills/test_watcher*.py -v`
-  - 确保所有测试通过，如有问题请询问用户
+  - 确保所有测试通过（50 passed）
 
-- [ ] 8. ConfigWatcher 配置文件监听器实现
-  - [ ] 8.1 创建 ConfigWatcher 核心类
+- [x] 8. ConfigWatcher 配置文件监听器实现
+  - [x] 8.1 创建 ConfigWatcher 核心类
     - 创建 `smartclaw/config/watcher.py`
     - 使用 watchdog 库监听 config.yaml 变化
     - 实现防抖机制（默认 500ms）
     - _Requirements: 4.1, 4.2, 4.8_
-  - [ ] 8.2 实现配置验证和热更新
+  - [x] 8.2 实现配置验证和热更新
     - 实现 `_validate_config()` 方法
     - 实现 `_diff_config()` 方法，区分可热更新和需重启的配置项
     - 支持热更新：`providers`、`memory`、`skills`、`logging.level`
     - 标记需重启：`gateway.host`、`gateway.port`
     - _Requirements: 4.3, 4.4, 4.5, 4.6, 4.7, 4.9_
-  - [ ] 8.3 编写 Property 13 属性测试：配置热更新范围
+  - [x] 8.3 编写 Property 13 属性测试：配置热更新范围
     - **Property 13: 配置热更新范围**
     - **Validates: Requirements 4.6, 4.7**
 
-- [ ] 9. Checkpoint - 确保 ConfigWatcher 测试通过
+- [x] 9. Checkpoint - 确保 ConfigWatcher 测试通过
   - 运行 `pytest tests/config/test_watcher*.py -v`
-  - 确保所有测试通过，如有问题请询问用户
+  - 确保所有测试通过（61 passed）
 
 - [ ] 10. 数据库 Schema 扩展
-  - [ ] 10.1 创建记忆分块表和索引
+  - [~] 10.1 创建记忆分块表和索引
     - 在 `smartclaw/memory/schema.py` 中添加 `memory_chunks` 表
     - 创建 `idx_memory_chunks_file` 索引
     - _Requirements: 5.3_
-  - [ ] 10.2 创建向量嵌入表（sqlite-vec）
+  - [~] 10.2 创建向量嵌入表（sqlite-vec）
     - 创建 `memory_embeddings` 虚拟表
     - 支持 1536 维向量（OpenAI text-embedding-3-small）
     - _Requirements: 6.1_
-  - [ ] 10.3 创建 BM25 全文索引表
+  - [~] 10.3 创建 BM25 全文索引表
     - 创建 `memory_fts` FTS5 虚拟表
     - _Requirements: 6.3_
-  - [ ] 10.4 创建事实表
+  - [~] 10.4 创建事实表
     - 创建 `facts` 表和 `idx_facts_confidence` 索引
     - _Requirements: 7.5_
 
 - [ ] 11. MemoryIndexManager 记忆索引管理器实现
-  - [ ] 11.1 创建 EmbeddingProvider 基类和实现
+  - [~] 11.1 创建 EmbeddingProvider 基类和实现
     - 创建 `smartclaw/memory/index_manager.py`
     - 实现 `EmbeddingProvider` 基类
     - 实现 `OpenAIEmbeddingProvider`（text-embedding-3-small）
     - 实现 `OllamaEmbeddingProvider`（nomic-embed-text）
     - _Requirements: 6.2_
-  - [ ] 11.2 实现 Provider 自动降级
+  - [~] 11.2 实现 Provider 自动降级
     - 优先使用配置的 Provider
     - 不可用时自动降级到下一个 Provider
     - 最终降级到纯 BM25 搜索
     - _Requirements: 6.6_
-  - [ ] 11.3 编写 Property 18 属性测试：Embedding Provider 降级
+  - [~] 11.3 编写 Property 18 属性测试：Embedding Provider 降级
     - **Property 18: Embedding Provider 降级**
     - **Validates: Requirements 6.2, 6.6**
-  - [ ] 11.4 实现 index_chunks() 方法
+  - [~] 11.4 实现 index_chunks() 方法
     - 将 MemoryChunk 向量化并存储到 sqlite-vec
     - 同时更新 BM25 索引
     - _Requirements: 6.1_
-  - [ ] 11.5 实现 Hybrid Search
+  - [~] 11.5 实现 Hybrid Search
     - 实现 `_vector_search()` 方法
     - 实现 `_bm25_search()` 方法
     - 实现 `_merge_results()` 方法，按权重合并结果
     - 支持 MMR 去重
     - _Requirements: 6.3, 6.4, 6.5, 6.7_
-  - [ ] 11.6 编写 Property 19 属性测试：Hybrid Search 权重计算
+  - [~] 11.6 编写 Property 19 属性测试：Hybrid Search 权重计算
     - **Property 19: Hybrid Search 权重计算**
     - **Validates: Requirements 6.3**
 
-- [ ] 12. Checkpoint - 确保 MemoryIndexManager 测试通过
+- [~] 12. Checkpoint - 确保 MemoryIndexManager 测试通过
   - 运行 `pytest tests/memory/test_index_manager*.py -v`
   - 确保所有测试通过，如有问题请询问用户
 
 - [ ] 13. FactExtractor 事实提取器实现（可选功能）
-  - [ ] 13.1 创建 FactExtractor 核心类
+  - [~] 13.1 创建 FactExtractor 核心类
     - 创建 `smartclaw/memory/fact_extractor.py`
     - 实现 `Fact`、`FactStore` 数据类
     - 实现 `_build_extraction_prompt()` 方法
     - _Requirements: 7.2_
-  - [ ] 13.2 实现事实提取逻辑
+  - [~] 13.2 实现事实提取逻辑
     - 实现 `extract_facts()` 方法，使用 LLM 分析对话
     - 提取用户偏好、项目信息、工作上下文
     - 为每个事实分配置信度分数
     - _Requirements: 7.1, 7.2, 7.3_
-  - [ ] 13.3 编写 Property 20 属性测试：事实置信度过滤
+  - [~] 13.3 编写 Property 20 属性测试：事实置信度过滤
     - **Property 20: 事实置信度过滤**
     - **Validates: Requirements 7.3**
-  - [ ] 13.4 实现事实去重和裁剪
+  - [~] 13.4 实现事实去重和裁剪
     - 实现 `_deduplicate_facts()` 方法
     - 实现 `_prune_facts()` 方法，按置信度裁剪
     - _Requirements: 7.4, 7.7, 7.8_
-  - [ ] 13.5 编写 Property 21 属性测试：事实数量裁剪
+  - [~] 13.5 编写 Property 21 属性测试：事实数量裁剪
     - **Property 21: 事实数量裁剪**
     - **Validates: Requirements 7.8**
-  - [ ] 13.6 实现事实持久化
+  - [~] 13.6 实现事实持久化
     - 实现 `save_facts()` 和 `load_facts()` 方法
     - 保存到 `<workspace>/.smartclaw/facts.json`
     - _Requirements: 7.5, 7.9_
 
-- [ ] 14. Checkpoint - 确保 FactExtractor 测试通过
+- [~] 14. Checkpoint - 确保 FactExtractor 测试通过
   - 运行 `pytest tests/memory/test_fact_extractor*.py -v`
   - 确保所有测试通过，如有问题请询问用户
 
 - [ ] 15. 系统集成
-  - [ ] 15.1 集成 MemoryLoader 到 AgentRuntime
+  - [~] 15.1 集成 MemoryLoader 到 AgentRuntime
     - 在 Agent 启动时调用 MemoryLoader 加载记忆
     - 将记忆内容注入系统提示词
     - _Requirements: 1.4_
-  - [ ] 15.2 集成 BootstrapLoader 到 SystemPromptBuilder
+  - [~] 15.2 集成 BootstrapLoader 到 SystemPromptBuilder
     - 在构建系统提示词时加载 Bootstrap 文件
     - SOUL.md 作为第一部分，USER.md 注入用户上下文
     - _Requirements: 2.7, 2.8_
-  - [ ] 15.3 集成 SkillsWatcher 到 AgentRuntime
+  - [~] 15.3 集成 SkillsWatcher 到 AgentRuntime
     - 在 Agent 启动时启动 SkillsWatcher
     - 在 Agent 关闭时停止 SkillsWatcher
     - _Requirements: 3.6_
-  - [ ] 15.4 集成 ConfigWatcher 到应用启动流程
+  - [~] 15.4 集成 ConfigWatcher 到应用启动流程
     - 在应用启动时启动 ConfigWatcher
     - 发布 `config_reloaded` 事件
     - _Requirements: 4.4_
-  - [ ] 15.5 集成 MemoryIndexManager 到 MemoryLoader
+  - [~] 15.5 集成 MemoryIndexManager 到 MemoryLoader
     - 在加载 memory/ 目录后自动索引
     - 监听目录变化时增量更新索引
     - _Requirements: 5.6_
-  - [ ] 15.6 集成 FactExtractor 到会话管理
+  - [~] 15.6 集成 FactExtractor 到会话管理
     - 在会话结束或超时后触发事实提取
     - 将提取的事实加载到记忆上下文
     - _Requirements: 7.1_
 
-- [ ] 16. 最终 Checkpoint - 确保所有测试通过
+- [~] 16. 最终 Checkpoint - 确保所有测试通过
   - 运行 `pytest tests/memory tests/bootstrap tests/skills tests/config -v`
   - 运行 `pytest tests/memory/test_integration.py -v`
   - 确保所有测试通过，如有问题请询问用户

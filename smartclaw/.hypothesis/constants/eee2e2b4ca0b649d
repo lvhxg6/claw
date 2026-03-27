@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/summarizer.py
-# hypothesis_version: 6.148.8
-
-[0.3, 100, 128000, '\nCONVERSATION:', 'args', 'memory.summarizer', 'name', 'text', 'tool_call_id']

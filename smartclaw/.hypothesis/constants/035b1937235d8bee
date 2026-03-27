@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/runtime.py
+# hypothesis_version: 6.148.8
+
+['_active_requests', '_lock', 'active_requests', 'agent.runtime', 'context_engine', 'graph', 'invalid_model', 'legacy', 'mcp_init_failed', 'mcp_initialized', 'model_config', 'model_switched', 'primary', 'providers', 'skills_load_failed', 'skills_loaded', '{workspace}']

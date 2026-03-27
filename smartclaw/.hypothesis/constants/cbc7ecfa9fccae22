@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/summarizer.py
+# hypothesis_version: 6.148.8
+
+[0.3, -500, 100, 1000, 1500, 2000, 3000, 4000, 128000, '\n\n---\n\n', '\nCONVERSATION:', ', ', '...', 'args', 'custom', 'memory.summarizer', 'memory_flush_failed', 'name', 'strict', 'text', 'tool_call_id', 'unknown']

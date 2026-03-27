@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/config/watcher.py
+# hypothesis_version: 6.148.8
+
+[5.0, 1000.0, 500, 65535, '.', 'CRITICAL', 'DEBUG', 'ERROR', 'INFO', 'WARNING', 'chunk_tokens', 'config.watcher', 'config.yaml', 'config_file_changed', 'config_load_failed', 'config_loaded', 'config_no_changes', 'config_parse_failed', 'config_reload_failed', 'config_reloaded', 'debounce_ms', 'gateway', 'gateway.host', 'gateway.port', 'host', 'level', 'logging', 'logging.level', 'memory', 'port', 'providers', 'skills', 'utf-8', 'vector_weight']

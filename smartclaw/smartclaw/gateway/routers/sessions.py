@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from langchain_core.messages import message_to_dict
 
-from smartclaw.gateway.models import SessionHistoryResponse, SessionSummaryResponse
+from smartclaw.gateway.models import SessionConfigRequest, SessionHistoryResponse, SessionSummaryResponse
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -35,6 +35,15 @@ async def get_summary(session_key: str, request: Request) -> SessionSummaryRespo
         return SessionSummaryResponse(session_key=session_key, summary="")
 
 
+@router.get("/{session_key}/decisions")
+async def get_session_decisions(session_key: str):
+    """Return decision records for a session. Empty list if not found."""
+    from smartclaw.observability import decision_collector
+
+    records = decision_collector.get_decisions(session_key)
+    return [r.to_dict() for r in records]
+
+
 @router.delete("/{session_key}")
 async def delete_session(session_key: str, request: Request) -> dict:  # type: ignore[type-arg]
     """Delete a session's history and summary."""
@@ -45,3 +54,22 @@ async def delete_session(session_key: str, request: Request) -> dict:  # type: i
     except Exception:
         pass
     return {"deleted": True}
+
+
+@router.put("/{session_key}/config")
+async def set_session_config(
+    session_key: str,
+    body: SessionConfigRequest,
+    request: Request,
+) -> dict:  # type: ignore[type-arg]
+    """Persist session-level model override."""
+    memory_store = request.app.state.runtime.memory_store
+    if memory_store is None:
+        return {"error": "Memory store not available"}
+    try:
+        await memory_store.set_session_config(
+            session_key, model_override=body.model
+        )
+        return {"session_key": session_key, "model_override": body.model}
+    except Exception as exc:
+        return {"error": str(exc)}

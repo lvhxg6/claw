@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/observability/decision_record.py
+# hypothesis_version: 6.148.8
+
+['decision_type', 'final_answer', 'input_summary', 'iteration', 'reasoning', 'supervisor_route', 'timestamp', 'tool_call']

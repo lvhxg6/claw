@@ -28,6 +28,7 @@ def _make_mock_result(iterations: int = 1) -> dict:  # type: ignore[type-arg]
         "messages": [],
         "summary": None,
         "sub_agent_depth": None,
+        "token_stats": None,
     }
 
 
@@ -96,6 +97,8 @@ def make_test_client(
     mock_memory.get_summary = AsyncMock(return_value="")
     mock_memory.set_history = AsyncMock()
     mock_memory.set_summary = AsyncMock()
+    mock_memory.get_session_config = AsyncMock(return_value=None)
+    mock_memory.set_session_config = AsyncMock()
 
     # Mock graph
     mock_graph = MagicMock()

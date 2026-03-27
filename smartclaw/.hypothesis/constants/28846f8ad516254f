@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/providers/fallback.py
-# hypothesis_version: 6.151.9
-
-[0.0, 60.0, 3600.0, 400, 401, 403, 429, 503, 529, 'ConnectTimeout', 'ReadTimeout', 'Timeout', 'TimeoutError', 'auth', 'format', 'invalid', 'malformed', 'overloaded', 'parse', 'rate_limit', 'response', 'schema', 'status_code', 'timeout', 'unknown', 'validation']

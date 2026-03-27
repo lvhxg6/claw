@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/nodes.py
+# hypothesis_version: 6.148.8
+
+[0.0, 1000.0, 2048, 'action', 'agent.nodes', 'args', 'duration_ms', 'end', 'error', 'final_answer', 'id', 'iteration', 'llm:after', 'llm:before', 'max_iterations', 'messages', 'name', 'reasoning_node done', 'reasoning_node error', 'reasoning_node start', 'tool.executed', 'tool:after', 'tool:before', 'tool_call_id', 'tool_name']

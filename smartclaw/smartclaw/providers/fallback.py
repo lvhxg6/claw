@@ -1,22 +1,28 @@
 """Fallback chain, cooldown tracker, and error classification for SmartClaw LLM providers.
 
 Implements automatic failover between LLM providers with exponential backoff cooldowns,
-error classification, and ordered candidate execution.
+error classification, ordered candidate execution, and two-stage AuthProfile rotation.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
     from langchain_core.messages import AIMessage
+
+    from smartclaw.providers.config import AuthProfile
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -52,10 +58,16 @@ class FailoverError(Exception):
 
 
 class FallbackCandidate(NamedTuple):
-    """A candidate provider/model pair for the fallback chain."""
+    """A candidate provider/model pair for the fallback chain.
+
+    When ``profile_id`` is set, the CooldownTracker uses it as the cooldown
+    key so that different AuthProfiles for the same provider have independent
+    cooldown state.
+    """
 
     provider: str
     model: str
+    profile_id: str | None = None
 
 
 @dataclass
@@ -209,7 +221,12 @@ class _CooldownEntry:
 
 
 class CooldownTracker:
-    """Thread-safe per-provider cooldown tracker with exponential backoff.
+    """Thread-safe cooldown tracker with exponential backoff.
+
+    The cooldown key is determined by the candidate's ``profile_id`` when
+    present, falling back to the ``provider`` name when absent.  This allows
+    independent cooldown tracking per AuthProfile while remaining backward
+    compatible with the original provider-level tracking.
 
     Backoff schedules (reference: PicoClaw):
     - Standard: min(1h, 1min × 5^min(n-1, 3))
@@ -226,11 +243,30 @@ class CooldownTracker:
         self._lock = threading.Lock()
         self._entries: dict[str, _CooldownEntry] = {}
 
-    def mark_failure(self, provider: str, reason: FailoverReason) -> None:
-        """Record a failure for *provider* and start/extend cooldown."""
+    @staticmethod
+    def _cooldown_key(provider: str, profile_id: str | None = None) -> str:
+        """Return the cooldown key: *profile_id* when set, else *provider*."""
+        return profile_id if profile_id is not None else provider
+
+    def mark_failure(
+        self,
+        provider: str,
+        reason: FailoverReason,
+        *,
+        profile_id: str | None = None,
+        store: Any | None = None,
+    ) -> None:
+        """Record a failure and start/extend cooldown.
+
+        Uses *profile_id* as the cooldown key when provided, otherwise
+        falls back to *provider*.
+
+        When *store* is provided, schedules fire-and-forget persistence.
+        """
+        key = self._cooldown_key(provider, profile_id)
         now = self._now()
         with self._lock:
-            entry = self._entries.setdefault(provider, _CooldownEntry())
+            entry = self._entries.setdefault(key, _CooldownEntry())
             entry.error_count += 1
             entry.failure_counts[reason] = entry.failure_counts.get(reason, 0) + 1
             entry.last_failure = now
@@ -238,26 +274,71 @@ class CooldownTracker:
             cooldown_secs = self._compute_cooldown(entry.error_count, reason)
             entry.cooldown_end = now + cooldown_secs
 
-    def mark_success(self, provider: str) -> None:
-        """Reset cooldown state for *provider* after a successful call."""
-        with self._lock:
-            if provider in self._entries:
-                del self._entries[provider]
+        if store is not None:
+            try:
+                asyncio.get_event_loop().create_task(self.save_state(store))
+            except RuntimeError:
+                pass  # no event loop — skip persistence
 
-    def is_available(self, provider: str) -> bool:
-        """Return True if *provider* is not in cooldown."""
+    def mark_success(
+        self,
+        provider: str,
+        *,
+        profile_id: str | None = None,
+        store: Any | None = None,
+    ) -> None:
+        """Reset cooldown state after a successful call.
+
+        Uses *profile_id* as the cooldown key when provided, otherwise
+        falls back to *provider*.
+
+        When *store* is provided, schedules fire-and-forget persistence.
+        """
+        key = self._cooldown_key(provider, profile_id)
+        with self._lock:
+            if key in self._entries:
+                del self._entries[key]
+
+        if store is not None:
+            try:
+                asyncio.get_event_loop().create_task(self.save_state(store))
+            except RuntimeError:
+                pass  # no event loop — skip persistence
+
+    def is_available(
+        self,
+        provider: str,
+        *,
+        profile_id: str | None = None,
+    ) -> bool:
+        """Return True if the candidate is not in cooldown.
+
+        Uses *profile_id* as the cooldown key when provided, otherwise
+        falls back to *provider*.
+        """
+        key = self._cooldown_key(provider, profile_id)
         now = self._now()
         with self._lock:
-            entry = self._entries.get(provider)
+            entry = self._entries.get(key)
             if entry is None:
                 return True
             return now >= entry.cooldown_end
 
-    def cooldown_remaining(self, provider: str) -> timedelta:
-        """Return the remaining cooldown duration for *provider*."""
+    def cooldown_remaining(
+        self,
+        provider: str,
+        *,
+        profile_id: str | None = None,
+    ) -> timedelta:
+        """Return the remaining cooldown duration.
+
+        Uses *profile_id* as the cooldown key when provided, otherwise
+        falls back to *provider*.
+        """
+        key = self._cooldown_key(provider, profile_id)
         now = self._now()
         with self._lock:
-            entry = self._entries.get(provider)
+            entry = self._entries.get(key)
             if entry is None:
                 return timedelta(0)
             remaining = entry.cooldown_end - now
@@ -280,6 +361,127 @@ class CooldownTracker:
         exponent = min(error_count - 1, 3)
         return float(min(max_secs, base_secs * (5 ** exponent)))
 
+    # ------------------------------------------------------------------
+    # Persistence: save_state / restore_state
+    # ------------------------------------------------------------------
+
+    async def save_state(self, store: Any) -> None:
+        """Serialize all cooldown entries to the MemoryStore cooldown_state table.
+
+        Converts monotonic timestamps to UTC for persistence.
+        """
+        import json as _json
+        from datetime import datetime, timezone
+
+        now_mono = self._now()
+        now_utc = datetime.now(timezone.utc)
+
+        with self._lock:
+            entries_snapshot = dict(self._entries)
+
+        for key, entry in entries_snapshot.items():
+            # Convert monotonic offsets to UTC timestamps
+            cooldown_remaining_secs = max(0.0, entry.cooldown_end - now_mono)
+            cooldown_end_utc = now_utc + timedelta(seconds=cooldown_remaining_secs)
+
+            last_failure_offset = max(0.0, now_mono - entry.last_failure)
+            last_failure_utc = now_utc - timedelta(seconds=last_failure_offset)
+
+            failure_counts_json = _json.dumps(
+                {str(k): v for k, v in entry.failure_counts.items()}
+            )
+
+            try:
+                await store.set_cooldown_state(
+                    profile_id=key,
+                    error_count=entry.error_count,
+                    cooldown_end_utc=cooldown_end_utc.isoformat(),
+                    last_failure_utc=last_failure_utc.isoformat(),
+                    failure_counts_json=failure_counts_json,
+                )
+            except Exception:
+                logger.warning("cooldown_save_state_failed: profile_id=%s", key)
+
+        # Delete entries that were removed (mark_success)
+        try:
+            existing = await store.get_cooldown_states()
+            existing_ids = {r["profile_id"] for r in existing}
+            active_ids = set(entries_snapshot.keys())
+            for stale_id in existing_ids - active_ids:
+                try:
+                    await store.delete_cooldown_state(stale_id)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    async def restore_state(self, store: Any) -> None:
+        """Restore cooldown state from the MemoryStore cooldown_state table.
+
+        Converts UTC timestamps back to monotonic offsets. Skips expired records.
+        """
+        from datetime import datetime, timezone
+
+        try:
+            records = await store.get_cooldown_states()
+        except Exception:
+            logger.warning("cooldown_restore_state_failed")
+            return
+
+        now_mono = self._now()
+        now_utc = datetime.now(timezone.utc)
+
+        with self._lock:
+            for record in records:
+                profile_id = record["profile_id"]
+                error_count = record["error_count"]
+                cooldown_end_utc_str = record["cooldown_end_utc"]
+                last_failure_utc_str = record["last_failure_utc"]
+                failure_counts_raw = record.get("failure_counts", {})
+
+                try:
+                    cooldown_end_utc = datetime.fromisoformat(cooldown_end_utc_str)
+                    if cooldown_end_utc.tzinfo is None:
+                        cooldown_end_utc = cooldown_end_utc.replace(tzinfo=timezone.utc)
+                except (ValueError, TypeError):
+                    continue
+
+                # Skip expired records
+                if cooldown_end_utc <= now_utc:
+                    continue
+
+                try:
+                    last_failure_utc = datetime.fromisoformat(last_failure_utc_str)
+                    if last_failure_utc.tzinfo is None:
+                        last_failure_utc = last_failure_utc.replace(tzinfo=timezone.utc)
+                except (ValueError, TypeError):
+                    last_failure_utc = now_utc
+
+                # Convert UTC to monotonic offsets
+                cooldown_remaining = (cooldown_end_utc - now_utc).total_seconds()
+                last_failure_ago = (now_utc - last_failure_utc).total_seconds()
+
+                # Reconstruct failure_counts with FailoverReason keys
+                failure_counts: dict[FailoverReason, int] = {}
+                for reason_str, count in failure_counts_raw.items():
+                    try:
+                        failure_counts[FailoverReason(reason_str)] = count
+                    except ValueError:
+                        pass
+
+                entry = _CooldownEntry(
+                    error_count=error_count,
+                    failure_counts=failure_counts,
+                    cooldown_end=now_mono + cooldown_remaining,
+                    last_failure=now_mono - max(0.0, last_failure_ago),
+                )
+                self._entries[profile_id] = entry
+
+        logger.info(
+            "cooldown_state_restored: restored_count=%d",
+            len(self._entries),
+        )
+
 
 # ---------------------------------------------------------------------------
 # Fallback chain
@@ -289,32 +491,147 @@ class CooldownTracker:
 class FallbackChain:
     """Model failover chain — tries candidates in priority order.
 
-    - Providers in cooldown are skipped (recorded as skipped attempts).
+    Supports two-stage execution when ``auth_profiles`` are provided:
+
+    - **Stage 1**: On RATE_LIMIT, rotate through AuthProfiles of the same
+      provider before switching providers.
+    - **Stage 2**: When all profiles of a provider are exhausted, move to
+      the next provider/model in the fallback list.
+
+    When ``auth_profiles`` is empty/None, behaviour is identical to the
+    original single-key fallback (backward compatible).
+
+    - Providers/profiles in cooldown are skipped (recorded as skipped attempts).
     - Non-retriable errors (FORMAT) abort immediately.
     - Retriable errors advance to the next candidate.
-    - A successful call resets the provider's cooldown.
+    - A successful call resets the candidate's cooldown.
     - Raises FallbackExhaustedError when all candidates fail.
     - Raises ValueError for an empty candidate list.
     """
 
     def __init__(self, cooldown: CooldownTracker | None = None) -> None:
         self._cooldown = cooldown or CooldownTracker()
+        # session_sticky: maps session_id → last successful profile_id
+        self._sticky_profiles: dict[str, str] = {}
 
     @property
     def cooldown(self) -> CooldownTracker:
         """Access the underlying CooldownTracker."""
         return self._cooldown
 
+    # ------------------------------------------------------------------
+    # Two-stage candidate builder
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_two_stage_candidates(
+        candidates: list[FallbackCandidate],
+        auth_profiles: list[AuthProfile],
+    ) -> list[FallbackCandidate]:
+        """Build a two-stage candidate list from base candidates + AuthProfiles.
+
+        For each candidate whose provider has matching AuthProfiles, expand it
+        into one FallbackCandidate per profile (same model, different
+        ``profile_id``).  Candidates whose provider has no matching profiles
+        are kept as-is.
+
+        The resulting order interleaves profile rotation *within* a provider
+        before moving to the next provider/model — exactly the two-stage
+        strategy described in the design doc.
+
+        Returns:
+            Expanded candidate list ready for ``execute``.
+        """
+        if not auth_profiles:
+            return list(candidates)
+
+        # Group profiles by provider name
+        profiles_by_provider: dict[str, list[AuthProfile]] = defaultdict(list)
+        for ap in auth_profiles:
+            profiles_by_provider[ap.provider].append(ap)
+
+        result: list[FallbackCandidate] = []
+        for cand in candidates:
+            provider_profiles = profiles_by_provider.get(cand.provider)
+            if provider_profiles:
+                # Expand: one candidate per AuthProfile for this provider/model
+                for ap in provider_profiles:
+                    result.append(
+                        FallbackCandidate(
+                            provider=cand.provider,
+                            model=cand.model,
+                            profile_id=ap.profile_id,
+                        )
+                    )
+            else:
+                # No profiles for this provider — keep original candidate
+                result.append(cand)
+        return result
+
+    # ------------------------------------------------------------------
+    # Session-sticky reordering
+    # ------------------------------------------------------------------
+
+    def _apply_session_sticky(
+        self,
+        candidates: list[FallbackCandidate],
+        session_id: str | None,
+    ) -> list[FallbackCandidate]:
+        """Reorder candidates so the last successful profile comes first.
+
+        Only applies when *session_id* is provided and a sticky profile is
+        recorded for that session.  The sticky profile is moved to the front
+        of its provider group (preserving relative order of other candidates).
+        """
+        if not session_id:
+            return candidates
+        sticky_pid = self._sticky_profiles.get(session_id)
+        if sticky_pid is None:
+            return candidates
+
+        # Find the sticky candidate
+        sticky_idx: int | None = None
+        for i, c in enumerate(candidates):
+            if c.profile_id == sticky_pid:
+                sticky_idx = i
+                break
+        if sticky_idx is None:
+            return candidates
+
+        # Move sticky candidate to the front of its provider group
+        sticky_cand = candidates[sticky_idx]
+        reordered = [sticky_cand]
+        for i, c in enumerate(candidates):
+            if i != sticky_idx:
+                reordered.append(c)
+        return reordered
+
+    # ------------------------------------------------------------------
+    # Execute
+    # ------------------------------------------------------------------
+
     async def execute(
         self,
         candidates: list[FallbackCandidate],
         run: Callable[[str, str], Awaitable[AIMessage]],
+        *,
+        auth_profiles: list[AuthProfile] | None = None,
+        session_sticky: bool = False,
+        session_id: str | None = None,
     ) -> FallbackResult:
         """Execute the fallback chain.
 
         Args:
-            candidates: Ordered list of (provider, model) pairs to try.
-            run: Async callable that takes (provider, model) and returns an AIMessage.
+            candidates: Ordered list of (provider, model[, profile_id]) to try.
+            run: Async callable ``(provider, model) -> AIMessage``.
+            auth_profiles: Optional list of AuthProfiles.  When provided,
+                candidates are expanded via ``_build_two_stage_candidates``
+                so that profile rotation happens before provider switching.
+                When empty or None, behaviour is identical to the original
+                single-key fallback.
+            session_sticky: When True, prefer the last successful profile_id
+                for the given *session_id*.
+            session_id: Session identifier for sticky-profile tracking.
 
         Returns:
             FallbackResult on success.
@@ -327,13 +644,23 @@ class FallbackChain:
         if not candidates:
             raise ValueError("No fallback candidates configured")
 
+        # Stage expansion: build two-stage list when auth_profiles provided
+        effective = self._build_two_stage_candidates(
+            candidates, auth_profiles or [],
+        )
+
+        # Session-sticky reordering
+        if session_sticky and session_id:
+            effective = self._apply_session_sticky(effective, session_id)
+
         attempts: list[FallbackAttempt] = []
 
-        for candidate in candidates:
+        for candidate in effective:
             provider, model = candidate.provider, candidate.model
+            profile_id = candidate.profile_id
 
-            # Skip providers in cooldown
-            if not self._cooldown.is_available(provider):
+            # Skip candidates in cooldown (key = profile_id or provider)
+            if not self._cooldown.is_available(provider, profile_id=profile_id):
                 attempts.append(
                     FallbackAttempt(
                         provider=provider,
@@ -365,7 +692,9 @@ class FallbackChain:
                     )
                 )
 
-                self._cooldown.mark_failure(provider, classified.reason)
+                self._cooldown.mark_failure(
+                    provider, classified.reason, profile_id=profile_id,
+                )
 
                 if not classified.is_retriable():
                     # Non-retriable (FORMAT) — abort immediately
@@ -376,7 +705,12 @@ class FallbackChain:
 
             # Success
             duration = timedelta(seconds=time.monotonic() - start)
-            self._cooldown.mark_success(provider)
+            self._cooldown.mark_success(provider, profile_id=profile_id)
+
+            # Record sticky profile for session
+            if session_sticky and session_id and profile_id is not None:
+                self._sticky_profiles[session_id] = profile_id
+
             attempts.append(
                 FallbackAttempt(
                     provider=provider,

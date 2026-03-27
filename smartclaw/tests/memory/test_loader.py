@@ -814,3 +814,174 @@ class TestLoadMemoryDirSizeLimit:
         assert any("b_medium.md" in p for p in paths)
         # Verify c_extra was skipped
         assert not any("c_extra.md" in p for p in paths)
+
+
+class TestBuildMemoryContext:
+    """Tests for build_memory_context() method."""
+
+    def test_build_memory_context_empty_when_disabled(self, tmp_path: Path) -> None:
+        """Should return empty string when loader is disabled."""
+        (tmp_path / "MEMORY.md").write_text("# Memory")
+        loader = MemoryLoader(workspace_dir=str(tmp_path), enabled=False)
+        
+        result = loader.build_memory_context()
+        
+        assert result == ""
+
+    def test_build_memory_context_empty_when_no_content(self, tmp_path: Path) -> None:
+        """Should return empty string when no memory content exists."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        assert result == ""
+
+    def test_build_memory_context_with_memory_md_only(self, tmp_path: Path) -> None:
+        """Should include MEMORY.md content with section header."""
+        content = "# My Memory\n\n- Fact 1\n- Fact 2"
+        (tmp_path / "MEMORY.md").write_text(content)
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        assert "## Long-term Memory" in result
+        assert "# My Memory" in result
+        assert "- Fact 1" in result
+        assert "- Fact 2" in result
+
+    def test_build_memory_context_with_memory_dir_only(self, tmp_path: Path) -> None:
+        """Should include memory/ directory files with section header."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "notes.md").write_text("# Notes\n\nSome notes here.")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        assert "## Memory Files" in result
+        assert "### memory/notes.md" in result
+        assert "# Notes" in result
+        assert "Some notes here." in result
+
+    def test_build_memory_context_with_both_sources(self, tmp_path: Path) -> None:
+        """Should include both MEMORY.md and memory/ directory content."""
+        # Create MEMORY.md
+        (tmp_path / "MEMORY.md").write_text("# Main Memory\n\nMain content.")
+        
+        # Create memory/ directory with files
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "extra.md").write_text("# Extra\n\nExtra content.")
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        # Should have both sections
+        assert "## Long-term Memory" in result
+        assert "## Memory Files" in result
+        assert "# Main Memory" in result
+        assert "Main content." in result
+        assert "### memory/extra.md" in result
+        assert "# Extra" in result
+        assert "Extra content." in result
+
+    def test_build_memory_context_memory_md_before_memory_dir(self, tmp_path: Path) -> None:
+        """Should place MEMORY.md content before memory/ directory content."""
+        (tmp_path / "MEMORY.md").write_text("# Main Memory")
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "extra.md").write_text("# Extra")
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        # Long-term Memory section should appear before Memory Files section
+        long_term_pos = result.find("## Long-term Memory")
+        memory_files_pos = result.find("## Memory Files")
+        assert long_term_pos < memory_files_pos
+
+    def test_build_memory_context_multiple_memory_files(self, tmp_path: Path) -> None:
+        """Should include all files from memory/ directory."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "file1.md").write_text("# File 1")
+        (memory_dir / "file2.md").write_text("# File 2")
+        (memory_dir / "file3.md").write_text("# File 3")
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        assert "### memory/file1.md" in result
+        assert "### memory/file2.md" in result
+        assert "### memory/file3.md" in result
+        assert "# File 1" in result
+        assert "# File 2" in result
+        assert "# File 3" in result
+
+    def test_build_memory_context_nested_memory_files(self, tmp_path: Path) -> None:
+        """Should include files from nested directories with relative paths."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        subdir = memory_dir / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.md").write_text("# Nested Content")
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        assert "### memory/subdir/nested.md" in result
+        assert "# Nested Content" in result
+
+    def test_build_memory_context_unicode_content(self, tmp_path: Path) -> None:
+        """Should handle Unicode content correctly."""
+        (tmp_path / "MEMORY.md").write_text("# 中文记忆\n\n- 事实一\n- 事实二")
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        (memory_dir / "日本語.md").write_text("# 日本語メモ\n\n内容です。")
+        
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        assert "中文记忆" in result
+        assert "事实一" in result
+        assert "日本語メモ" in result
+        assert "内容です。" in result
+
+    def test_build_memory_context_strips_whitespace(self, tmp_path: Path) -> None:
+        """Should strip leading/trailing whitespace from content."""
+        (tmp_path / "MEMORY.md").write_text("\n\n# Memory\n\nContent\n\n\n")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        # Should not start or end with excessive whitespace
+        assert not result.startswith("\n\n")
+        assert not result.endswith("\n\n\n")
+
+    def test_build_memory_context_empty_memory_md(self, tmp_path: Path) -> None:
+        """Should handle empty MEMORY.md file gracefully."""
+        (tmp_path / "MEMORY.md").write_text("")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        # Empty MEMORY.md should not add content
+        # The result should be empty since there's no actual content
+        assert result == ""
+
+    def test_build_memory_context_whitespace_only_memory_md(self, tmp_path: Path) -> None:
+        """Should handle whitespace-only MEMORY.md file gracefully."""
+        (tmp_path / "MEMORY.md").write_text("   \n\n   \t  ")
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.build_memory_context()
+        
+        # Whitespace-only content should still create a section header
+        # but the content will be stripped
+        if result:
+            assert "## Long-term Memory" in result

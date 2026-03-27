@@ -21,6 +21,9 @@ logger = structlog.get_logger(component="gateway.app")
 # SSE broadcast queues for hook events (one per connected debug client)
 _hook_event_queues: list[asyncio.Queue] = []
 
+# SSE broadcast queues for decision events (one per connected debug client)
+_decision_event_queues: list[asyncio.Queue] = []
+
 _STATIC_DIR = Path(__file__).parent / "static"
 
 
@@ -36,6 +39,22 @@ def _broadcast_hook_event(data: dict) -> None:
     for q in dead:
         try:
             _hook_event_queues.remove(q)
+        except ValueError:
+            pass
+
+
+def _broadcast_decision_event(data: dict) -> None:
+    """Push a decision event to all connected debug SSE clients."""
+    payload = json.dumps(data, ensure_ascii=False, default=str)
+    dead = []
+    for q in _decision_event_queues:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for q in dead:
+        try:
+            _decision_event_queues.remove(q)
         except ValueError:
             pass
 
@@ -72,6 +91,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for hp in hook_registry.VALID_HOOK_POINTS:
         hook_registry.register(hp, _debug_hook_handler)
 
+    # Register decision event subscriber on Diagnostic Bus
+    from smartclaw.observability import diagnostic_bus
+
+    async def _decision_bus_handler(event_type: str, payload: dict) -> None:
+        _broadcast_decision_event(payload)
+
+    diagnostic_bus.on("decision.captured", _decision_bus_handler)
+
     app.state.ready = True
     logger.info("gateway_startup_complete", tools=runtime.registry.count)
 
@@ -81,6 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.ready = False
     for hp in hook_registry.VALID_HOOK_POINTS:
         hook_registry.unregister(hp, _debug_hook_handler)
+    diagnostic_bus.off("decision.captured", _decision_bus_handler)
     await runtime.close()
     logger.info("gateway_shutdown_complete")
 
@@ -139,6 +167,31 @@ def create_app(settings: Any = None) -> FastAPI:
             finally:
                 try:
                     _hook_event_queues.remove(q)
+                except ValueError:
+                    pass
+
+        return EventSourceResponse(generator())
+
+    # Debug UI: decision events SSE endpoint
+    @app.get("/api/debug/decision-events")
+    async def debug_decision_events(request: Request):
+        """SSE stream of decision trace events for the debug UI."""
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        _decision_event_queues.append(q)
+
+        async def generator():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        payload = await asyncio.wait_for(q.get(), timeout=15.0)
+                        yield {"data": payload}
+                    except asyncio.TimeoutError:
+                        yield {"data": json.dumps({"ping": True})}
+            finally:
+                try:
+                    _decision_event_queues.remove(q)
                 except ValueError:
                     pass
 

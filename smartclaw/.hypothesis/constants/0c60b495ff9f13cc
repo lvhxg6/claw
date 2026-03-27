@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/multi_agent.py
+# hypothesis_version: 6.148.8
+
+[0.0, 100, 200, 512, 2048, '(none yet)', 'No result', 'No task provided.', 'Task completed.', '__end__', '```', 'agent', 'agent.multi_agent', 'agent_node_complete', 'agent_node_error', 'agent_results', 'answer', 'content', 'current_agent', 'done', 'error', 'final_answer', 'max_total_iterations', 'messages', 'multi_agent_invoke', 'supervisor', 'task_plan', 'total_iterations', '{', '}']

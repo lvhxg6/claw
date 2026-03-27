@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/providers/config.py
-# hypothesis_version: 6.151.9
-
-[0.0, 2.0, 32768, '/', 'openai/gpt-4o']

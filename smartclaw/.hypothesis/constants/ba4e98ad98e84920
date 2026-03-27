@@ -1,4 +1,0 @@
-# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/store.py
-# hypothesis_version: 6.148.8
-
-[200, 'history_replaced', 'history_truncated', 'human', 'memory.store', 'memory_store_closed', 'summary_set', 'user']
