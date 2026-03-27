@@ -100,3 +100,39 @@ def test_delete_session_calls_memory_store() -> None:
         mock_memory.set_summary.assert_called_once()
     finally:
         graph_module.invoke = original  # type: ignore[assignment]
+
+
+def test_list_sessions_returns_recent_items() -> None:
+    """GET /api/sessions returns recent session metadata."""
+    import smartclaw.agent.graph as graph_module
+    original = graph_module.invoke
+    try:
+        client, _, mock_memory, _ = make_test_client()
+        mock_memory.list_sessions = AsyncMock(
+            return_value=[
+                {
+                    "session_key": "sess-1",
+                    "title": "基线检查任务",
+                    "preview": "先检查再加固",
+                    "updated_at": "2026-03-27 10:00:00",
+                    "message_count": 4,
+                    "model_override": "kimi/kimi-k2.5",
+                }
+            ]
+        )
+        with client:
+            resp = client.get("/api/sessions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == [
+            {
+                "session_key": "sess-1",
+                "title": "基线检查任务",
+                "preview": "先检查再加固",
+                "updated_at": "2026-03-27 10:00:00",
+                "message_count": 4,
+                "model_override": "kimi/kimi-k2.5",
+            }
+        ]
+    finally:
+        graph_module.invoke = original  # type: ignore[assignment]

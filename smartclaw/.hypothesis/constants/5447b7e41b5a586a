@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/capabilities/loader.py
+# hypothesis_version: 6.148.8
+
+['allowed_tools', 'builtin', 'capabilities.loader', 'denied_tools', 'description', 'global', 'manifest.yaml', 'metadata', 'name', 'preferred_mode', 'prompt', 'prompt_file', 'result_schema', 'result_schema_file', 'scenario_types', 'task_profile', 'tool_groups', 'utf-8', 'version', 'workspace']

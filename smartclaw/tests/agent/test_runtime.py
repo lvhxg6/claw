@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -74,9 +75,12 @@ async def test_setup_sub_agent_enabled(mock_build_graph):
     """sub_agent.enabled=True registers spawn_sub_agent tool."""
     settings = _make_settings(**{"sub_agent.enabled": True})
     rt = await setup_agent_runtime(settings)
+    tool = rt.registry.get("spawn_sub_agent")
 
-    assert rt.registry.get("spawn_sub_agent") is not None
+    assert tool is not None
     assert "spawn_sub_agent" in rt.tool_names
+    assert getattr(tool, "available_tools", [])
+    assert all(t.name != "spawn_sub_agent" for t in tool.available_tools)
 
 
 @pytest.mark.asyncio
@@ -93,6 +97,164 @@ async def test_setup_memory_enabled(mock_build_graph):
 
     assert rt.memory_store is not None
     assert rt.summarizer is not None
+    assert rt.tool_result_guard is not None
+    assert rt.session_pruner is not None
+    assert rt.graph_factory is not None
+
+
+@pytest.mark.asyncio
+async def test_create_graph_uses_graph_factory(mock_build_graph):
+    """create_graph() routes through GraphFactory for default and override cases."""
+    settings = _make_settings()
+    rt = await setup_agent_runtime(settings)
+
+    default_graph = rt.create_graph()
+    override_graph = rt.create_graph("openai/gpt-4o")
+
+    assert default_graph is not None
+    assert override_graph is not None
+    assert mock_build_graph.call_count >= 3
+
+
+@pytest.mark.asyncio
+async def test_resolve_mode_respects_explicit_request(mock_build_graph):
+    """Explicit classic/orchestrator requests should win over heuristics."""
+    settings = _make_settings(**{"orchestrator.mode": "auto"})
+    rt = await setup_agent_runtime(settings)
+
+    decision = rt.resolve_mode(requested_mode="orchestrator", message="hello")
+
+    assert decision.resolved_mode == "orchestrator"
+    assert decision.reason == "explicit_request"
+
+
+@pytest.mark.asyncio
+async def test_resolve_mode_auto_uses_heuristics(mock_build_graph):
+    """Auto mode should classify multi-stage governance tasks as orchestrator."""
+    settings = _make_settings(**{"orchestrator.mode": "auto"})
+    rt = await setup_agent_runtime(settings)
+
+    decision = rt.resolve_mode(
+        requested_mode="auto",
+        message="先做基线检查，再根据结果加固，最后输出报告",
+        scenario_type="inspection",
+        task_profile="multi_stage",
+    )
+
+    assert decision.resolved_mode == "orchestrator"
+    assert decision.confidence >= 0.7
+
+
+@pytest.mark.asyncio
+async def test_setup_loads_capability_packs_and_builds_summary(mock_build_graph, tmp_path: Path):
+    """Capability packs should be discovered and included in runtime prompt state."""
+    pack_dir = tmp_path / "capability_packs" / "security-governance"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "manifest.yaml").write_text(
+        "\n".join(
+            [
+                "name: security-governance",
+                "description: Security governance workflows",
+                "scenario_types:",
+                "  - inspection",
+                "preferred_mode: orchestrator",
+                "allowed_tools:",
+                "  - read_file",
+                "prompt: Prefer phased inspection and remediation.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = _make_settings(
+        **{
+            "agent_defaults.workspace": str(tmp_path),
+            "capability_packs.enabled": True,
+            "capability_packs.workspace_dir": "{workspace}/capability_packs",
+        }
+    )
+    rt = await setup_agent_runtime(settings)
+
+    assert rt.capability_registry is not None
+    assert rt.capability_registry.list_names() == ["security-governance"]
+    assert "Available Capability Packs" in rt.system_prompt
+
+
+@pytest.mark.asyncio
+async def test_create_request_graph_filters_tools_by_capability_pack(mock_build_graph, tmp_path: Path):
+    """Request graph creation should apply capability-pack tool policy."""
+    pack_dir = tmp_path / "capability_packs" / "security-governance"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "manifest.yaml").write_text(
+        "\n".join(
+            [
+                "name: security-governance",
+                "description: Security governance workflows",
+                "allowed_tools:",
+                "  - read_file",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = _make_settings(
+        **{
+            "agent_defaults.workspace": str(tmp_path),
+            "capability_packs.enabled": True,
+            "capability_packs.workspace_dir": "{workspace}/capability_packs",
+        }
+    )
+    rt = await setup_agent_runtime(settings)
+    mock_build_graph.reset_mock()
+
+    rt.create_request_graph(mode="classic", capability_pack="security-governance")
+
+    assert mock_build_graph.called
+    filtered_tools = mock_build_graph.call_args.args[1]
+    assert [tool.name for tool in filtered_tools] == ["read_file"]
+
+
+@pytest.mark.asyncio
+async def test_build_capability_policy_exposes_governance_fields(mock_build_graph, tmp_path: Path):
+    """Runtime should expose normalized capability governance policy."""
+    pack_dir = tmp_path / "capability_packs" / "security-governance"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "manifest.yaml").write_text(
+        "\n".join(
+            [
+                "name: security-governance",
+                "description: Security governance workflows",
+                "approval_required: true",
+                "approval_message: Please approve execution",
+                "result_format: json",
+                "schema_enforced: true",
+                "result_schema: '{\"type\":\"object\",\"required\":[\"status\"]}'",
+                "max_schema_retries: 1",
+                "max_task_retries: 2",
+                "retry_on_error: true",
+                "concurrency_limits:",
+                "  inspection: 2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    settings = _make_settings(
+        **{
+            "agent_defaults.workspace": str(tmp_path),
+            "capability_packs.enabled": True,
+            "capability_packs.workspace_dir": "{workspace}/capability_packs",
+        }
+    )
+    rt = await setup_agent_runtime(settings)
+
+    policy = rt.build_capability_policy(capability_pack="security-governance")
+
+    assert policy is not None
+    assert policy["approval_required"] is True
+    assert policy["schema_enforced"] is True
+    assert policy["max_schema_retries"] == 1
+    assert policy["max_task_retries"] == 2
+    assert policy["concurrency_limits"] == {"inspection": 2}
 
 
 # -----------------------------------------------------------------------

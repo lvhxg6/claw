@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
+from smartclaw.agent.mode_router import ModeDecision
 from smartclaw.tools.registry import ToolRegistry
 
 
@@ -39,6 +40,7 @@ def _build_test_app(
     ready: bool = True,
 ) -> FastAPI:
     """Build a FastAPI app with pre-injected test state (no real lifespan)."""
+    from smartclaw.gateway.routers.capability_packs import router as capability_packs_router
     from smartclaw.gateway.routers.chat import router as chat_router
     from smartclaw.gateway.routers.health import router as health_router
     from smartclaw.gateway.routers.sessions import router as sessions_router
@@ -55,6 +57,29 @@ def _build_test_app(
         mock_runtime.summarizer = None
         mock_runtime.close = AsyncMock()
         mock_runtime.tools = registry.get_all()
+        mock_runtime.create_graph = MagicMock(return_value=mock_graph)
+        mock_runtime.create_request_graph = MagicMock(return_value=mock_graph)
+        mock_runtime.resolve_mode = MagicMock(
+            return_value=ModeDecision(
+                requested_mode=None,
+                resolved_mode="classic",
+                reason="test_default",
+                confidence=1.0,
+            )
+        )
+        mock_runtime.resolve_capability_pack = MagicMock(
+            return_value=MagicMock(
+                requested_name=None,
+                resolved_name=None,
+                reason="test_default",
+                pack=None,
+            )
+        )
+        mock_runtime.capability_registry = MagicMock()
+        mock_runtime.capability_registry.list_names = MagicMock(return_value=[])
+        mock_runtime.capability_registry.get = MagicMock(return_value=None)
+        mock_runtime.compose_system_prompt = MagicMock(return_value=mock_runtime.system_prompt)
+        mock_runtime.build_capability_policy = MagicMock(return_value=None)
 
         from smartclaw.providers.config import ModelConfig
         mock_runtime.model_config = ModelConfig()
@@ -76,6 +101,7 @@ def _build_test_app(
         allow_headers=["*"],
     )
     app.include_router(chat_router)
+    app.include_router(capability_packs_router)
     app.include_router(sessions_router)
     app.include_router(tools_router)
     app.include_router(health_router)
@@ -99,6 +125,7 @@ def make_test_client(
     mock_memory.set_summary = AsyncMock()
     mock_memory.get_session_config = AsyncMock(return_value=None)
     mock_memory.set_session_config = AsyncMock()
+    mock_memory.list_sessions = AsyncMock(return_value=[])
 
     # Mock graph
     mock_graph = MagicMock()
@@ -116,7 +143,6 @@ def make_test_client(
     else:
         mock_invoke = AsyncMock(return_value=result)
 
-    original_invoke = graph_module.invoke
     graph_module.invoke = mock_invoke  # type: ignore[assignment]
 
     app = _build_test_app(registry, mock_memory, mock_graph, ready=ready)

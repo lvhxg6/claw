@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/schema.py
+# hypothesis_version: 6.148.8
+
+['aiosqlite.Connection']

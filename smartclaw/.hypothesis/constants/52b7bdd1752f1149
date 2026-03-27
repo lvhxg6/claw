@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/graph.py
+# hypothesis_version: 6.148.8
+
+[1000.0, 100, 256, 300, 'action', 'agent.graph', 'agent.run', 'agent:end', 'agent:start', 'capability_pack', 'capability_policy', 'classic', 'current_phase', 'dispatch_batches', 'duration_ms', 'enabled', 'end', 'error', 'final_answer', 'global_dir', 'has_tool_calls', 'image/png', 'image_url', 'invoke done', 'invoke start', 'iteration', 'iterations', 'llm.called', 'llm:after', 'llm:before', 'max_concurrent', 'max_depth', 'max_iterations', 'message_count', 'messages', 'mode', 'model', 'orchestrator', 'phase', 'phase_index', 'phase_status', 'plan', 'reasoning', 'schema_validation', 'session:end', 'session:start', 'session_key', 'start', 'structured_result', 'sub_agent_depth', 'summary', 'task_results', 'text', 'todos', 'token_stats', 'type', 'url', 'user_message', 'workspace_dir', '{workspace}', '~/.smartclaw/skills']

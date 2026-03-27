@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/dispatch_tasks.py
+# hypothesis_version: 6.148.8
+
+[240, 'Error:', 'attempt', 'attempts', 'batch_id', 'completed', 'default', 'dispatch.batch_ended', 'error', 'failed', 'generic', 'id', 'kind', 'objective', 'parallel', 'phase_index', 'result', 'result_count', 'result_preview', 'status', 'subagent.completed', 'subagent.spawned', 'task', 'task_group', 'title', 'todo_id', 'todo_ids', 'todo_title', 'todos']

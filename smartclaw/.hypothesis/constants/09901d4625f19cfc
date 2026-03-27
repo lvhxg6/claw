@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/gateway/app.py
+# hypothesis_version: 6.148.8
+
+[15.0, 100, 200, 8000, '*', '/', '/api/config', '0.1.0', 'SmartClaw API', 'data', 'decision.captured', 'dispatch.batch_ended', 'dispatch.created', 'event_type', 'gateway', 'gateway.app', 'gateway_port', 'index.html', 'model', 'phase.ended', 'phase.started', 'ping', 'plan.created', 'plan.updated', 'schema.validation', 'settings', 'static', 'subagent.completed', 'subagent.spawned', 'unknown', 'utf-8']

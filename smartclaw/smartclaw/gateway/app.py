@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,6 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 logger = structlog.get_logger(component="gateway.app")
@@ -23,6 +22,9 @@ _hook_event_queues: list[asyncio.Queue] = []
 
 # SSE broadcast queues for decision events (one per connected debug client)
 _decision_event_queues: list[asyncio.Queue] = []
+
+# SSE broadcast queues for execution/orchestrator events
+_execution_event_queues: list[asyncio.Queue] = []
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -37,10 +39,8 @@ def _broadcast_hook_event(data: dict) -> None:
         except asyncio.QueueFull:
             dead.append(q)
     for q in dead:
-        try:
+        with suppress(ValueError):
             _hook_event_queues.remove(q)
-        except ValueError:
-            pass
 
 
 def _broadcast_decision_event(data: dict) -> None:
@@ -53,10 +53,22 @@ def _broadcast_decision_event(data: dict) -> None:
         except asyncio.QueueFull:
             dead.append(q)
     for q in dead:
-        try:
+        with suppress(ValueError):
             _decision_event_queues.remove(q)
-        except ValueError:
-            pass
+
+
+def _broadcast_execution_event(data: dict) -> None:
+    """Push an execution event to all connected debug SSE clients."""
+    payload = json.dumps(data, ensure_ascii=False, default=str)
+    dead = []
+    for q in _execution_event_queues:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for q in dead:
+        with suppress(ValueError):
+            _execution_event_queues.remove(q)
 
 
 @asynccontextmanager
@@ -97,7 +109,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async def _decision_bus_handler(event_type: str, payload: dict) -> None:
         _broadcast_decision_event(payload)
 
+    async def _execution_bus_handler(event_type: str, payload: dict) -> None:
+        _broadcast_execution_event({"event_type": event_type, **payload})
+
+    execution_event_types = [
+        "plan.created",
+        "plan.updated",
+        "dispatch.created",
+        "dispatch.batch_started",
+        "dispatch.batch_ended",
+        "phase.started",
+        "phase.ended",
+        "subagent.spawned",
+        "subagent.completed",
+        "subagent.retry_scheduled",
+        "schema.validation",
+    ]
+
     diagnostic_bus.on("decision.captured", _decision_bus_handler)
+    for event_type in execution_event_types:
+        diagnostic_bus.on(event_type, _execution_bus_handler)
 
     app.state.ready = True
     logger.info("gateway_startup_complete", tools=runtime.registry.count)
@@ -109,6 +140,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for hp in hook_registry.VALID_HOOK_POINTS:
         hook_registry.unregister(hp, _debug_hook_handler)
     diagnostic_bus.off("decision.captured", _decision_bus_handler)
+    for event_type in execution_event_types:
+        diagnostic_bus.off(event_type, _execution_bus_handler)
     await runtime.close()
     logger.info("gateway_shutdown_complete")
 
@@ -116,6 +149,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app(settings: Any = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     from smartclaw.gateway.routers.chat import router as chat_router
+    from smartclaw.gateway.routers.capability_packs import router as capability_packs_router
     from smartclaw.gateway.routers.health import router as health_router
     from smartclaw.gateway.routers.models import router as models_router
     from smartclaw.gateway.routers.sessions import router as sessions_router
@@ -142,6 +176,7 @@ def create_app(settings: Any = None) -> FastAPI:
 
     # Include routers
     app.include_router(chat_router)
+    app.include_router(capability_packs_router)
     app.include_router(sessions_router)
     app.include_router(tools_router)
     app.include_router(health_router)
@@ -194,6 +229,29 @@ def create_app(settings: Any = None) -> FastAPI:
                     _decision_event_queues.remove(q)
                 except ValueError:
                     pass
+
+        return EventSourceResponse(generator())
+
+    # Debug UI: orchestrator / execution events SSE endpoint
+    @app.get("/api/debug/execution-events")
+    async def debug_execution_events(request: Request):
+        """SSE stream of orchestrator execution events for the debug UI."""
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        _execution_event_queues.append(q)
+
+        async def generator():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        payload = await asyncio.wait_for(q.get(), timeout=15.0)
+                        yield {"data": payload}
+                    except TimeoutError:
+                        yield {"data": json.dumps({"ping": True})}
+            finally:
+                with suppress(ValueError):
+                    _execution_event_queues.remove(q)
 
         return EventSourceResponse(generator())
 

@@ -16,16 +16,27 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.tools import BaseTool
 
 from smartclaw.agent.sub_agent import (
     ConcurrencyTimeoutError,
-    DepthLimitExceededError,
     EphemeralStore,
     SpawnSubAgentTool,
     SubAgentConfig,
     spawn_sub_agent,
 )
+from smartclaw.providers.config import ModelConfig
+
+
+class DummyTool(BaseTool):
+    """Minimal tool used for BaseTool-typed tests."""
+
+    name: str = "dummy_tool"
+    description: str = "dummy"
+
+    def _run(self, *args, **kwargs):
+        return "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +263,36 @@ class TestExceptionHandling:
 
         assert "Error" in result
         assert "Internal agent error" in result
+
+
+class TestToolBindings:
+    """SpawnSubAgentTool should pass runtime bindings through to spawn_sub_agent."""
+
+    @pytest.mark.asyncio
+    async def test_tool_forwards_available_tools_context_and_graph_factory(self) -> None:
+        """The tool should forward available_tools, context_engine, and graph_factory."""
+        context_engine = object()
+        graph_factory = object()
+        available_tools = [DummyTool()]
+        model_config = ModelConfig(primary="openai/gpt-4o", fallbacks=["openai/gpt-4o-mini"])
+
+        tool = SpawnSubAgentTool(
+            default_model="openai/gpt-4o",
+            available_tools=available_tools,
+            context_engine=context_engine,
+            graph_factory=graph_factory,
+            parent_model_config=model_config,
+        )
+
+        with patch("smartclaw.agent.sub_agent.spawn_sub_agent", new_callable=AsyncMock) as mock_spawn:
+            mock_spawn.return_value = "ok"
+            result = await tool._arun("do something")
+
+        assert result == "ok"
+        config = mock_spawn.await_args.args[0]
+        assert config.tools == available_tools
+        assert mock_spawn.await_args.kwargs["context_engine"] is context_engine
+        assert mock_spawn.await_args.kwargs["graph_factory"] is graph_factory
 
     @pytest.mark.asyncio
     async def test_no_final_answer_no_error(self) -> None:

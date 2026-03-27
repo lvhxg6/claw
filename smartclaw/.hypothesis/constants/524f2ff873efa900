@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/tool_result_guard.py
+# hypothesis_version: 6.148.8
+
+[8000, 12000, 30000, 'head_chars', 'max_chars', 'tail_chars']

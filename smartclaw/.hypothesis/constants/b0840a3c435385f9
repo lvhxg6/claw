@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/dispatch_policy.py
+# hypothesis_version: 6.148.8
+
+['batch_id', 'id', 'parallel', 'parallelizable', 'ready', 'status', 'todo_ids']

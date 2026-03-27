@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/plan_manager.py
+# hypothesis_version: 6.148.8
+
+['blocked', 'completed', 'depends_on', 'execute', 'failed', 'firewall', 'generic', 'hardening', 'id', 'in_progress', 'inspect', 'inspection', 'kind', 'objective', 'parallelizable', 'pending', 'phase_oriented', 'ready', 'remediate', 'remediation', 'report', 'status', 'strategy', 'title', 'todo_id', 'todos', '修复', '加固', '基线', '巡检', '弱口令', '总结', '执行任务', '执行检查任务', '报告', '整改', '根据检查结果执行整改', '根据结果', '检查', '汇总', '汇总结果并生成输出', '输出', '防火墙']

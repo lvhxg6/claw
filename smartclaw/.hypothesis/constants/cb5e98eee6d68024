@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/orchestrator_graph.py
+# hypothesis_version: 6.148.8
+
+['batch_count', 'completed', 'current_phase', 'dispatch_batches', 'error', 'execute', 'failed', 'final_answer', 'iteration', 'messages', 'objective', 'phase', 'phase.ended', 'phase.started', 'phase_status', 'plan', 'plan.created', 'planned', 'status', 'sub_agent_depth', 'summary', 'synthesize', 'task_results', 'todo_count', 'todos', 'token_stats']

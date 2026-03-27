@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/fact_extractor.py
+# hypothesis_version: 6.148.8
+
+[0.0, 0.3, 0.7, 100, ', ', '.smartclaw', '1.0', 'Fact', 'FactStore', 'category', 'confidence', 'content', 'context', 'createdAt', 'facts', 'facts.json', 'facts_extracted', 'facts_load_failed', 'facts_save_failed', 'facts_saved', 'gpt-4o-mini', 'id', 'json_object', 'lastUpdated', 'personal', 'preference', 'project', 'r', 'role', 'source', 'system', 'technical', 'text', 'type', 'unknown', 'user', 'utf-8', 'version', 'w']

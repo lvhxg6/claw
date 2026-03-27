@@ -10,6 +10,7 @@ Provides:
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from functools import partial
 from typing import Any
 
@@ -105,7 +106,14 @@ async def _llm_call_with_fallback(
         pass
     try:
         from smartclaw.observability import diagnostic_bus as _dbus
-        await _dbus.emit("llm.called", {"phase": "start", "model": model_config.primary, "message_count": len(messages)})
+        await _dbus.emit(
+            "llm.called",
+            {
+                "phase": "start",
+                "model": model_config.primary,
+                "message_count": len(messages),
+            },
+        )
     except Exception:
         pass
 
@@ -234,7 +242,12 @@ def build_graph(
         )
 
     async def _action(state: AgentState) -> dict[str, Any]:
-        return await action_node(state, tools_by_name=tools_by_name, tool_result_guard=tool_result_guard, loop_detector=loop_detector)
+        return await action_node(
+            state,
+            tools_by_name=tools_by_name,
+            tool_result_guard=tool_result_guard,
+            loop_detector=loop_detector,
+        )
 
     # Build the graph
     graph = StateGraph(AgentState)
@@ -267,6 +280,9 @@ async def invoke(
     memory_store: Any | None = None,
     summarizer: Any | None = None,
     context_engine: Any | None = None,
+    mode: str | None = None,
+    capability_pack: str | None = None,
+    capability_policy: dict[str, Any] | None = None,
 ) -> AgentState:
     """Run the agent graph and return the final AgentState.
 
@@ -296,6 +312,9 @@ async def invoke(
 
     # P1: Load history and summary when memory is enabled
     if session_key is not None and memory_store is not None:
+        if context_engine is not None:
+            with suppress(Exception):
+                await context_engine.bootstrap(session_key, system_prompt=system_prompt)
         history = await memory_store.get_history(session_key)
         if history:
             messages.extend(history)
@@ -321,9 +340,30 @@ async def invoke(
         "session_key": session_key,
         "summary": None,
         "sub_agent_depth": None,
+        "mode": mode if mode in {"classic", "orchestrator"} else None,
+        "plan": None,
+        "todos": None,
+        "current_phase": None,
+        "phase_status": None,
+        "phase_index": None,
+        "capability_pack": capability_pack,
+        "capability_policy": capability_policy,
+        "dispatch_batches": None,
+        "task_results": None,
+        "structured_result": None,
+        "schema_validation": None,
         "token_stats": None,
         "clarification_request": None,
     }
+
+    if session_key is not None:
+        try:
+            import smartclaw.hooks.registry as _hook_registry
+            from smartclaw.hooks.events import SessionStartEvent
+
+            await _hook_registry.trigger("session:start", SessionStartEvent(session_key=session_key))
+        except Exception:
+            pass
 
     # P2A: trigger agent:start hook and emit agent.run diagnostic event
     try:
@@ -339,7 +379,14 @@ async def invoke(
         pass
     try:
         from smartclaw.observability import diagnostic_bus as _dbus
-        await _dbus.emit("agent.run", {"phase": "start", "session_key": session_key, "user_message": user_message[:256]})
+        await _dbus.emit(
+            "agent.run",
+            {
+                "phase": "start",
+                "session_key": session_key,
+                "user_message": user_message[:256],
+            },
+        )
     except Exception:
         pass
 
@@ -384,6 +431,15 @@ async def invoke(
         })
     except Exception:
         pass
+
+    if session_key is not None:
+        try:
+            import smartclaw.hooks.registry as _hook_registry
+            from smartclaw.hooks.events import SessionEndEvent
+
+            await _hook_registry.trigger("session:end", SessionEndEvent(session_key=session_key))
+        except Exception:
+            pass
 
     return result  # type: ignore[return-value]
 

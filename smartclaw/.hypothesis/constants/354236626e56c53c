@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/capabilities/registry.py
+# hypothesis_version: 6.148.8
+
+['Prompt guidance:', 'Result schema:', 'explicit_request', 'no_match', 'scenario_match']

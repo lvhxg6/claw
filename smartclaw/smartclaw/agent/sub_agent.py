@@ -10,11 +10,13 @@ Reference: PicoClaw ``pkg/agent/subturn.go``.
 from __future__ import annotations
 
 import asyncio
+import copy
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -133,12 +135,9 @@ class EphemeralStore:
         if prune_start >= prune_end:
             return
 
-        from langchain_core.messages import ToolMessage as _TM
-        import copy
-
         for i in range(prune_start, prune_end):
             msg = self._messages[i]
-            if isinstance(msg, _TM):
+            if isinstance(msg, ToolMessage):
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)
                 if len(content) > 800:
                     # Soft-trim: keep first 500 + last 300 chars
@@ -166,6 +165,7 @@ async def spawn_sub_agent(
     semaphore: asyncio.Semaphore | None = None,
     concurrency_timeout: float = 30.0,
     context_engine: Any | None = None,
+    graph_factory: Any | None = None,
 ) -> str:
     """Spawn a sub-agent to execute a delegated task.
 
@@ -209,20 +209,18 @@ async def spawn_sub_agent(
         try:
             async with asyncio.timeout(concurrency_timeout):
                 await semaphore.acquire()
-        except TimeoutError:
+        except TimeoutError as exc:
             raise ConcurrencyTimeoutError(
                 f"Timed out waiting for concurrency slot after {concurrency_timeout}s"
-            )
+            ) from exc
 
     try:
         # 3. ContextEngine: prepare_subagent_spawn hook
         if context_engine is not None:
-            try:
+            with suppress(Exception):
                 await context_engine.prepare_subagent_spawn(
                     config.task, {"model": config.model, "depth": parent_depth}
                 )
-            except Exception:
-                pass  # non-critical
 
         # 4. Build graph (lazy imports to avoid circular deps)
         from smartclaw.agent import graph as _graph_mod
@@ -243,7 +241,10 @@ async def spawn_sub_agent(
             max_depth=config.max_depth,
         )
 
-        graph = _graph_mod.build_graph(model_config, config.tools)
+        if graph_factory is not None:
+            graph = graph_factory.create(model_config, config.tools)
+        else:
+            graph = _graph_mod.build_graph(model_config, config.tools)
 
         # 4. Run with timeout
         try:
@@ -268,20 +269,16 @@ async def spawn_sub_agent(
             logger.info("sub_agent_complete", answer_len=len(final_answer))
             # ContextEngine: on_subagent_ended hook
             if context_engine is not None:
-                try:
+                with suppress(Exception):
                     await context_engine.on_subagent_ended(config.task, final_answer)
-                except Exception:
-                    pass
             return final_answer
 
         error = result.get("error")
         if error:
             logger.error("sub_agent_error", error=error)
             if context_engine is not None:
-                try:
+                with suppress(Exception):
                     await context_engine.on_subagent_ended(config.task, f"Error: {error}")
-                except Exception:
-                    pass
             return f"Error: {error}"
 
         return "Sub-agent completed without producing a final answer."
@@ -294,10 +291,8 @@ async def spawn_sub_agent(
         return f"Error: {error_msg}"
     finally:
         if semaphore is not None:
-            try:
+            with suppress(ValueError):
                 semaphore.release()
-            except ValueError:
-                pass  # Already released or never acquired
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +344,14 @@ class SpawnSubAgentTool(BaseTool):
         default=None,
         description="Parent Agent's ModelConfig for fallback inheritance",
     )
+    context_engine: Any | None = Field(
+        default=None,
+        description="Parent ContextEngine for sub-agent lifecycle hooks",
+    )
+    graph_factory: Any | None = Field(
+        default=None,
+        description="GraphFactory for consistent sub-agent graph construction",
+    )
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -380,6 +383,8 @@ class SpawnSubAgentTool(BaseTool):
                 parent_depth=self.parent_depth,
                 semaphore=self.semaphore,
                 concurrency_timeout=self.concurrency_timeout,
+                context_engine=self.context_engine,
+                graph_factory=self.graph_factory,
             )
             return result
         except DepthLimitExceededError as exc:

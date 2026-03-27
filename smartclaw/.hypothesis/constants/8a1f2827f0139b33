@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/capabilities/governance.py
+# hypothesis_version: 6.148.8
+
+['approval_message', 'approval_required', 'approve', 'cancel', 'concurrency_limits', 'empty_output', 'error', 'invalid_output_json', 'invalid_schema_json', 'max_schema_retries', 'max_task_retries', 'name', 'options', 'question', 'reason', 'result_format', 'result_schema', 'retry_on_error', 'schema_enforced', 'schema_not_enforced', 'text', 'valid', 'validated']

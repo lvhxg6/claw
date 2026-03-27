@@ -17,9 +17,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from smartclaw.agent.graph import build_graph, invoke
-from smartclaw.agent.state import AgentState
 from smartclaw.providers.config import ModelConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -86,7 +84,7 @@ class TestStatelessBehavior:
         mock_store = AsyncMock()
         mock_summarizer = AsyncMock()
         try:
-            result = await invoke(
+            await invoke(
                 graph,
                 "Hello",
                 session_key=None,
@@ -165,7 +163,7 @@ class TestMemoryLoading:
         mock_summarizer.maybe_summarize = AsyncMock(return_value=[])
 
         try:
-            result = await invoke(
+            await invoke(
                 graph,
                 "Hello",
                 session_key="sess-2",
@@ -336,3 +334,46 @@ class TestSummarizationTrigger:
             assert call_args[0][1] == updated_msgs
         finally:
             patcher.stop()
+
+
+class TestContextEngineLifecycle:
+    """ContextEngine lifecycle hooks are invoked by invoke()."""
+
+    @pytest.mark.asyncio
+    async def test_context_engine_bootstrap_and_after_turn_called(self) -> None:
+        """invoke bootstraps context engine and runs after_turn on completion."""
+        graph, patcher = _build_patched_graph("Context engine response")
+        mock_store = AsyncMock()
+        mock_store.get_history = AsyncMock(side_effect=[[], []])
+        mock_engine = AsyncMock()
+        mock_engine.assemble = AsyncMock(side_effect=lambda msgs, **kw: msgs)
+        mock_engine.after_turn = AsyncMock(return_value=[])
+
+        try:
+            await invoke(
+                graph,
+                "Hello context engine",
+                session_key="ctx-sess",
+                memory_store=mock_store,
+                context_engine=mock_engine,
+            )
+            mock_engine.bootstrap.assert_awaited_once_with("ctx-sess", system_prompt=None)
+            mock_engine.assemble.assert_awaited_once()
+            mock_engine.after_turn.assert_awaited_once()
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_session_hooks_emitted_when_session_key_present(self) -> None:
+        """invoke emits session:start and session:end hooks for session-scoped runs."""
+        graph, patcher = _build_patched_graph("Hook response")
+
+        with patch("smartclaw.hooks.registry.trigger", new_callable=AsyncMock) as mock_trigger:
+            try:
+                await invoke(graph, "Hello hooks", session_key="hook-sess")
+            finally:
+                patcher.stop()
+
+        hook_points = [call.args[0] for call in mock_trigger.await_args_list]
+        assert "session:start" in hook_points
+        assert "session:end" in hook_points

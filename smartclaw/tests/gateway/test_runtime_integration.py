@@ -10,15 +10,15 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from smartclaw.agent.mode_router import ModeDecision
 from smartclaw.agent.runtime import AgentRuntime
+from smartclaw.capabilities.models import CapabilityResolution
 from smartclaw.providers.config import ModelConfig
 from smartclaw.tools.registry import ToolRegistry
 from tests.gateway.conftest import make_test_client
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -122,6 +122,41 @@ class TestChatPassesRuntimeParams:
         finally:
             graph_module.invoke = original_invoke
 
+
+class TestCapabilityPackEndpoints:
+    """Verify gateway endpoints expose capability pack metadata for the UI."""
+
+    def test_list_capability_packs_returns_metadata(self):
+        client, _, _, _ = make_test_client()
+
+        with client:
+            runtime = client.app.state.runtime
+            pack = MagicMock()
+            pack.name = "security-governance"
+            pack.description = "Security governance workflow"
+            pack.scenario_types = ["inspection", "hardening"]
+            pack.preferred_mode = "orchestrator"
+            pack.task_profile = "multi_stage"
+            pack.approval_required = True
+            pack.schema_enforced = True
+            runtime.capability_registry.list_names.return_value = ["security-governance"]
+            runtime.capability_registry.get.return_value = pack
+
+            resp = client.get("/api/capability-packs")
+
+        assert resp.status_code == 200
+        assert resp.json() == [
+            {
+                "name": "security-governance",
+                "description": "Security governance workflow",
+                "scenario_types": ["inspection", "hardening"],
+                "preferred_mode": "orchestrator",
+                "task_profile": "multi_stage",
+                "approval_required": True,
+                "schema_enforced": True,
+            }
+        ]
+
     def test_chat_stream_passes_system_prompt_and_summarizer(self):
         import smartclaw.agent.graph as graph_module
         original_invoke = graph_module.invoke
@@ -138,5 +173,88 @@ class TestChatPassesRuntimeParams:
             assert "system_prompt" in call_kwargs.kwargs
             assert call_kwargs.kwargs["system_prompt"] is not None
             assert "summarizer" in call_kwargs.kwargs
+        finally:
+            graph_module.invoke = original_invoke
+
+    def test_chat_applies_capability_pack_prompt_and_graph_scope(self):
+        import smartclaw.agent.graph as graph_module
+        original_invoke = graph_module.invoke
+
+        try:
+            client, mock_invoke, _, _ = make_test_client()
+
+            with client:
+                runtime = client.app.state.runtime
+                runtime.resolve_capability_pack.return_value = CapabilityResolution(
+                    requested_name="security-governance",
+                    resolved_name="security-governance",
+                    reason="explicit_request",
+                    pack=MagicMock(
+                        preferred_mode="orchestrator",
+                        task_profile="multi_stage",
+                        scenario_types=["inspection"],
+                    ),
+                )
+                runtime.resolve_mode.return_value = ModeDecision(
+                    requested_mode="orchestrator",
+                    resolved_mode="orchestrator",
+                    reason="explicit_request",
+                    confidence=1.0,
+                )
+                runtime.compose_system_prompt.return_value = "Prompt with capability pack"
+
+                resp = client.post(
+                    "/api/chat",
+                    json={
+                        "message": "执行巡检",
+                        "capability_pack": "security-governance",
+                    },
+                )
+            assert resp.status_code == 200
+
+            runtime.create_request_graph.assert_called_once()
+            graph_kwargs = runtime.create_request_graph.call_args.kwargs
+            assert graph_kwargs["capability_pack"] == "security-governance"
+            call_kwargs = mock_invoke.call_args
+            assert call_kwargs.kwargs["system_prompt"] == "Prompt with capability pack"
+            assert call_kwargs.kwargs["mode"] == "orchestrator"
+        finally:
+            graph_module.invoke = original_invoke
+
+    def test_chat_requires_approval_for_governed_capability_pack(self):
+        import smartclaw.agent.graph as graph_module
+        original_invoke = graph_module.invoke
+
+        try:
+            client, mock_invoke, _, _ = make_test_client()
+
+            with client:
+                runtime = client.app.state.runtime
+                runtime.resolve_capability_pack.return_value = CapabilityResolution(
+                    requested_name="security-governance",
+                    resolved_name="security-governance",
+                    reason="explicit_request",
+                    pack=MagicMock(
+                        preferred_mode="orchestrator",
+                        task_profile="multi_stage",
+                        scenario_types=["inspection"],
+                    ),
+                )
+                runtime.build_capability_policy.return_value = {
+                    "approval_required": True,
+                    "approval_message": "Please approve governance execution",
+                }
+
+                resp = client.post(
+                    "/api/chat",
+                    json={
+                        "message": "执行巡检",
+                        "capability_pack": "security-governance",
+                    },
+                )
+            assert resp.status_code == 200
+            payload = resp.json()
+            assert payload["clarification"]["question"] == "Please approve governance execution"
+            mock_invoke.assert_not_called()
         finally:
             graph_module.invoke = original_invoke

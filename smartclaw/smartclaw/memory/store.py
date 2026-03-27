@@ -8,6 +8,7 @@ interface and ``jsonl.go`` implementation, using SQLite instead of JSONL.
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -104,11 +105,11 @@ class MemoryStore:
     ) -> None:
         """Append a simple text message (human or ai) to the session."""
         assert self._db is not None, "MemoryStore not initialized"
-        msg: BaseMessage
-        if role == "human" or role == "user":
-            msg = HumanMessage(content=content)
-        else:
-            msg = AIMessage(content=content)
+        msg: BaseMessage = (
+            HumanMessage(content=content)
+            if role == "human" or role == "user"
+            else AIMessage(content=content)
+        )
         await self._insert_message(session_key, msg)
 
     async def add_full_message(
@@ -281,6 +282,60 @@ class MemoryStore:
         await self._db.commit()
         logger.debug("session_config_set", session_key=session_key)
 
+    async def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return recent sessions with lightweight metadata for navigation UIs."""
+        assert self._db is not None, "MemoryStore not initialized"
+        capped_limit = max(1, min(int(limit), 200))
+        cursor = await self._db.execute(
+            """
+            WITH session_keys AS (
+                SELECT session_key FROM messages
+                UNION
+                SELECT session_key FROM summaries
+                UNION
+                SELECT session_key FROM session_config
+            )
+            SELECT
+                sk.session_key,
+                COALESCE(msg.message_count, 0) AS message_count,
+                CASE
+                    WHEN msg.last_message_at IS NULL THEN COALESCE(sum.updated_at, cfg.updated_at)
+                    WHEN sum.updated_at IS NULL THEN COALESCE(msg.last_message_at, cfg.updated_at)
+                    WHEN cfg.updated_at IS NULL THEN COALESCE(msg.last_message_at, sum.updated_at)
+                    ELSE MAX(msg.last_message_at, sum.updated_at, cfg.updated_at)
+                END AS last_activity_at,
+                COALESCE(sum.summary, '') AS summary,
+                cfg.model_override
+            FROM session_keys sk
+            LEFT JOIN (
+                SELECT session_key, COUNT(*) AS message_count, MAX(created_at) AS last_message_at
+                FROM messages
+                GROUP BY session_key
+            ) msg ON msg.session_key = sk.session_key
+            LEFT JOIN summaries sum ON sum.session_key = sk.session_key
+            LEFT JOIN session_config cfg ON cfg.session_key = sk.session_key
+            ORDER BY last_activity_at DESC, sk.session_key DESC
+            LIMIT ?
+            """,
+            (capped_limit,),
+        )
+        rows = await cursor.fetchall()
+        sessions: list[dict[str, Any]] = []
+        for row in rows:
+            session_key, message_count, updated_at, summary, model_override = row
+            title, preview = await self._get_session_title_and_preview(session_key)
+            sessions.append(
+                {
+                    "session_key": session_key,
+                    "title": title or session_key,
+                    "preview": preview or summary or "",
+                    "updated_at": updated_at,
+                    "message_count": int(message_count or 0),
+                    "model_override": model_override,
+                }
+            )
+        return sessions
+
     # ------------------------------------------------------------------
     # Cooldown State
     # ------------------------------------------------------------------
@@ -298,10 +353,8 @@ class MemoryStore:
             profile_id, error_count, cooldown_end_utc, last_failure_utc, fc_json = row
             failure_counts: dict[str, int] = {}
             if fc_json:
-                try:
+                with suppress(json.JSONDecodeError, TypeError):
                     failure_counts = json.loads(fc_json)
-                except (json.JSONDecodeError, TypeError):
-                    pass
             results.append({
                 "profile_id": profile_id,
                 "error_count": error_count,
@@ -358,3 +411,91 @@ class MemoryStore:
             (session_key, msg_json),
         )
         await self._db.commit()  # type: ignore[union-attr]
+
+    async def _get_session_title_and_preview(self, session_key: str) -> tuple[str, str]:
+        assert self._db is not None, "MemoryStore not initialized"
+        first_cursor = await self._db.execute(
+            """
+            SELECT message_json
+            FROM messages
+            WHERE session_key = ?
+            ORDER BY id ASC
+            LIMIT 20
+            """,
+            (session_key,),
+        )
+        first_rows = await first_cursor.fetchall()
+        title = ""
+        fallback_title = ""
+        for (raw_json,) in first_rows:
+            message_type, content = _extract_message_type_and_text(raw_json)
+            if not content:
+                continue
+            shortened = _shorten_text(content, 48)
+            if not fallback_title:
+                fallback_title = shortened
+            if message_type in {"human", "user"}:
+                title = shortened
+                break
+        if not title:
+            title = fallback_title
+
+        last_cursor = await self._db.execute(
+            """
+            SELECT message_json
+            FROM messages
+            WHERE session_key = ?
+            ORDER BY id DESC
+            LIMIT 20
+            """,
+            (session_key,),
+        )
+        last_rows = await last_cursor.fetchall()
+        preview = ""
+        fallback_preview = ""
+        for (raw_json,) in last_rows:
+            message_type, content = _extract_message_type_and_text(raw_json)
+            if not content:
+                continue
+            shortened = _shorten_text(content, 88)
+            if not fallback_preview:
+                fallback_preview = shortened
+            if message_type in {"human", "user", "ai", "assistant"}:
+                preview = shortened
+                break
+        if not preview:
+            preview = fallback_preview
+        return title, _shorten_text(preview, 88)
+
+
+def _extract_text_content(raw_json: str | None) -> str:
+    return _extract_message_type_and_text(raw_json)[1]
+
+
+def _extract_message_type_and_text(raw_json: str | None) -> tuple[str, str]:
+    if not raw_json:
+        return "", ""
+    try:
+        payload = json.loads(raw_json)
+    except (json.JSONDecodeError, TypeError):
+        return "", ""
+    message_type = str(payload.get("type", "")).strip().lower()
+    content = payload.get("data", {}).get("content")
+    if isinstance(content, str):
+        return message_type, content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+        return message_type, " ".join(parts).strip()
+    return message_type, ""
+
+
+def _shorten_text(text: str, limit: int) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: max(1, limit - 1)] + "…"

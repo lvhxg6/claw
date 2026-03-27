@@ -6,6 +6,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
+from contextlib import suppress
 from typing import Any
 
 import structlog
@@ -31,32 +32,64 @@ STREAM_HOOK_POINTS = [
 ]
 
 
-def _resolve_graph(request_body: ChatRequest, runtime: Any) -> Any:
-    """Return the graph to use for this request.
-
-    If request_body.model is None or empty, returns runtime.graph.
-    Otherwise validates the model ref and builds a temporary graph.
-
-    Raises:
-        ValueError: If the model reference is invalid.
-    """
-    model_str = request_body.model
-    if not model_str:
-        return runtime.graph
-
-    from smartclaw.agent.graph import build_graph
-    from smartclaw.providers.config import ModelConfig, parse_model_ref
-
-    # Validate — raises ValueError on bad format
-    parse_model_ref(model_str)
-
-    temp_config = ModelConfig(
-        primary=model_str,
-        fallbacks=runtime.model_config.fallbacks,
-        temperature=runtime.model_config.temperature,
-        max_tokens=runtime.model_config.max_tokens,
+def _resolve_execution(request_body: ChatRequest, runtime: Any) -> tuple[str, Any, str, str | None, dict | None]:
+    """Resolve execution mode and graph for this request."""
+    capability_resolution = runtime.resolve_capability_pack(
+        requested_name=request_body.capability_pack,
+        scenario_type=request_body.scenario_type,
     )
-    return build_graph(temp_config, runtime.tools)
+    scenario_type = request_body.scenario_type
+    task_profile = request_body.task_profile
+    preferred_mode = request_body.mode
+    if capability_resolution.pack is not None:
+        scenario_type = scenario_type or (
+            capability_resolution.pack.scenario_types[0]
+            if capability_resolution.pack.scenario_types
+            else None
+        )
+        task_profile = task_profile or capability_resolution.pack.task_profile
+        if preferred_mode in {None, "", "auto"} and capability_resolution.pack.preferred_mode:
+            preferred_mode = capability_resolution.pack.preferred_mode
+
+    decision = runtime.resolve_mode(
+        requested_mode=preferred_mode,
+        message=request_body.message,
+        scenario_type=scenario_type,
+        task_profile=task_profile,
+    )
+    graph = runtime.create_request_graph(
+        request_body.model or None,
+        mode=decision.resolved_mode,
+        capability_pack=capability_resolution.resolved_name,
+    )
+    system_prompt = runtime.compose_system_prompt(capability_pack=capability_resolution.resolved_name)
+    capability_policy = runtime.build_capability_policy(
+        capability_pack=capability_resolution.resolved_name
+    )
+    return (
+        decision.resolved_mode,
+        graph,
+        system_prompt,
+        capability_resolution.resolved_name,
+        capability_policy,
+    )
+
+
+def _build_approval_response(policy: dict | None, *, session_key: str) -> ChatResponse:
+    from smartclaw.capabilities.governance import build_approval_request
+
+    clarification = build_approval_request(policy)
+    return ChatResponse(
+        session_key=session_key,
+        response="",
+        iterations=0,
+        error=None,
+        token_stats=None,
+        clarification=ClarificationData(
+            question=clarification["question"],
+            options=clarification.get("options"),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -74,10 +107,8 @@ def _make_queue_handler(
     """
 
     async def handler(event: HookEvent) -> None:
-        try:
+        with suppress(asyncio.QueueFull):
             queue.put_nowait({**event.to_dict(), "hook_point": hook_point})
-        except asyncio.QueueFull:
-            pass  # discard — never block the agent loop
 
     return handler
 
@@ -210,13 +241,20 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
             pass  # fall back to default model
 
     try:
-        graph = _resolve_graph(request_body, runtime)
+        resolved_mode, graph, system_prompt, capability_pack, capability_policy = _resolve_execution(
+            request_body,
+            runtime,
+        )
     except ValueError as exc:
         runtime.decrement_requests()
         return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content={"error": str(exc)},
         )
+
+    if capability_policy and capability_policy.get("approval_required") and not request_body.approved:
+        runtime.decrement_requests()
+        return _build_approval_response(capability_policy, session_key=session_key)
 
     try:
         from smartclaw.agent.graph import invoke
@@ -227,9 +265,12 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
             max_iterations=request_body.max_iterations,
             session_key=session_key,
             memory_store=memory_store,
-            system_prompt=runtime.system_prompt,
+            system_prompt=system_prompt,
             summarizer=runtime.summarizer,
             context_engine=getattr(runtime, "context_engine", None),
+            mode=resolved_mode,
+            capability_pack=capability_pack,
+            capability_policy=capability_policy,
         )
         clarification = None
         cr = result.get("clarification_request")
@@ -267,13 +308,40 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
     runtime.increment_requests()
 
     try:
-        graph = _resolve_graph(request_body, runtime)
+        resolved_mode, graph, system_prompt, capability_pack, capability_policy = _resolve_execution(
+            request_body,
+            runtime,
+        )
     except ValueError as exc:
         runtime.decrement_requests()
         return JSONResponse(  # type: ignore[return-value]
             status_code=400,
             content={"error": str(exc)},
         )
+
+    if capability_policy and capability_policy.get("approval_required") and not request_body.approved:
+        async def approval_generator() -> AsyncGenerator[dict, None]:  # type: ignore[type-arg]
+            from smartclaw.capabilities.governance import build_approval_request
+
+            clarification = build_approval_request(capability_policy)
+            yield {
+                "event": "clarification",
+                "data": json.dumps(clarification, ensure_ascii=False),
+            }
+            yield {
+                "event": "done",
+                "data": json.dumps(
+                    {
+                        "session_key": session_key,
+                        "response": "",
+                        "iterations": 0,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+            runtime.decrement_requests()
+
+        return EventSourceResponse(approval_generator())
 
     async def event_generator() -> AsyncGenerator[dict, None]:  # type: ignore[type-arg]
         from smartclaw.agent.graph import invoke
@@ -297,9 +365,12 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     max_iterations=max_iterations,
                     session_key=session_key,
                     memory_store=memory_store,
-                    system_prompt=runtime.system_prompt,
+                    system_prompt=system_prompt,
                     summarizer=runtime.summarizer,
                     context_engine=getattr(runtime, "context_engine", None),
+                    mode=resolved_mode,
+                    capability_pack=capability_pack,
+                    capability_policy=capability_policy,
                 )
                 cr = result.get("clarification_request")
                 if cr:
@@ -343,9 +414,12 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     max_iterations=max_iterations,
                     session_key=session_key,
                     memory_store=memory_store,
-                    system_prompt=runtime.system_prompt,
+                    system_prompt=system_prompt,
                     summarizer=runtime.summarizer,
                     context_engine=getattr(runtime, "context_engine", None),
+                    mode=resolved_mode,
+                    capability_pack=capability_pack,
+                    capability_policy=capability_policy,
                 )
             )
 
@@ -356,7 +430,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     sse = _format_sse(evt)
                     if sse:
                         yield sse
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
 
             # Drain remaining events

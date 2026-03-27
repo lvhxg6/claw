@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from langchain_core.messages import message_to_dict
 
-from smartclaw.gateway.models import SessionConfigRequest, SessionHistoryResponse, SessionSummaryResponse
+from smartclaw.gateway.models import (
+    SessionConfigRequest,
+    SessionHistoryResponse,
+    SessionListItemData,
+    SessionSummaryResponse,
+)
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+@router.get("", response_model=list[SessionListItemData])
+async def list_sessions(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[SessionListItemData]:
+    """Return recent sessions for the workspace UI."""
+    memory_store = request.app.state.memory_store
+    if memory_store is None:
+        return []
+    try:
+        sessions = await memory_store.list_sessions(limit=limit)
+    except Exception:
+        return []
+    return [SessionListItemData(**item) for item in sessions]
 
 
 @router.get("/{session_key}/history", response_model=SessionHistoryResponse)

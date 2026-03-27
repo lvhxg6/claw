@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/capabilities/loader.py
+# hypothesis_version: 6.148.8
+
+['allowed_tools', 'approval_message', 'approval_required', 'builtin', 'capabilities.loader', 'concurrency_limits', 'denied_tools', 'description', 'global', 'manifest.yaml', 'max_schema_retries', 'max_task_retries', 'metadata', 'name', 'preferred_mode', 'prompt', 'prompt_file', 'result_format', 'result_schema', 'result_schema_file', 'retry_on_error', 'scenario_types', 'schema_enforced', 'task_profile', 'text', 'tool_groups', 'utf-8', 'version', 'workspace']

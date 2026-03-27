@@ -28,8 +28,6 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
     from smartclaw.agent.graph import invoke
     from smartclaw.agent.runtime import setup_agent_runtime
 
-    logger = get_logger("cli")
-
     # Apply --no-* flags to settings before runtime initialization
     if args.no_memory:
         settings.memory.enabled = False
@@ -40,7 +38,6 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
 
     runtime = await setup_agent_runtime(settings)
 
-    graph = runtime.graph
     memory_store = runtime.memory_store
     summarizer = runtime.summarizer
     prompt = runtime.system_prompt
@@ -126,6 +123,11 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
 
         try:
             print("  ⏳ thinking...", end="", flush=True)
+            decision = runtime.resolve_mode(
+                requested_mode=getattr(runtime, "mode", None),
+                message=user_input,
+            )
+            graph = runtime.create_graph(mode=decision.resolved_mode)
             result = await invoke(
                 graph, user_input,
                 max_iterations=settings.agent_defaults.max_tool_iterations,
@@ -133,14 +135,16 @@ async def _run_agent_loop(settings: SmartClawSettings, args: argparse.Namespace)
                 session_key=session_key,
                 memory_store=memory_store,
                 summarizer=summarizer,
+                context_engine=getattr(runtime, "context_engine", None),
+                mode=decision.resolved_mode,
             )
 
             # Show tool call trace
-            from langchain_core.messages import AIMessage as _AI, ToolMessage as _TM
+            from langchain_core.messages import AIMessage
             msgs = result.get("messages", [])
             tool_calls_shown = []
             for m in msgs:
-                if isinstance(m, _AI) and m.tool_calls:
+                if isinstance(m, AIMessage) and m.tool_calls:
                     for tc in m.tool_calls:
                         name = tc.get("name", "?")
                         args_str = str(tc.get("args", {}))

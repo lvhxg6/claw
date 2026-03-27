@@ -106,6 +106,14 @@ class ConfigSettings(BaseSettings):
     debounce_ms: int = Field(default=500, description="Debounce time in milliseconds")
 
 
+class CapabilityPackSettings(BaseSettings):
+    """Capability pack configuration."""
+
+    enabled: bool = Field(default=True, description="Enable capability pack loading")
+    workspace_dir: str = "{workspace}/capability_packs"
+    global_dir: str = "~/.smartclaw/capability_packs"
+
+
 class SubAgentSettings(BaseSettings):
     """Sub-agent configuration."""
 
@@ -161,6 +169,22 @@ class ObservabilitySettings(BaseSettings):
     redact_sensitive: bool = True
 
 
+class OrchestratorSettings(BaseSettings):
+    """Execution mode and orchestration settings."""
+
+    enabled: bool = True
+    mode: str = Field(default="auto", description="Execution mode: auto | classic | orchestrator")
+    plan_enabled: bool = Field(default=True, description="Enable explicit planning when orchestrator mode is active")
+    max_concurrent_workers: int = Field(default=4, description="Global concurrent worker cap")
+    max_batch_size: int = Field(default=4, description="Maximum tasks per dispatch batch")
+    max_phases: int = Field(default=8, description="Maximum orchestration phases")
+    enable_explicit_compaction: bool = Field(
+        default=True,
+        description="Allow explicit context compaction between phases",
+    )
+    enable_dispatch_policy: bool = Field(default=True, description="Enable dispatch policy checks")
+
+
 class SmartClawSettings(BaseSettings):
     """SmartClaw root configuration schema.
 
@@ -191,12 +215,14 @@ class SmartClawSettings(BaseSettings):
     skills: SkillsSettings = Field(default_factory=SkillsSettings)
     bootstrap: BootstrapSettings = Field(default_factory=BootstrapSettings)
     config: ConfigSettings = Field(default_factory=ConfigSettings)
+    capability_packs: CapabilityPackSettings = Field(default_factory=CapabilityPackSettings)
     sub_agent: SubAgentSettings = Field(default_factory=SubAgentSettings)
     multi_agent: MultiAgentSettings = Field(default_factory=MultiAgentSettings)
 
     # P2A fields
     gateway: GatewaySettings = Field(default_factory=GatewaySettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
 
     # L5 ContextEngine
     context_engine: str = Field(

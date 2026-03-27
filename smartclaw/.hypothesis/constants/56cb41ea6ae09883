@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/memory/index_manager.py
+# hypothesis_version: 6.148.8
+
+[0.0, 0.3, 0.7, 1.0, 2.0, 10.0, 60.0, 768, 1536, ',', '?', 'MemoryChunk', 'auto', 'bm25_only', 'bm25_search_failed', 'chunk_index_failed', 'chunks_deleted', 'chunks_indexed', 'embedding', 'index_manager_closed', 'memory.index_manager', 'model', 'nomic-embed-text', 'none', 'ollama', 'openai', 'prompt', 'test', 'vector_search_failed']

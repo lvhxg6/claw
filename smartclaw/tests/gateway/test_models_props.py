@@ -13,7 +13,6 @@ from pydantic import ValidationError
 
 from smartclaw.gateway.models import ChatRequest
 
-
 # ---------------------------------------------------------------------------
 # Property 1: Pydantic 请求校验拒绝无效输入
 # ---------------------------------------------------------------------------
@@ -49,6 +48,30 @@ def test_positive_max_iterations_accepted(max_iterations: int) -> None:
     """max_iterations >= 1 must be accepted."""
     req = ChatRequest(message="hello", max_iterations=max_iterations)
     assert req.max_iterations == max_iterations
+
+
+def test_valid_mode_accepted() -> None:
+    """Known execution modes should be accepted."""
+    req = ChatRequest(message="hello", mode="orchestrator")
+    assert req.mode == "orchestrator"
+
+
+def test_invalid_mode_rejected() -> None:
+    """Unknown execution modes should be rejected."""
+    with pytest.raises(ValidationError):
+        ChatRequest(message="hello", mode="invalid")
+
+
+def test_capability_pack_accepted() -> None:
+    """Capability pack name is an optional free-form request hint."""
+    req = ChatRequest(message="hello", capability_pack="security-governance")
+    assert req.capability_pack == "security-governance"
+
+
+def test_approved_flag_accepted() -> None:
+    """Explicit approval flag should be accepted."""
+    req = ChatRequest(message="hello", approved=True)
+    assert req.approved is True
 
 
 @settings(max_examples=100, deadline=None)

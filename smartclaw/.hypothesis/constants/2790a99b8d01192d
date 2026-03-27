@@ -1,0 +1,4 @@
+# file: /Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/orchestrator_graph.py
+# hypothesis_version: 6.148.8
+
+['batch_count', 'batch_id', 'blocked', 'capability_policy', 'completed', 'concurrency_limits', 'current_phase', 'dispatch', 'dispatch.created', 'dispatch_batches', 'error', 'execute', 'failed', 'final_answer', 'id', 'iteration', 'max_schema_retries', 'max_task_retries', 'messages', 'objective', 'parallel', 'phase', 'phase.ended', 'phase.started', 'phase_index', 'phase_status', 'plan', 'plan.created', 'plan.updated', 'planning', 'ready', 'ready_todo_ids', 'reason', 'result_count', 'result_schema', 'retry_on_error', 'retry_remaining', 'review', 'schema.validation', 'schema_enforced', 'schema_validation', 'skipped', 'spawn_sub_agent', 'status', 'structured_result', 'sub_agent_depth', 'summary', 'synthesize', 'task_results', 'todo_count', 'todo_id', 'todo_ids', 'todos', 'token_stats', 'valid']
