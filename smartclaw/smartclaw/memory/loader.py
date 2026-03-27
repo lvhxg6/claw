@@ -248,17 +248,117 @@ class MemoryLoader:
         return []
 
     def chunk_markdown(self, content: str, file_path: str) -> list[MemoryChunk]:
-        """Chunk Markdown content.
+        """Chunk Markdown content by tokens.
+        
+        Splits content into overlapping chunks based on token count.
+        Uses word-based approximation for token counting (1 word ≈ 1.3 tokens).
         
         Args:
             content: Markdown text content.
             file_path: Source file path.
             
         Returns:
-            List of MemoryChunk objects.
+            List of MemoryChunk objects with computed hashes and line tracking.
+            
+        Notes:
+            - Chunks are created with overlap to maintain context continuity
+            - Each chunk tracks its start and end line numbers (1-indexed)
+            - Hash is computed using SHA-256 (first 16 characters)
+            - embedding_input is set to the chunk text for vectorization
         """
-        # TODO: Implement in task 2.4
-        return []
+        if not content:
+            return []
+        
+        # Split content into lines for line number tracking
+        lines = content.split("\n")
+        
+        # Tokenize content using word-based approximation
+        # We'll track words with their line numbers
+        word_line_map: list[tuple[str, int]] = []  # (word, line_number)
+        
+        for line_idx, line in enumerate(lines):
+            line_num = line_idx + 1  # 1-indexed
+            words = line.split()
+            for word in words:
+                word_line_map.append((word, line_num))
+            # Add newline marker to preserve line structure
+            if line_idx < len(lines) - 1:
+                word_line_map.append(("\n", line_num))
+        
+        if not word_line_map:
+            # Content has no words (empty or whitespace only)
+            return []
+        
+        # Convert token counts to word counts (approximation: 1 word ≈ 1.3 tokens)
+        # So chunk_tokens=512 ≈ 394 words, chunk_overlap=64 ≈ 49 words
+        words_per_chunk = max(1, int(self._chunk_tokens / 1.3))
+        overlap_words = max(0, int(self._chunk_overlap / 1.3))
+        
+        chunks: list[MemoryChunk] = []
+        start_idx = 0
+        
+        while start_idx < len(word_line_map):
+            # Calculate end index for this chunk
+            end_idx = min(start_idx + words_per_chunk, len(word_line_map))
+            
+            # Extract words for this chunk
+            chunk_words = word_line_map[start_idx:end_idx]
+            
+            # Build chunk text
+            chunk_text_parts: list[str] = []
+            for word, _ in chunk_words:
+                if word == "\n":
+                    chunk_text_parts.append("\n")
+                else:
+                    if chunk_text_parts and chunk_text_parts[-1] != "\n":
+                        chunk_text_parts.append(" ")
+                    chunk_text_parts.append(word)
+            
+            chunk_text = "".join(chunk_text_parts).strip()
+            
+            if not chunk_text:
+                # Skip empty chunks
+                start_idx = end_idx
+                continue
+            
+            # Determine start and end line numbers
+            start_line = chunk_words[0][1]
+            end_line = chunk_words[-1][1]
+            
+            # Compute hash
+            chunk_hash = self.compute_hash(chunk_text)
+            
+            # Create chunk
+            chunk = MemoryChunk(
+                file_path=file_path,
+                start_line=start_line,
+                end_line=end_line,
+                text=chunk_text,
+                hash=chunk_hash,
+                embedding_input=chunk_text,
+            )
+            chunks.append(chunk)
+            
+            # Move to next chunk with overlap
+            if end_idx >= len(word_line_map):
+                break
+            
+            # Calculate next start position with overlap
+            step = words_per_chunk - overlap_words
+            if step <= 0:
+                step = 1  # Ensure progress
+            start_idx += step
+        
+        logger.debug(
+            "markdown_chunked",
+            file_path=file_path,
+            content_length=len(content),
+            chunk_count=len(chunks),
+            chunk_tokens=self._chunk_tokens,
+            chunk_overlap=self._chunk_overlap,
+        )
+        
+        return chunks
 
     def build_memory_context(self) -> str:
         """Build memory context string for system prompt injection.

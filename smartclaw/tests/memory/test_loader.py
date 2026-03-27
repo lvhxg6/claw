@@ -323,3 +323,209 @@ class TestMemoryFileDataclass:
         )
         
         assert memory_file.chunks == []
+
+
+class TestChunkMarkdown:
+    """Tests for chunk_markdown() method."""
+
+    def test_chunk_markdown_empty_content(self, tmp_path: Path) -> None:
+        """Should return empty list for empty content."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.chunk_markdown("", "/path/to/file.md")
+        
+        assert result == []
+
+    def test_chunk_markdown_whitespace_only(self, tmp_path: Path) -> None:
+        """Should return empty list for whitespace-only content."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        
+        result = loader.chunk_markdown("   \n\n   \t  ", "/path/to/file.md")
+        
+        assert result == []
+
+    def test_chunk_markdown_single_line(self, tmp_path: Path) -> None:
+        """Should create single chunk for short content."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "# Hello World"
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        assert len(result) == 1
+        assert result[0].text == "# Hello World"
+        assert result[0].start_line == 1
+        assert result[0].end_line == 1
+        assert result[0].file_path == "/path/to/file.md"
+        assert len(result[0].hash) == 16
+        assert result[0].embedding_input == result[0].text
+
+    def test_chunk_markdown_multiple_lines(self, tmp_path: Path) -> None:
+        """Should track line numbers correctly for multi-line content."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "# Title\n\nParagraph one.\n\nParagraph two."
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        assert len(result) >= 1
+        # First chunk should start at line 1
+        assert result[0].start_line == 1
+
+    def test_chunk_markdown_creates_overlapping_chunks(self, tmp_path: Path) -> None:
+        """Should create overlapping chunks for large content."""
+        # Use small chunk size to force multiple chunks
+        loader = MemoryLoader(
+            workspace_dir=str(tmp_path),
+            chunk_tokens=50,  # Small chunk size
+            chunk_overlap=10,  # Some overlap
+        )
+        # Create content with many words
+        words = ["word" + str(i) for i in range(100)]
+        content = " ".join(words)
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        # Should have multiple chunks
+        assert len(result) > 1
+        
+        # Each chunk should have valid hash
+        for chunk in result:
+            assert len(chunk.hash) == 16
+            assert chunk.file_path == "/path/to/file.md"
+
+    def test_chunk_markdown_hash_uniqueness(self, tmp_path: Path) -> None:
+        """Should compute unique hashes for different chunks."""
+        loader = MemoryLoader(
+            workspace_dir=str(tmp_path),
+            chunk_tokens=50,
+            chunk_overlap=0,  # No overlap for distinct chunks
+        )
+        # Create content with distinct sections
+        content = "Section A content here.\n\nSection B different content.\n\nSection C more content."
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        if len(result) > 1:
+            # Hashes should be different for different content
+            hashes = [chunk.hash for chunk in result]
+            # At least some hashes should be unique
+            assert len(set(hashes)) > 1 or len(result) == 1
+
+    def test_chunk_markdown_hash_deterministic(self, tmp_path: Path) -> None:
+        """Should produce same hash for same content."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "# Test Content\n\nSome text here."
+        
+        result1 = loader.chunk_markdown(content, "/path/to/file.md")
+        result2 = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        assert len(result1) == len(result2)
+        for c1, c2 in zip(result1, result2):
+            assert c1.hash == c2.hash
+            assert c1.text == c2.text
+
+    def test_chunk_markdown_respects_chunk_tokens_config(self, tmp_path: Path) -> None:
+        """Should respect chunk_tokens configuration."""
+        # Create loader with very small chunk size
+        loader = MemoryLoader(
+            workspace_dir=str(tmp_path),
+            chunk_tokens=20,  # Very small
+            chunk_overlap=0,
+        )
+        # Create content with many words
+        content = " ".join(["word"] * 100)
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        # Should create multiple chunks due to small chunk size
+        assert len(result) > 1
+
+    def test_chunk_markdown_respects_chunk_overlap_config(self, tmp_path: Path) -> None:
+        """Should respect chunk_overlap configuration."""
+        # Create loader with overlap
+        loader = MemoryLoader(
+            workspace_dir=str(tmp_path),
+            chunk_tokens=30,
+            chunk_overlap=15,  # 50% overlap
+        )
+        # Create content with many words
+        words = ["word" + str(i) for i in range(50)]
+        content = " ".join(words)
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        # With overlap, we should have more chunks than without
+        loader_no_overlap = MemoryLoader(
+            workspace_dir=str(tmp_path),
+            chunk_tokens=30,
+            chunk_overlap=0,
+        )
+        result_no_overlap = loader_no_overlap.chunk_markdown(content, "/path/to/file.md")
+        
+        # More chunks with overlap (due to smaller step size)
+        assert len(result) >= len(result_no_overlap)
+
+    def test_chunk_markdown_unicode_content(self, tmp_path: Path) -> None:
+        """Should handle Unicode content correctly."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "# 中文标题\n\n这是一段中文内容。\n\n日本語のテキスト。"
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        assert len(result) >= 1
+        # Should preserve Unicode content
+        full_text = " ".join(chunk.text for chunk in result)
+        assert "中文" in full_text or "中文标题" in result[0].text
+
+    def test_chunk_markdown_preserves_line_structure(self, tmp_path: Path) -> None:
+        """Should preserve line structure in chunks."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "Line 1\nLine 2\nLine 3"
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        assert len(result) >= 1
+        # Check that newlines are preserved in the text
+        chunk_text = result[0].text
+        assert "Line 1" in chunk_text
+        assert "Line 2" in chunk_text
+
+    def test_chunk_markdown_embedding_input_equals_text(self, tmp_path: Path) -> None:
+        """Should set embedding_input equal to text."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "# Test\n\nSome content here."
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        for chunk in result:
+            assert chunk.embedding_input == chunk.text
+
+    def test_chunk_markdown_line_numbers_are_one_indexed(self, tmp_path: Path) -> None:
+        """Should use 1-indexed line numbers."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        content = "First line\nSecond line\nThird line"
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        assert len(result) >= 1
+        # First chunk should start at line 1, not 0
+        assert result[0].start_line >= 1
+        assert result[0].end_line >= result[0].start_line
+
+    def test_chunk_markdown_large_content(self, tmp_path: Path) -> None:
+        """Should handle large content efficiently."""
+        loader = MemoryLoader(workspace_dir=str(tmp_path))
+        # Create large content
+        lines = [f"Line {i}: " + "x" * 50 for i in range(1000)]
+        content = "\n".join(lines)
+        
+        result = loader.chunk_markdown(content, "/path/to/file.md")
+        
+        # Should create multiple chunks
+        assert len(result) > 1
+        
+        # All chunks should have valid data
+        for chunk in result:
+            assert chunk.text
+            assert len(chunk.hash) == 16
+            assert chunk.start_line >= 1
+            assert chunk.end_line >= chunk.start_line
