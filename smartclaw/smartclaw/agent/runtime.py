@@ -77,6 +77,9 @@ class AgentRuntime:
     mcp_manager: Any | None  # MCPManager | None
     model_config: ModelConfig
     context_engine: Any | None = None  # ContextEngine | None
+    skills_watcher: Any | None = None  # SkillsWatcher | None
+    memory_loader: Any | None = None  # MemoryLoader | None
+    bootstrap_loader: Any | None = None  # BootstrapLoader | None
     _active_requests: int = 0  # Track active requests for model switching
     _lock: asyncio.Lock | None = None  # Lock for thread-safe model switching
 
@@ -158,6 +161,12 @@ class AgentRuntime:
 
     async def close(self) -> None:
         """Release all resources. Never propagates exceptions."""
+        # Stop SkillsWatcher first
+        if self.skills_watcher is not None:
+            try:
+                self.skills_watcher.stop()
+            except Exception:
+                logger.error("skills_watcher_stop_failed", exc_info=True)
         if self.context_engine is not None:
             try:
                 await self.context_engine.dispose()
@@ -186,11 +195,14 @@ async def setup_agent_runtime(
         1. System tools (ToolRegistry)
         2. MCP tools (if enabled)
         3. Skills (if enabled)
+        3.1 SkillsWatcher (if hot_reload enabled)
         4. Sub-Agent tool (if enabled)
-        5. System prompt (with skills_section)
-        6. MemoryStore (if enabled)
-        7. AutoSummarizer (if enabled and memory available)
-        8. Build LangGraph
+        5. BootstrapLoader (if enabled)
+        6. MemoryLoader (if enabled)
+        7. System prompt (with bootstrap, memory, skills)
+        8. MemoryStore (if enabled)
+        9. AutoSummarizer (if enabled and memory available)
+        10. Build LangGraph
 
     Each step is wrapped in try/except — logs warning and continues on failure.
     """
@@ -224,6 +236,7 @@ async def setup_agent_runtime(
 
     # 3. Skills
     skills_summary = ""
+    skills_watcher = None
     if settings.skills.enabled:
         try:
             from smartclaw.skills.loader import SkillsLoader
@@ -236,6 +249,26 @@ async def setup_agent_runtime(
             skills_summary = loader.build_skills_summary()
             if skills_summary:
                 logger.info("skills_loaded", count=len(skills_reg.list_skills()))
+
+            # 3.1 SkillsWatcher (hot reload)
+            if getattr(settings.skills, "hot_reload", False):
+                try:
+                    from smartclaw.skills.watcher import SkillsWatcher
+
+                    def on_skills_reload():
+                        skills_reg.load_and_register_all()
+
+                    skills_watcher = SkillsWatcher(
+                        workspace_dir=ws_dir,
+                        global_dir=settings.skills.global_dir,
+                        debounce_ms=getattr(settings.skills, "debounce_ms", 250),
+                        on_reload=on_skills_reload,
+                        enabled=True,
+                    )
+                    skills_watcher.start()
+                    logger.info("skills_watcher_started")
+                except Exception as exc:
+                    logger.warning("skills_watcher_init_failed", error=str(exc))
         except Exception as exc:
             logger.warning("skills_load_failed", error=str(exc))
 
@@ -257,10 +290,70 @@ async def setup_agent_runtime(
         except Exception as exc:
             logger.warning("sub_agent_setup_failed", error=str(exc))
 
-    # 5. System prompt
-    system_prompt = SYSTEM_PROMPT.format(
+    # 5. BootstrapLoader
+    bootstrap_loader = None
+    soul_content = ""
+    user_content = ""
+    if getattr(settings, "bootstrap", None) and getattr(settings.bootstrap, "enabled", True):
+        try:
+            from smartclaw.bootstrap.loader import BootstrapLoader
+
+            global_dir = getattr(settings.bootstrap, "global_dir", "~/.smartclaw")
+            bootstrap_loader = BootstrapLoader(
+                workspace_dir=workspace,
+                global_dir=global_dir,
+                enabled=True,
+            )
+            bootstrap_loader.load_all()
+            soul_content = bootstrap_loader.get_soul_content()
+            user_content = bootstrap_loader.get_user_content()
+            if soul_content or user_content:
+                logger.info("bootstrap_loaded", has_soul=bool(soul_content), has_user=bool(user_content))
+        except Exception as exc:
+            logger.warning("bootstrap_load_failed", error=str(exc))
+
+    # 6. MemoryLoader
+    memory_loader = None
+    memory_context = ""
+    if settings.memory.enabled and getattr(settings.memory, "memory_file_enabled", True):
+        try:
+            from smartclaw.memory.loader import MemoryLoader
+
+            memory_loader = MemoryLoader(
+                workspace_dir=workspace,
+                chunk_tokens=getattr(settings.memory, "chunk_tokens", 512),
+                chunk_overlap=getattr(settings.memory, "chunk_overlap", 64),
+                enabled=True,
+            )
+            memory_context = memory_loader.build_memory_context()
+            if memory_context:
+                logger.info("memory_loaded", context_length=len(memory_context))
+        except Exception as exc:
+            logger.warning("memory_load_failed", error=str(exc))
+
+    # 7. System prompt (with bootstrap, memory, skills)
+    # Build system prompt with proper ordering:
+    # 1. SOUL.md content (if exists) - highest priority
+    # 2. Default SYSTEM_PROMPT
+    # 3. Memory context (MEMORY.md)
+    # 4. User context (USER.md)
+    # 5. Skills section
+    prompt_parts = []
+    
+    if soul_content:
+        prompt_parts.append(soul_content)
+    
+    prompt_parts.append(SYSTEM_PROMPT.format(
         skills_section=f"\n\nAvailable skills:\n{skills_summary}" if skills_summary else ""
-    )
+    ))
+    
+    if memory_context:
+        prompt_parts.append(f"\n\n## Long-term Memory\n{memory_context}")
+    
+    if user_content:
+        prompt_parts.append(f"\n\n## User Context\n{user_content}")
+    
+    system_prompt = "\n".join(prompt_parts)
 
     # 6. MemoryStore
     memory_store = None
@@ -331,4 +424,7 @@ async def setup_agent_runtime(
         mcp_manager=mcp_manager,
         model_config=settings.model,
         context_engine=context_engine,
+        skills_watcher=skills_watcher,
+        memory_loader=memory_loader,
+        bootstrap_loader=bootstrap_loader,
     )
