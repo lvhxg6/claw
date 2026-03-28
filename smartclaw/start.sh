@@ -38,11 +38,14 @@ case "$MODE" in
         echo "Swagger: http://localhost:8000/docs"
         echo "================================"
         echo ""
+        # 使用用户目录存储PID文件，避免/tmp安全风险
+        PIDFILE="${HOME}/.smartclaw/smartclaw.pid"
+        mkdir -p "${HOME}/.smartclaw"
         uv run python -m smartclaw.serve &
-        echo $! > /tmp/smartclaw.pid
-        echo "PID:     $(cat /tmp/smartclaw.pid)"
+        echo $! > "$PIDFILE"
+        echo "PID:     $(cat "$PIDFILE")"
         wait
-        rm -f /tmp/smartclaw.pid
+        rm -f "${HOME}/.smartclaw/smartclaw.pid"
         ;;
     cli)
         echo "模式:    交互式 CLI"

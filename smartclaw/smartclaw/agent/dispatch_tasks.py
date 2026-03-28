@@ -35,6 +35,7 @@ class DispatchTasks:
         retry_on_error: bool = True,
         concurrency_limits: dict[str, int] | None = None,
         skill_context_provider: Any | None = None,
+        session_key: str | None = None,
     ) -> None:
         self._spawn_tool = spawn_tool
         self._max_concurrent_workers = max(1, max_concurrent_workers)
@@ -45,6 +46,7 @@ class DispatchTasks:
             for group, limit in (concurrency_limits or {}).items()
         }
         self._skill_context_provider = skill_context_provider
+        self._session_key = session_key
 
     @property
     def enabled(self) -> bool:
@@ -99,6 +101,7 @@ class DispatchTasks:
         await _emit_diagnostic(
             "dispatch.batch_started",
             {
+                "session_key": self._session_key,
                 "batch_id": batch.get("batch_id"),
                 "parallel": bool(batch.get("parallel")),
                 "todo_ids": todo_ids,
@@ -136,6 +139,7 @@ class DispatchTasks:
             await _emit_diagnostic(
                 "subagent.spawned",
                 {
+                    "session_key": self._session_key,
                     "todo_id": todo_id,
                     "step_id": todo_step_identifier(todo),
                     "todo_title": str(todo.get("title", todo_id)),
@@ -172,6 +176,7 @@ class DispatchTasks:
                 await _emit_diagnostic(
                     "subagent.retry_scheduled",
                     {
+                        "session_key": self._session_key,
                         "todo_id": todo_id,
                         "step_id": todo_step_identifier(todo),
                         "todo_title": str(todo.get("title", todo_id)),
@@ -185,6 +190,7 @@ class DispatchTasks:
             await _emit_diagnostic(
                 "subagent.completed",
                 {
+                    "session_key": self._session_key,
                     "todo_id": todo_id,
                     "step_id": todo_step_identifier(todo),
                     "todo_title": str(todo.get("title", todo_id)),
@@ -220,6 +226,7 @@ class DispatchTasks:
         await _emit_diagnostic(
             "dispatch.batch_ended",
             {
+                "session_key": self._session_key,
                 "batch_id": batch.get("batch_id"),
                 "parallel": bool(batch.get("parallel")),
                 "phase_index": phase_index,

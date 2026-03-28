@@ -204,8 +204,24 @@ class PlanManager:
             if todo_id in selected and updated["status"] in {"ready", "pending", "in_progress", "pending_approval"}:
                 updated["status"] = "cancelled"
             depends_on = [str(dep_id) for dep_id in updated.get("depends_on", [])]
+            original_depends_on = [
+                str(dep_id)
+                for dep_id in updated.get("original_depends_on", updated.get("depends_on", []))
+                if str(dep_id)
+            ]
+            if original_depends_on:
+                updated["original_depends_on"] = list(original_depends_on)
             if depends_on:
+                removed = [dep_id for dep_id in depends_on if dep_id in selected]
                 updated["depends_on"] = [dep_id for dep_id in depends_on if dep_id not in selected]
+                if removed:
+                    skipped = {
+                        str(dep_id)
+                        for dep_id in updated.get("skipped_depends_on", [])
+                        if str(dep_id)
+                    }
+                    skipped.update(removed)
+                    updated["skipped_depends_on"] = sorted(skipped)
             updated_todos.append(updated)  # type: ignore[arg-type]
         updated_plan = dict(plan)
         updated_plan["todos"] = updated_todos
@@ -376,6 +392,8 @@ class PlanManager:
             "status": "pending" if depends_on else "ready",
             "parallelizable": parallelizable,
             "depends_on": depends_on,
+            "original_depends_on": list(depends_on),
+            "skipped_depends_on": [],
             "resolved_inputs": resolved_inputs or {},
             "consumes_artifacts": consumes_artifacts or [],
             "execution_mode": execution_mode,
@@ -451,6 +469,7 @@ class PlanManager:
                         planned_step_ids=planned_step_ids,
                     ),
                     artifacts=artifacts,
+                    current_plan=current_plan,
                 )
             )
         return todos
@@ -462,10 +481,15 @@ class PlanManager:
         title: str,
         depends_on: list[str],
         artifacts: list[dict[str, Any]] | None,
+        current_plan: TodoPlan | None = None,
     ) -> TodoItem:
         step = (self._step_registry.get(step_id) or {}) if self._step_registry is not None else {}
         consumes_artifacts = (
-            self._step_registry.artifact_ids_for_step(step_id, artifacts)
+            self._step_registry.artifact_ids_for_step(
+                step_id,
+                artifacts,
+                plan_todos=list((current_plan or {}).get("todos", [])),
+            )
             if self._step_registry is not None
             else []
         )

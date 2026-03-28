@@ -511,6 +511,8 @@ class TestPlanManager:
                     "status": "completed",
                     "parallelizable": True,
                     "depends_on": [],
+                    "original_depends_on": [],
+                    "skipped_depends_on": [],
                     "resolved_inputs": {},
                     "consumes_artifacts": [],
                     "execution_mode": "subagent",
@@ -524,6 +526,8 @@ class TestPlanManager:
                     "status": "pending_approval",
                     "parallelizable": False,
                     "depends_on": ["inspect"],
+                    "original_depends_on": ["inspect"],
+                    "skipped_depends_on": [],
                     "resolved_inputs": {"artifact_ids": ["art_001"]},
                     "consumes_artifacts": ["art_001"],
                     "execution_mode": "subagent",
@@ -537,6 +541,8 @@ class TestPlanManager:
                     "status": "pending",
                     "parallelizable": False,
                     "depends_on": ["inspect", "remediate"],
+                    "original_depends_on": ["inspect", "remediate"],
+                    "skipped_depends_on": [],
                     "resolved_inputs": {},
                     "consumes_artifacts": ["art_001"],
                     "execution_mode": "subagent",
@@ -552,6 +558,8 @@ class TestPlanManager:
         report = next(todo for todo in updated["todos"] if todo["todo_id"] == "report")
         assert statuses == {"inspect": "completed", "remediate": "cancelled", "report": "ready"}
         assert report["depends_on"] == ["inspect"]
+        assert report["original_depends_on"] == ["inspect", "remediate"]
+        assert report["skipped_depends_on"] == ["remediate"]
 
     def test_registry_filtered_plan_respects_capability_pack_steps(self, tmp_path) -> None:
         steps_dir = tmp_path / "steps"
@@ -855,6 +863,183 @@ class TestPlanManager:
         assert plan["todos"][0]["consumes_artifacts"] == ["art_001"]
         assert plan["todos"][0]["resolved_inputs"] == {"artifact_ids": ["art_001"]}
         assert plan["todos"][0]["approval_required"] is True
+
+    def test_registry_replan_scopes_report_artifacts_to_current_plan_lineage(self, tmp_path) -> None:
+        steps_dir = tmp_path / "steps"
+        steps_dir.mkdir(parents=True)
+        (steps_dir / "inspect.yaml").write_text(
+            "\n".join(
+                [
+                    "id: inspect",
+                    "domain: security",
+                    "description: 对目标执行检查任务",
+                    "outputs:",
+                    "  - inspection_result",
+                    "can_parallel: true",
+                    "risk_level: low",
+                    "completion_signal: inspection_result_ready",
+                    "side_effect_level: read_only",
+                    "kind: inspection",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (steps_dir / "remediation_plan.yaml").write_text(
+            "\n".join(
+                [
+                    "id: remediation_plan",
+                    "domain: security",
+                    "description: 生成整改方案",
+                    "consumes_artifact_types:",
+                    "  - inspection_result",
+                    "outputs:",
+                    "  - remediation_plan_result",
+                    "can_parallel: false",
+                    "risk_level: low",
+                    "completion_signal: remediation_plan_ready",
+                    "side_effect_level: read_only",
+                    "kind: remediation",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (steps_dir / "remediation_apply.yaml").write_text(
+            "\n".join(
+                [
+                    "id: remediation_apply",
+                    "domain: security",
+                    "description: 执行修复",
+                    "consumes_artifact_types:",
+                    "  - remediation_plan_result",
+                    "outputs:",
+                    "  - remediation_apply_result",
+                    "can_parallel: false",
+                    "risk_level: high",
+                    "completion_signal: remediation_apply_ready",
+                    "side_effect_level: write",
+                    "kind: remediation_apply",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (steps_dir / "report.yaml").write_text(
+            "\n".join(
+                [
+                    "id: report",
+                    "domain: security",
+                    "description: 输出报告",
+                    "consumes_artifact_types:",
+                    "  - inspection_result",
+                    "  - remediation_plan_result",
+                    "  - remediation_apply_result",
+                    "outputs:",
+                    "  - report_result",
+                    "can_parallel: false",
+                    "risk_level: low",
+                    "completion_signal: report_ready",
+                    "side_effect_level: read_only",
+                    "kind: report",
+                    "plan_role: terminal",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        step_registry = StepRegistry(StepRegistryLoader(workspace_dir=str(steps_dir), global_dir=str(tmp_path / "none")))
+        step_registry.load_all()
+
+        capability_registry = CapabilityPackRegistry.__new__(CapabilityPackRegistry)
+        capability_registry._loader = None  # type: ignore[attr-defined]
+        capability_registry._packs = {
+            "security-governance": CapabilityPackDefinition(
+                name="security-governance",
+                description="security",
+                allowed_steps=["inspect", "remediation_plan", "remediation_apply", "report"],
+                preferred_steps=["inspect", "remediation_plan", "remediation_apply", "report"],
+            )
+        }
+
+        manager = PlanManager(
+            step_registry=step_registry,
+            capability_registry=capability_registry,
+            capability_pack="security-governance",
+        )
+        from langchain_core.messages import HumanMessage
+
+        plan = manager.replan(
+            [HumanMessage(content="输出最终报告")],
+            artifacts=[
+                {
+                    "artifact_id": "art_inspect_current",
+                    "artifact_type": "inspection_result",
+                    "status": "ready",
+                    "metadata": {"todo_id": "inspect"},
+                },
+                {
+                    "artifact_id": "art_plan_current",
+                    "artifact_type": "remediation_plan_result",
+                    "status": "ready",
+                    "metadata": {"todo_id": "remediation_plan"},
+                },
+                {
+                    "artifact_id": "art_apply_old",
+                    "artifact_type": "remediation_apply_result",
+                    "status": "ready",
+                    "metadata": {"todo_id": "remediation_apply"},
+                },
+            ],
+            current_plan={
+                "plan_version": "v1",
+                "objective": "先做安全检查，再生成整改方案，然后执行修复，最后输出报告",
+                "strategy": "rule_based_fallback",
+                "missing_inputs": [],
+                "reasoning_summary": "",
+                "todos": [
+                    {
+                        "todo_id": "inspect",
+                        "step_id": "inspect",
+                        "title": "执行安全检查",
+                        "kind": "inspection",
+                        "status": "completed",
+                        "parallelizable": True,
+                        "depends_on": [],
+                        "resolved_inputs": {},
+                        "consumes_artifacts": [],
+                        "execution_mode": "subagent",
+                        "approval_required": False,
+                    },
+                    {
+                        "todo_id": "remediation_plan",
+                        "step_id": "remediation_plan",
+                        "title": "生成整改方案",
+                        "kind": "remediation",
+                        "status": "completed",
+                        "parallelizable": False,
+                        "depends_on": ["inspect"],
+                        "resolved_inputs": {},
+                        "consumes_artifacts": ["art_inspect_current"],
+                        "execution_mode": "subagent",
+                        "approval_required": False,
+                    },
+                    {
+                        "todo_id": "remediation_apply",
+                        "step_id": "remediation_apply",
+                        "title": "执行修复",
+                        "kind": "remediation_apply",
+                        "status": "cancelled",
+                        "parallelizable": False,
+                        "depends_on": ["remediation_plan"],
+                        "resolved_inputs": {},
+                        "consumes_artifacts": ["art_plan_current"],
+                        "execution_mode": "subagent",
+                        "approval_required": True,
+                    },
+                ],
+            },
+        )
+
+        assert [todo["todo_id"] for todo in plan["todos"]] == ["report"]
+        assert plan["todos"][0]["consumes_artifacts"] == ["art_inspect_current", "art_plan_current"]
+        assert "art_apply_old" not in plan["todos"][0]["consumes_artifacts"]
 
 
 class TestDispatchPolicy:

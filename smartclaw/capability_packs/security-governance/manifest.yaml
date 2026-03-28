@@ -15,12 +15,14 @@ approval_message: 请确认是否允许继续执行整改或加固类步骤。
 
 allowed_steps:
   - inspect
+  - dependency_audit
   - remediation_plan
   - remediation_apply
   - report
 
 preferred_steps:
   - inspect
+  - dependency_audit
   - remediation_plan
   - remediation_apply
   - report
@@ -32,6 +34,7 @@ retry_on_error: true
 
 concurrency_limits:
   inspection: 2
+  dependency_audit: 2
   remediation_plan: 1
   remediation_apply: 1
   report: 1

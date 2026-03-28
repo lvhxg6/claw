@@ -258,6 +258,7 @@ class LLMPlanner:
                 seen_todo_ids=seen_todo_ids,
                 allowed_dependency_ids=permitted_dependency_ids,
                 artifacts=artifacts or [],
+                current_plan=current_plan,
             )
             if normalized is None:
                 return None
@@ -449,6 +450,7 @@ class LLMPlanner:
         seen_todo_ids: set[str],
         allowed_dependency_ids: set[str],
         artifacts: list[dict[str, Any]],
+        current_plan: TodoPlan | None,
     ) -> TodoItem | None:
         if not isinstance(raw_todo, dict):
             return None
@@ -480,7 +482,11 @@ class LLMPlanner:
             if str(item) and str(item) in ready_artifact_ids
         ]
         if not consumes_artifacts and self._step_registry is not None:
-            consumes_artifacts = self._step_registry.artifact_ids_for_step(step_id, artifacts)
+            consumes_artifacts = self._step_registry.artifact_ids_for_step(
+                step_id,
+                artifacts,
+                plan_todos=list((current_plan or {}).get("todos", [])),
+            )
         resolved_inputs = raw_todo.get("resolved_inputs", {})
         if not isinstance(resolved_inputs, dict):
             resolved_inputs = {}
@@ -513,6 +519,8 @@ class LLMPlanner:
             "status": status,  # type: ignore[typeddict-item]
             "parallelizable": bool(raw_todo.get("parallelizable", step_map[step_id].get("can_parallel", False))),
             "depends_on": depends_on,
+            "original_depends_on": list(depends_on),
+            "skipped_depends_on": [str(item) for item in raw_todo.get("skipped_depends_on", []) if str(item)],
             "resolved_inputs": resolved_inputs,
             "consumes_artifacts": consumes_artifacts,
             "execution_mode": str(raw_todo.get("execution_mode", "subagent") or "subagent"),  # type: ignore[typeddict-item]

@@ -94,6 +94,12 @@ def build_orchestrator_graph(
         ]
     )
 
+    async def _emit_session_diagnostic(event_name: str, payload: dict[str, Any]) -> None:
+        merged_payload = dict(payload)
+        if session_key and "session_key" not in merged_payload:
+            merged_payload["session_key"] = session_key
+        await _emit_diagnostic(event_name, merged_payload)
+
     def _load_skill_context(skill_name: str) -> str:
         if skills_loader is None or not skill_name:
             return ""
@@ -110,7 +116,7 @@ def build_orchestrator_graph(
             step_registry=step_registry,
             artifact_store=artifact_store,
             session_key=session_key,
-            emit_diagnostic=_emit_diagnostic,
+            emit_diagnostic=_emit_session_diagnostic,
             serialize_todos=_serialize_todos,
             serialize_batches=_serialize_batches,
         )
@@ -214,6 +220,7 @@ def build_orchestrator_graph(
             retry_on_error=bool(capability_policy.get("retry_on_error", True)),
             concurrency_limits=dict(capability_policy.get("concurrency_limits", {}) or {}),
             skill_context_provider=_load_skill_context,
+            session_key=session_key,
         )
 
         phase_results: list[dict[str, Any]] = []
@@ -337,7 +344,7 @@ def build_orchestrator_graph(
         result = await classic_graph.ainvoke({**state, "messages": messages})
         final_answer = result.get("final_answer")
         structured_result, validation = validate_structured_output(final_answer, capability_policy)
-        await _emit_diagnostic(
+        await _emit_session_diagnostic(
             "schema.validation",
             {
                 "phase_index": state.get("phase_index") or 0,
@@ -360,7 +367,7 @@ def build_orchestrator_graph(
             result = await classic_graph.ainvoke({**state, "messages": retry_messages})
             final_answer = result.get("final_answer")
             structured_result, validation = validate_structured_output(final_answer, capability_policy)
-            await _emit_diagnostic(
+            await _emit_session_diagnostic(
                 "schema.validation",
                 {
                     "phase_index": state.get("phase_index") or 0,
@@ -542,6 +549,8 @@ def _serialize_todos(todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "status": todo.get("status"),
                 "parallelizable": bool(todo.get("parallelizable", False)),
                 "depends_on": list(todo.get("depends_on", [])),
+                "original_depends_on": list(todo.get("original_depends_on", todo.get("depends_on", []))),
+                "skipped_depends_on": list(todo.get("skipped_depends_on", [])),
                 "execution_mode": todo.get("execution_mode"),
                 "plan_role": todo.get("plan_role"),
                 "activation_mode": todo.get("activation_mode"),

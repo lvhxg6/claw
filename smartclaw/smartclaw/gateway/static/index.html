@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SmartClaw Workspace</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
 <style>
   :root {
     --bg: #202123;
@@ -87,7 +90,18 @@
     font-size: 11px;
   }
   .mini-btn:hover { background: rgba(255, 255, 255, 0.08); }
-  .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 272px minmax(0, 1fr); position: relative; }
+  .workspace {
+    --sidebar-width: 272px;
+    --inspector-width: 396px;
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    position: relative;
+  }
+  .workspace.inspect-open {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) minmax(340px, var(--inspector-width));
+  }
   .sidebar {
     border-right: 1px solid var(--border-soft);
     background: #171717;
@@ -369,6 +383,19 @@
     gap: 18px;
     align-items: stretch;
   }
+  .workspace.inspect-open .msg,
+  .workspace.inspect-open .msg.progress,
+  .workspace.inspect-open .msg.clarification {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  .workspace.inspect-open .composer {
+    justify-content: flex-start;
+  }
+  .workspace.inspect-open .composer-shell {
+    margin-left: 0;
+    margin-right: 0;
+  }
   .msg {
     width: min(100%, var(--content-width));
     margin: 0 auto;
@@ -554,6 +581,148 @@
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+  .progress-summary {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #d8dee7;
+  }
+  .progress-checklist {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .progress-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .progress-stage-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .progress-stage-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #dbeafe;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .progress-stage-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(96, 165, 250, 0.18);
+    background: rgba(59, 130, 246, 0.08);
+    font-size: 10px;
+    color: #bfdbfe;
+  }
+  .progress-stage-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+  }
+  .progress-check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .progress-check-item.running,
+  .progress-check-item.in_progress {
+    border-color: rgba(251, 191, 36, 0.45);
+    background: rgba(251, 191, 36, 0.12);
+  }
+  .progress-check-item.pending_approval,
+  .progress-check-item.awaiting_clarification {
+    border-color: rgba(192, 132, 252, 0.42);
+    background: rgba(139, 92, 246, 0.12);
+  }
+  .progress-check-item.pending,
+  .progress-check-item.ready {
+    border-color: rgba(34, 211, 238, 0.42);
+    background: rgba(8, 47, 73, 0.28);
+  }
+  .progress-check-item.completed {
+    border-color: rgba(34, 197, 94, 0.34);
+    background: rgba(34, 197, 94, 0.11);
+  }
+  .progress-check-item.cancelled {
+    border-color: rgba(239, 68, 68, 0.34);
+    background: rgba(239, 68, 68, 0.11);
+    opacity: 0.92;
+  }
+  .progress-check-item.failed,
+  .progress-check-item.error {
+    border-color: rgba(244, 63, 94, 0.34);
+    background: rgba(127, 29, 29, 0.2);
+  }
+  .progress-check-step {
+    flex-shrink: 0;
+    width: 20px;
+    color: #97a0ad;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+  .progress-check-body {
+    min-width: 0;
+    flex: 1;
+  }
+  .progress-check-title {
+    font-size: 12px;
+    line-height: 1.55;
+    color: #eef2f7;
+  }
+  .progress-check-status-inline {
+    margin-left: 4px;
+    font-weight: 700;
+  }
+  .progress-check-status-inline.running,
+  .progress-check-status-inline.in_progress {
+    color: #fbbf24;
+  }
+  .progress-check-status-inline.pending_approval {
+    color: #e9d5ff;
+  }
+  .progress-check-status-inline.awaiting_clarification {
+    color: #e9d5ff;
+  }
+  .progress-check-status-inline.completed {
+    color: #4ade80;
+  }
+  .progress-check-status-inline.cancelled {
+    color: #f87171;
+  }
+  .progress-check-status-inline.failed {
+    color: #fb7185;
+  }
+  .progress-check-status-inline.pending,
+  .progress-check-status-inline.ready {
+    color: #67e8f9;
+  }
+  .progress-check-note {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #9da7b6;
   }
   .attachment-list {
     display: flex;
@@ -760,6 +929,7 @@
   .toolbar-input { height: 34px; border-radius: 12px; border: 1px solid #3a3a3a; background: #232323; color: var(--text); padding: 0 12px; font-size: 12px; }
   .composer-hint { display: none; }
   .inspector-backdrop {
+    display: none;
     position: absolute;
     inset: 0;
     background: rgba(7, 9, 12, 0.36);
@@ -767,30 +937,20 @@
     pointer-events: none;
     transition: opacity 0.18s ease;
   }
-  .workspace.inspect-open .inspector-backdrop { opacity: 1; pointer-events: auto; }
   .inspector {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    bottom: 10px;
-    width: min(360px, calc(100vw - 28px));
-    border: 1px solid var(--border-soft);
-    border-radius: 18px;
+    position: relative;
+    min-width: 0;
+    height: 100%;
+    border-left: 1px solid var(--border-soft);
     background: linear-gradient(180deg, rgba(24, 29, 36, 0.96) 0%, rgba(18, 22, 28, 0.98) 100%);
     display: flex;
     flex-direction: column;
     min-height: 0;
-    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
-    transform: translateX(calc(100% + 18px));
-    opacity: 0;
-    pointer-events: none;
-    transition: transform 0.22s ease, opacity 0.22s ease;
-    z-index: 20;
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.02);
+    overflow: hidden;
   }
-  .workspace.inspect-open .inspector {
-    transform: translateX(0);
-    opacity: 1;
-    pointer-events: auto;
+  .workspace:not(.inspect-open) .inspector {
+    display: none;
   }
   .inspector-head { padding: 14px 12px 10px; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; gap: 10px; }
   .inspector-title { font-size: 13px; font-weight: 600; color: #fff; }
@@ -850,8 +1010,10 @@
   .execution-status-pill {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     border-radius: 999px;
-    padding: 3px 8px;
+    padding: 4px 9px;
+    min-height: 24px;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -859,10 +1021,14 @@
     border: 1px solid #303744;
     background: #17202b;
     color: #bfdbfe;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1;
   }
   .execution-status-pill.running,
-  .execution-status-pill.in_progress,
-  .execution-status-pill.ready { background: #2a220e; border-color: #5b4612; color: #fcd34d; }
+  .execution-status-pill.in_progress { background: #3b250d; border-color: #7c4a12; color: #fcd34d; }
+  .execution-status-pill.ready,
+  .execution-status-pill.pending { background: #0d2532; border-color: #0f7490; color: #67e8f9; }
   .execution-status-pill.completed,
   .execution-status-pill.success { background: #13261a; border-color: #255e38; color: #86efac; }
   .execution-status-pill.failed,
@@ -870,24 +1036,109 @@
   .execution-status-pill.pending_approval,
   .execution-status-pill.awaiting_clarification { background: #261d2c; border-color: #55306d; color: #e9d5ff; }
   .execution-status-pill.cancelled,
-  .execution-status-pill.skipped { background: #1d2128; border-color: #394150; color: #cbd5e1; }
+  .execution-status-pill.skipped { background: #3b1214; border-color: #7f1d1d; color: #fca5a5; }
+  .execution-graph-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .execution-graph-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .execution-graph-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 11px;
+    color: #cdd5df;
+  }
+  .execution-graph-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .execution-graph-surface {
+    position: relative;
+    min-height: 380px;
+    border-radius: 18px;
+    border: 1px solid #293241;
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 44%),
+      linear-gradient(180deg, rgba(15, 19, 25, 0.98) 0%, rgba(13, 17, 23, 0.98) 100%);
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+  .execution-graph-canvas {
+    width: 100%;
+    height: 380px;
+  }
+  .execution-graph-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+    opacity: 0.3;
+  }
+  .execution-graph-fallback {
+    position: relative;
+    padding: 16px;
+  }
+  .execution-graph-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .execution-graph-line {
+    fill: none;
+    stroke: rgba(96, 165, 250, 0.4);
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.15));
+  }
+  .execution-graph-line.skipped {
+    stroke: rgba(148, 163, 184, 0.45);
+    stroke-dasharray: 5 4;
+  }
+  .execution-graph-arrow {
+    fill: rgba(96, 165, 250, 0.75);
+  }
+  .execution-graph-arrow.skipped {
+    fill: rgba(148, 163, 184, 0.7);
+  }
   .execution-graph {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 16px;
   }
   .execution-graph-level {
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid #242a33;
-    background: rgba(16, 19, 24, 0.7);
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid #2a3240;
+    background: linear-gradient(180deg, rgba(18, 22, 29, 0.9) 0%, rgba(14, 17, 23, 0.72) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
   .execution-graph-level-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .execution-level-title {
     font-size: 11px;
@@ -898,18 +1149,18 @@
   }
   .execution-level-badge {
     font-size: 10px;
-    color: #9ca3af;
+    color: #93c5fd;
   }
   .execution-graph-lane {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    gap: 12px;
   }
   .execution-node {
     border: 1px solid #2a313b;
     background: #171a20;
     border-radius: 12px;
-    padding: 10px;
+    padding: 12px;
     cursor: pointer;
     transition: 0.15s ease;
   }
@@ -923,17 +1174,23 @@
     background: #192331;
   }
   .execution-node-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: 8px;
     margin-bottom: 8px;
   }
   .execution-node-title {
+    min-width: 0;
     font-size: 12px;
     font-weight: 700;
     color: #eef2f7;
     line-height: 1.45;
+    word-break: break-word;
+  }
+  .execution-node-head .execution-status-pill {
+    justify-self: end;
+    align-self: start;
   }
   .execution-node-meta,
   .execution-node-deps {
@@ -979,16 +1236,68 @@
   .execution-raw-payload { max-height: 88px; overflow: hidden; cursor: pointer; white-space: pre-wrap; word-break: break-all; color: #9ca3af; font-size: 12px; }
   .execution-raw-payload.expanded { max-height: none; }
   .workspace.sidebar-collapsed { grid-template-columns: 52px minmax(0, 1fr); }
+  .workspace.sidebar-collapsed.inspect-open {
+    grid-template-columns: 52px minmax(0, 1fr) minmax(340px, var(--inspector-width));
+  }
   .workspace.sidebar-collapsed .sidebar-pane { display: none; }
   .workspace.sidebar-collapsed .sidebar { border-right: 1px solid var(--border-soft); }
-  @media (max-width: 1200px) {
-    .workspace { grid-template-columns: 256px minmax(0, 1fr); }
+  @media (max-width: 1440px) {
+    .workspace {
+      --inspector-width: 360px;
+    }
+  }
+  @media (max-width: 1180px) {
+    .workspace,
+    .workspace.inspect-open {
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    }
+    .workspace.sidebar-collapsed,
+    .workspace.sidebar-collapsed.inspect-open {
+      grid-template-columns: 52px minmax(0, 1fr);
+    }
+    .inspector-backdrop { display: block; }
+    .workspace.inspect-open .inspector-backdrop { opacity: 1; pointer-events: auto; }
+    .inspector {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      bottom: 10px;
+      width: min(380px, calc(100vw - 28px));
+      height: auto;
+      border: 1px solid var(--border-soft);
+      border-radius: 18px;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
+      transform: translateX(calc(100% + 18px));
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.22s ease, opacity 0.22s ease;
+      z-index: 20;
+      display: flex;
+    }
+    .workspace:not(.inspect-open) .inspector { display: flex; }
+    .workspace.inspect-open .inspector {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .workspace.inspect-open .msg,
+    .workspace.inspect-open .msg.progress,
+    .workspace.inspect-open .msg.clarification {
+      margin-left: auto;
+    }
+    .workspace.inspect-open .composer {
+      justify-content: center;
+    }
+    .workspace.inspect-open .composer-shell {
+      margin-left: auto;
+      margin-right: auto;
+    }
   }
   @media (max-width: 980px) {
     .workspace { grid-template-columns: 0 minmax(0, 1fr); }
     .sidebar,
     .inspector-backdrop,
-    .inspector { display: none; }
+    .inspector { display: none !important; }
     .chat-head,
     .chat-canvas,
     .composer { padding-left: 16px; padding-right: 16px; }
@@ -1238,6 +1547,7 @@ let decisionES = null;
 let executionES = null;
 let streamEl = null;
 let inspectorOpen = false;
+let executionGraphCy = null;
 let availableModels = [];
 let currentModel = "";
 let modelCapabilityMap = {};
@@ -1319,6 +1629,10 @@ async function init() {
 }
 
 function bindStaticEvents() {
+  window.addEventListener("resize", () => {
+    if (!Array.isArray(executionView.todos) || !executionView.todos.length) return;
+    window.requestAnimationFrame(() => renderExecutionGraph());
+  });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && inspectorOpen) {
       toggleInspector(false);
@@ -1830,6 +2144,9 @@ function resolveImageRouteHint() {
 function toggleInspector(forceValue) {
   inspectorOpen = typeof forceValue === "boolean" ? forceValue : !inspectorOpen;
   document.getElementById("workspace").classList.toggle("inspect-open", inspectorOpen);
+  if (inspectorOpen) {
+    window.requestAnimationFrame(() => renderExecutionGraph());
+  }
 }
 
 function switchTab(name) {
@@ -1878,6 +2195,9 @@ function connectExecution() {
     try {
       const data = JSON.parse(event.data);
       if (data.ping || !data.event_type) return;
+      const eventSessionKey = String(data.session_key || "");
+      const activeSessionKey = String(sessionKey || "");
+      if (activeSessionKey && (!eventSessionKey || eventSessionKey !== activeSessionKey)) return;
       addExecutionEvent(data);
       updateExecutionFromEvent(data);
     } catch (error) {}
@@ -2022,7 +2342,7 @@ function updateExecutionFromEvent(data) {
     addTimelineEntry("阶段结束", buildPhaseEndSummary(data), data.completed === false ? "error" : "success");
   } else if (eventType === "plan.updated") {
     executionState.status = data.phase_status || executionState.status;
-    executionView.todos = Array.isArray(data.todos) ? data.todos.slice() : executionView.todos;
+    replaceExecutionTodos(data.todos);
     addTimelineEntry("计划状态更新", buildPlanUpdateSummary(data), "info");
     publishProcessUpdate(
       "plan.updated:" + String(data.phase_index || "") + ":" + String(data.replanning_count || 0) + ":" + String(data.phase_status || ""),
@@ -2032,6 +2352,7 @@ function updateExecutionFromEvent(data) {
   } else if (eventType === "governance.approval_required") {
     executionState.status = "awaiting_clarification";
     executionState.approval = "pending";
+    replaceExecutionTodos(data.todos);
     addTimelineEntry("等待审批", buildApprovalSummary(data), "warning", {
       todoId: Array.isArray(data.todo_ids) && data.todo_ids.length ? data.todo_ids[0] : null,
     });
@@ -2040,6 +2361,18 @@ function updateExecutionFromEvent(data) {
       "等待你确认下一步",
       buildApprovalSummary(data),
     );
+  } else if (eventType === "governance.approval_skipped") {
+    executionState.approval = "report_only";
+    replaceExecutionTodos(data.todos);
+    addTimelineEntry("已跳过审批步骤", "操作：" + String(data.action || "report_only"), "info", {
+      todoId: Array.isArray(data.todo_ids) && data.todo_ids.length ? data.todo_ids[0] : null,
+    });
+  } else if (eventType === "governance.approval_granted") {
+    executionState.approval = "approved";
+    replaceExecutionTodos(data.todos);
+    addTimelineEntry("审批已通过", "操作：" + String(data.action || "approve"), "success", {
+      todoId: Array.isArray(data.todo_ids) && data.todo_ids.length ? data.todo_ids[0] : null,
+    });
   } else if (eventType === "schema.validation") {
     executionState.schema = data.valid ? "valid" : "invalid";
     executionState.schemaReason = data.reason || "—";
@@ -2083,6 +2416,7 @@ function execRow(key, value) {
 }
 
 function renderExecutionPanels() {
+  refreshExecutionChecklistCard();
   renderExecutionGraph();
   renderExecutionTimeline();
   renderExecutionDetails();
@@ -2090,29 +2424,344 @@ function renderExecutionPanels() {
   renderExecutionSectionState();
 }
 
+function refreshExecutionChecklistCard() {
+  const container = document.getElementById("messages");
+  const existing = executionView.processMessageEls.live;
+  if (!container || !existing || existing.parentNode !== container) return;
+  existing.innerHTML = renderProgressCardHtml("执行清单", "", "live");
+}
+
 function renderExecutionGraph() {
   const container = document.getElementById("execution-graph");
   const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
   if (!todos.length) {
+    destroyExecutionGraph();
     container.innerHTML = "<div class=\"empty\">等待计划生成...</div>";
     return;
   }
+  if (canUseExecutionDag()) {
+    try {
+      renderExecutionGraphDag(container, todos);
+      return;
+    } catch (error) {
+      console.warn("execution dag render failed, fallback to custom renderer", error);
+      destroyExecutionGraph();
+    }
+  }
+  renderExecutionGraphFallback(container, todos);
+}
+
+function canUseExecutionDag() {
+  if (typeof window.cytoscape !== "function") return false;
+  try {
+    if (typeof window.cytoscapeDagre === "function") {
+      window.cytoscapeDagre(window.cytoscape);
+    }
+  } catch (error) {}
+  return true;
+}
+
+function destroyExecutionGraph() {
+  if (executionGraphCy && typeof executionGraphCy.destroy === "function") {
+    executionGraphCy.destroy();
+  }
+  executionGraphCy = null;
+}
+
+function renderExecutionGraphDag(container, todos) {
+  destroyExecutionGraph();
+  const graphMeta = summarizeExecutionGraphMeta(todos);
+  container.innerHTML =
+    "<div class=\"execution-graph-panel\">" +
+      renderExecutionGraphLegend(graphMeta) +
+      "<div class=\"execution-graph-surface\">" +
+        "<div class=\"execution-graph-canvas\" id=\"execution-graph-canvas\"></div>" +
+      "</div>" +
+    "</div>";
+  const canvas = document.getElementById("execution-graph-canvas");
+  const elements = buildExecutionGraphElements(todos);
+  executionGraphCy = window.cytoscape({
+    container: canvas,
+    elements: elements,
+    layout: { name: "preset" },
+    wheelSensitivity: 0.18,
+    minZoom: 0.42,
+    maxZoom: 1.6,
+    boxSelectionEnabled: false,
+    selectionType: "single",
+    style: [
+      {
+        selector: "node",
+        style: {
+          "shape": "round-rectangle",
+          "width": 194,
+          "height": 88,
+          "background-color": "data(bgColor)",
+          "border-width": 2.2,
+          "border-color": "data(borderColor)",
+          "label": "data(label)",
+          "color": "data(textColor)",
+          "font-size": 10,
+          "font-weight": 700,
+          "text-wrap": "wrap",
+          "text-max-width": 158,
+          "text-halign": "center",
+          "text-valign": "center",
+          "line-height": 1.22,
+          "padding": "10px",
+          "overlay-opacity": 0,
+          "shadow-color": "data(glowColor)",
+          "shadow-opacity": 0.22,
+          "shadow-blur": 12,
+          "shadow-offset-x": 0,
+          "shadow-offset-y": 0,
+        },
+      },
+      {
+        selector: "node.current",
+        style: {
+          "border-width": 2.6,
+          "shadow-opacity": 0.42,
+          "shadow-blur": 24,
+          "underlay-color": "data(borderColor)",
+          "underlay-opacity": 0.18,
+          "underlay-padding": 12,
+        },
+      },
+      {
+        selector: "node.cancelled",
+        style: {
+          "opacity": 0.82,
+        },
+      },
+      {
+        selector: "edge",
+        style: {
+          "width": 2.4,
+          "curve-style": "bezier",
+          "control-point-step-size": 42,
+          "source-endpoint": "outside-to-node",
+          "target-endpoint": "outside-to-node",
+          "line-color": "data(lineColor)",
+          "target-arrow-color": "data(lineColor)",
+          "target-arrow-shape": "triangle",
+          "arrow-scale": 1,
+          "opacity": 0.96,
+        },
+      },
+      {
+        selector: "edge.skipped",
+        style: {
+          "line-style": "dashed",
+          "line-dash-pattern": [7, 5],
+          "opacity": 0.72,
+        },
+      },
+    ],
+  });
+  const layoutName = chooseExecutionDagLayout(executionGraphCy, elements);
+  try {
+    executionGraphCy.layout({
+      name: layoutName,
+      rankDir: "TB",
+      nodeSep: 24,
+      edgeSep: 14,
+      rankSep: 52,
+      padding: 18,
+      animate: false,
+      fit: true,
+      spacingFactor: 0.92,
+      roots: elements.filter(item => item.group === "nodes" && !elements.some(edge => edge.group === "edges" && edge.data.target === item.data.id)).map(item => item.data.id),
+    }).run();
+    executionGraphCy.fit(undefined, 12);
+  } catch (error) {
+    executionGraphCy.layout({
+      name: "breadthfirst",
+      directed: true,
+      spacingFactor: 0.98,
+      padding: 18,
+      animate: false,
+      fit: true,
+    }).run();
+    executionGraphCy.fit(undefined, 12);
+  }
+  executionGraphCy.on("tap", "node", event => {
+    const todoId = event.target.id();
+    if (!todoId) return;
+    selectExecutionTodo(todoId);
+  });
+}
+
+function chooseExecutionDagLayout(cy, elements) {
+  try {
+    const candidate = cy.layout({ name: "dagre", rankDir: "TB" });
+    if (candidate && typeof candidate.run === "function") return "dagre";
+  } catch (error) {}
+  return "breadthfirst";
+}
+
+function summarizeExecutionGraphMeta(todos) {
+  const groups = groupExecutionTodosByLevel(todos);
+  const parallelLevels = groups.filter(group => group.items.length > 1).length;
+  const runningCount = todos.filter(todo => ["running", "in_progress"].includes(getTodoDisplayStatus(todo))).length;
+  return {
+    levelCount: groups.length,
+    parallelLevels: parallelLevels,
+    runningCount: runningCount,
+  };
+}
+
+function renderExecutionGraphLegend(meta) {
+  const chips = [
+    legendChip("已完成", "#22c55e"),
+    legendChip("进行中", "#fbbf24"),
+    legendChip("待执行", "#22d3ee"),
+    legendChip("待审批", "#c084fc"),
+    legendChip("已取消", "#ef4444"),
+    legendChip("虚线=跳过前置", "#94a3b8"),
+  ];
+  chips.unshift("<div class=\"execution-graph-legend-chip\">层级 " + esc(String(meta.levelCount || 0)) + " · 并行层 " + esc(String(meta.parallelLevels || 0)) + " · 运行中 " + esc(String(meta.runningCount || 0)) + "</div>");
+  return "<div class=\"execution-graph-legend\">" + chips.join("") + "</div>";
+}
+
+function legendChip(label, color) {
+  return "<div class=\"execution-graph-legend-chip\"><span class=\"execution-graph-legend-dot\" style=\"background:" + escAttr(color) + "\"></span>" + esc(label) + "</div>";
+}
+
+function buildExecutionGraphElements(todos) {
+  const selectedId = executionView.selectedTodoId || getPreferredExecutionTodoId();
+  const todoIds = new Set(
+    todos
+      .map(getTodoIdentifier)
+      .filter(Boolean)
+      .map(String)
+  );
+  const elements = [];
+  todos.forEach(todo => {
+    const todoId = getTodoIdentifier(todo);
+    if (!todoId) return;
+    const status = getTodoDisplayStatus(todo);
+    const tone = graphToneForStatus(status);
+    const title = todo.title || todo.id || "task";
+    const role = planRoleLabel(getTodoPlanRole(todo));
+    const activation = activationLabel(getTodoActivationMode(todo));
+    const statusLabel = todoStatusLabel(status);
+    const modeLabel = todo.parallelizable ? "并行" : "串行";
+    const label = title + "\n" + statusLabel + " · " + role + "\n" + activation + " · " + modeLabel;
+    elements.push({
+      group: "nodes",
+      data: {
+        id: todoId,
+        label: label,
+        borderColor: tone.border,
+        glowColor: tone.glow,
+        bgColor: tone.bg,
+        textColor: tone.text,
+      },
+      classes: [
+        selectedId === todoId ? "current" : "",
+        status === "cancelled" ? "cancelled" : "",
+      ].filter(Boolean).join(" "),
+    });
+  });
+  todos.forEach(todo => {
+    const targetId = getTodoIdentifier(todo);
+    if (!targetId) return;
+    const skippedDeps = new Set(getTodoSkippedDependencies(todo));
+    getTodoFlowDependencies(todo).forEach(depId => {
+      if (!depId || !todoIds.has(String(depId))) return;
+      elements.push({
+        group: "edges",
+        data: {
+          id: depId + "__" + targetId,
+          source: depId,
+          target: targetId,
+          lineColor: skippedDeps.has(depId) ? "#94a3b8" : "#60a5fa",
+        },
+        classes: skippedDeps.has(depId) ? "skipped" : "",
+      });
+    });
+  });
+  return elements;
+}
+
+function graphToneForStatus(status) {
+  const normalized = normalizeStatus(status);
+  if (["completed", "success"].includes(normalized)) {
+    return {
+      border: "#22c55e",
+      glow: "rgba(34, 197, 94, 0.4)",
+      bg: "#102417",
+      text: "#eafff0",
+    };
+  }
+  if (["running", "in_progress", "retrying"].includes(normalized)) {
+    return {
+      border: "#fbbf24",
+      glow: "rgba(251, 191, 36, 0.45)",
+      bg: "#2b210d",
+      text: "#fff6d7",
+    };
+  }
+  if (normalized === "pending_approval") {
+    return {
+      border: "#c084fc",
+      glow: "rgba(192, 132, 252, 0.42)",
+      bg: "#24182f",
+      text: "#f5eaff",
+    };
+  }
+  if (["cancelled", "skipped"].includes(normalized)) {
+    return {
+      border: "#ef4444",
+      glow: "rgba(239, 68, 68, 0.36)",
+      bg: "#2a1517",
+      text: "#ffe7e9",
+    };
+  }
+  if (["failed", "error"].includes(normalized)) {
+    return {
+      border: "#fb7185",
+      glow: "rgba(251, 113, 133, 0.42)",
+      bg: "#30171d",
+      text: "#ffe7ec",
+    };
+  }
+  return {
+    border: "#22d3ee",
+    glow: "rgba(34, 211, 238, 0.3)",
+    bg: "#0f2130",
+    text: "#dffafe",
+  };
+}
+
+function activationLabel(mode) {
+  const normalized = String(mode || "immediate");
+  if (normalized === "approval_gated") return "审批后";
+  if (normalized === "after_artifact") return "依赖完成后";
+  return "立即";
+}
+
+function renderExecutionGraphFallback(container, todos) {
   const levels = groupExecutionTodosByLevel(todos);
-  let html = "<div class=\"execution-graph\">";
+  let html = "<div class=\"execution-graph-panel\">" +
+    renderExecutionGraphLegend(summarizeExecutionGraphMeta(todos)) +
+    "<div class=\"execution-graph-surface execution-graph-fallback\"><div class=\"execution-graph-wrap\"><div class=\"execution-graph\">";
   levels.forEach((group, index) => {
     html +=
       "<div class=\"execution-graph-level\">" +
         "<div class=\"execution-graph-level-header\">" +
           "<div class=\"execution-level-title\">第 " + esc(String(index + 1)) + " 层</div>" +
-          "<div class=\"execution-level-badge\">" + esc(group.items.length > 1 ? "并行候选 " + group.items.length + " 个" : "串行步骤") + "</div>" +
+          "<div class=\"execution-level-badge\">" + esc(group.items.length > 1 ? "并行 " + group.items.length + " 步" : "单步骤") + "</div>" +
         "</div>" +
         "<div class=\"execution-graph-lane\">" +
           group.items.map(todo => renderExecutionNode(todo)).join("") +
         "</div>" +
       "</div>";
   });
-  html += "</div>";
+  html += "</div><svg class=\"execution-graph-svg\"></svg></div></div></div>";
   container.innerHTML = html;
+  drawExecutionGraphEdges(container, todos);
 }
 
 function renderExecutionTimeline() {
@@ -2140,13 +2789,16 @@ function renderExecutionDetails() {
   const worker = executionView.workers[getTodoIdentifier(todo)] || null;
   const detailRows = [
     ["步骤", todo.title || todo.id || "未命名步骤"],
-    ["状态", todo.status || "unknown"],
+    ["状态", todoStatusLabel(getTodoDisplayStatus(todo))],
     ["执行方式", todo.parallelizable ? "可并行" : "串行"],
-    ["依赖", getTodoDependencies(todo).length ? getTodoDependencies(todo).join("、") : "无"],
+    ["流程依赖", getTodoFlowDependencies(todo).length ? getTodoFlowDependencies(todo).join("、") : "无"],
+    ["当前依赖", getTodoDependencies(todo).length ? getTodoDependencies(todo).join("、") : "无"],
     ["步骤类型", todo.kind || todo.step_id || "generic"],
     ["审批", todo.approval_required ? "需要审批" : "无需审批"],
     ["输入绑定", summarizeTodoInputs(todo)],
   ];
+  const skippedDependencies = getTodoSkippedDependencies(todo);
+  if (skippedDependencies.length) detailRows.push(["跳过的前置", skippedDependencies.join("、")]);
   if (worker) {
     detailRows.push(["SubAgent", [
       "状态：" + (worker.status || "pending"),
@@ -2344,13 +2996,26 @@ function renderOverviewCard(label, value, note, wide) {
   );
 }
 
-function executionStatusPill(status) {
+function executionStatusPill(status, label) {
   const normalized = normalizeStatus(status);
-  return "<span class=\"execution-status-pill " + esc(normalized) + "\">" + esc(status || "unknown") + "</span>";
+  return "<span class=\"execution-status-pill " + esc(normalized) + "\">" + esc(label || status || "unknown") + "</span>";
 }
 
 function normalizeStatus(status) {
   return String(status || "unknown").toLowerCase().replace(/[^a-z0-9_-]+/g, "_");
+}
+
+function getTodoDisplayStatus(todo) {
+  const normalized = normalizeStatus(todo && todo.status);
+  if (
+    normalized === "ready" &&
+    todo &&
+    todo.approval_required &&
+    String(todo.activation_mode || "immediate") === "approval_gated"
+  ) {
+    return "pending_approval";
+  }
+  return normalized;
 }
 
 function getTodoIdentifier(todo) {
@@ -2359,6 +3024,19 @@ function getTodoIdentifier(todo) {
 
 function getTodoDependencies(todo) {
   return Array.isArray(todo && todo.depends_on) ? todo.depends_on.filter(Boolean).map(String) : [];
+}
+
+function getTodoFlowDependencies(todo) {
+  const original = Array.isArray(todo && todo.original_depends_on)
+    ? todo.original_depends_on.filter(Boolean).map(String)
+    : [];
+  return original.length ? original : getTodoDependencies(todo);
+}
+
+function getTodoSkippedDependencies(todo) {
+  return Array.isArray(todo && todo.skipped_depends_on)
+    ? todo.skipped_depends_on.filter(Boolean).map(String)
+    : [];
 }
 
 function getTodoPlanRole(todo) {
@@ -2385,9 +3063,9 @@ function syncSelectedExecutionTodo() {
 
 function getPreferredExecutionTodoId() {
   const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
-  const priority = ["running", "in_progress", "ready", "pending_approval", "completed", "failed", "cancelled"];
+  const priority = ["running", "in_progress", "pending_approval", "ready", "completed", "failed", "cancelled"];
   for (const status of priority) {
-    const matched = todos.find(todo => normalizeStatus(todo.status) === status);
+    const matched = todos.find(todo => getTodoDisplayStatus(todo) === status);
     if (matched) return getTodoIdentifier(matched);
   }
   return todos.length ? getTodoIdentifier(todos[0]) : null;
@@ -2404,24 +3082,31 @@ function getPreferredExecutionTodo() {
 
 function getNextExecutionTodo() {
   const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
-  return todos.find(todo => ["ready", "pending_approval"].includes(normalizeStatus(todo.status))) || null;
+  return todos.find(todo => ["ready", "pending_approval"].includes(getTodoDisplayStatus(todo))) || null;
 }
 
 function buildTodoSnapshot(todo) {
-  return [
-    "状态：" + (todo.status || "unknown"),
+  const flowDeps = getTodoFlowDependencies(todo);
+  const skippedDeps = getTodoSkippedDependencies(todo);
+  const lines = [
+    "状态：" + todoStatusLabel(getTodoDisplayStatus(todo)),
     "规划：" + planRoleLabel(getTodoPlanRole(todo)),
-    "依赖：" + (getTodoDependencies(todo).length ? getTodoDependencies(todo).join("、") : "无"),
+    "依赖：" + (flowDeps.length ? flowDeps.join("、") : "无"),
     "模式：" + (todo.parallelizable ? "可并行" : "串行"),
-  ].join("\n");
+  ];
+  if (skippedDeps.length) lines.push("跳过前置：" + skippedDeps.join("、"));
+  return lines.join("\n");
 }
 
 function buildNextTodoNote(todo) {
-  return [
-    "状态：" + (todo.status || "unknown"),
+  const skippedDeps = getTodoSkippedDependencies(todo);
+  const lines = [
+    "状态：" + todoStatusLabel(getTodoDisplayStatus(todo)),
     "规划：" + planRoleLabel(getTodoPlanRole(todo)),
     "是否审批：" + (todo.approval_required ? "需要" : "不需要"),
-  ].join("\n");
+  ];
+  if (skippedDeps.length) lines.push("跳过前置：" + skippedDeps.join("、"));
+  return lines.join("\n");
 }
 
 function summarizeTodoInputs(todo) {
@@ -2473,8 +3158,13 @@ function summarizeExecutionProgress(todoList) {
     const title = todo.title || todo.id || "task";
     const status = String(todo.status || "unknown");
     const role = planRoleLabel(getTodoPlanRole(todo));
-    const deps = getTodoDependencies(todo);
-    return label + ". " + title + " [" + role + " · " + status + "]" + (deps.length ? " <- " + deps.join("、") : "");
+    const deps = getTodoFlowDependencies(todo);
+    const skippedDeps = getTodoSkippedDependencies(todo);
+    return (
+      label + ". " + title + " [" + role + " · " + status + "]" +
+      (deps.length ? " <- " + deps.join("、") : "") +
+      (skippedDeps.length ? " (跳过前置：" + skippedDeps.join("、") + ")" : "")
+    );
   });
   return {
     summary: "共 " + counts.total + " 步，主干 " + counts.core + " / 条件 " + counts.conditional + " / 终态 " + counts.terminal,
@@ -2491,6 +3181,61 @@ function updateTodoExecutionStatus(todoId, status) {
   executionView.selectedTodoId = String(todoId);
 }
 
+function replaceExecutionTodos(todos) {
+  if (!Array.isArray(todos)) return;
+  executionView.todos = todos.slice();
+  syncSelectedExecutionTodo();
+}
+
+function promoteOptimisticTodoContinuation(todos) {
+  if (!Array.isArray(todos) || !todos.length) return todos;
+  if (todos.some(todo => ["running", "in_progress", "retrying"].includes(normalizeStatus(todo && todo.status)))) {
+    return todos;
+  }
+  const todoMap = new Map();
+  todos.forEach(todo => {
+    const id = getTodoIdentifier(todo);
+    if (id) todoMap.set(id, todo);
+  });
+  let promoted = false;
+  return todos.map(todo => {
+    if (promoted) return todo;
+    const status = normalizeStatus(todo && todo.status);
+    if (!["pending", "ready"].includes(status)) return todo;
+    const deps = getTodoDependencies(todo);
+    const depsSatisfied = deps.every(depId => {
+      const dep = todoMap.get(depId);
+      if (!dep) return true;
+      return ["completed", "cancelled", "skipped"].includes(normalizeStatus(dep.status));
+    });
+    if (!depsSatisfied) return todo;
+    promoted = true;
+    return { ...todo, status: "in_progress" };
+  });
+}
+
+function applyOptimisticApprovalAction(action) {
+  if (!Array.isArray(executionView.todos) || !executionView.todos.length) return;
+  const normalizedAction = String(action || "").toLowerCase();
+  executionView.todos = executionView.todos.map(todo => {
+    const displayStatus = getTodoDisplayStatus(todo);
+    if (displayStatus !== "pending_approval") return todo;
+    if (normalizedAction === "report_only" || normalizedAction === "cancel") {
+      return { ...todo, status: "cancelled", approval_required: false };
+    }
+    if (normalizedAction === "approve") {
+      return { ...todo, status: "in_progress", approval_required: false };
+    }
+    return todo;
+  });
+  if (normalizedAction === "report_only") {
+    executionView.todos = promoteOptimisticTodoContinuation(executionView.todos);
+  }
+  syncSelectedExecutionTodo();
+  renderExecutionState();
+  renderExecutionPanels();
+}
+
 function groupExecutionTodosByLevel(todos) {
   const todoMap = new Map();
   todos.forEach(todo => {
@@ -2503,7 +3248,7 @@ function groupExecutionTodosByLevel(todos) {
     if (stack.has(todoId)) return 0;
     stack.add(todoId);
     const todo = todoMap.get(todoId);
-    const deps = getTodoDependencies(todo).filter(depId => todoMap.has(depId));
+    const deps = getTodoFlowDependencies(todo).filter(depId => todoMap.has(depId));
     const level = deps.length ? 1 + Math.max(...deps.map(depId => resolveLevel(depId, new Set(stack)))) : 0;
     memo.set(todoId, level);
     return level;
@@ -2524,22 +3269,64 @@ function groupExecutionTodosByLevel(todos) {
 }
 
 function renderExecutionNode(todo) {
-  const status = normalizeStatus(todo.status);
+  const status = getTodoDisplayStatus(todo);
   const todoId = getTodoIdentifier(todo);
-  const deps = getTodoDependencies(todo);
+  const deps = getTodoFlowDependencies(todo);
+  const skippedDeps = getTodoSkippedDependencies(todo);
   const role = planRoleLabel(getTodoPlanRole(todo));
   const activation = getTodoActivationMode(todo);
   return (
-    "<div class=\"execution-node" + (executionView.selectedTodoId === todoId ? " active" : "") + "\" onclick=\"selectExecutionTodo('" + escAttr(todoId) + "')\">" +
+    "<div class=\"execution-node" + (executionView.selectedTodoId === todoId ? " active" : "") + "\" data-todo-id=\"" + escAttr(todoId) + "\" onclick=\"selectExecutionTodo('" + escAttr(todoId) + "')\">" +
       "<div class=\"execution-node-head\">" +
         "<div class=\"execution-node-title\">" + esc(todo.title || todo.id || "task") + "</div>" +
-        executionStatusPill(todo.status || status) +
+        executionStatusPill(status, todoStatusLabel(status)) +
       "</div>" +
       "<div class=\"execution-node-meta\">" + esc(role) + " · " + esc(todo.parallelizable ? "可并行执行" : "串行执行") + " · " + esc(todo.kind || todo.step_id || "generic") + "</div>" +
       "<div class=\"execution-node-deps\">" + esc("激活：" + activation) + "</div>" +
-      "<div class=\"execution-node-deps\">" + esc(deps.length ? "依赖：" + deps.join("、") : "依赖：无") + "</div>" +
+      "<div class=\"execution-node-deps\">" + esc(deps.length ? "流程依赖：" + deps.join("、") : "流程依赖：无") + "</div>" +
+      (skippedDeps.length ? "<div class=\"execution-node-deps\">" + esc("跳过前置：" + skippedDeps.join("、")) + "</div>" : "") +
     "</div>"
   );
+}
+
+function drawExecutionGraphEdges(container, todos) {
+  const wrap = container.querySelector(".execution-graph-wrap");
+  const svg = container.querySelector(".execution-graph-svg");
+  if (!wrap || !svg || !Array.isArray(todos) || !todos.length) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const nodeMap = new Map();
+  wrap.querySelectorAll(".execution-node[data-todo-id]").forEach(node => {
+    const id = String(node.getAttribute("data-todo-id") || "");
+    if (id) nodeMap.set(id, node);
+  });
+  svg.setAttribute("viewBox", "0 0 " + Math.max(1, Math.ceil(wrapRect.width)) + " " + Math.max(1, Math.ceil(wrapRect.height)));
+  svg.innerHTML = "";
+  todos.forEach(todo => {
+    const targetId = getTodoIdentifier(todo);
+    const targetNode = nodeMap.get(targetId);
+    if (!targetNode) return;
+    const targetRect = targetNode.getBoundingClientRect();
+    const deps = getTodoFlowDependencies(todo);
+    deps.forEach(depId => {
+      const sourceNode = nodeMap.get(depId);
+      if (!sourceNode) return;
+      const sourceRect = sourceNode.getBoundingClientRect();
+      const x1 = sourceRect.left - wrapRect.left + (sourceRect.width / 2);
+      const y1 = sourceRect.top - wrapRect.top + sourceRect.height;
+      const x2 = targetRect.left - wrapRect.left + (targetRect.width / 2);
+      const y2 = targetRect.top - wrapRect.top;
+      const midY = y1 + Math.max(18, (y2 - y1) / 2);
+      const skipped = getTodoSkippedDependencies(todo).includes(depId);
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("class", "execution-graph-line" + (skipped ? " skipped" : ""));
+      path.setAttribute("d", "M " + x1 + " " + y1 + " L " + x1 + " " + midY + " L " + x2 + " " + midY + " L " + x2 + " " + (y2 - 6));
+      svg.appendChild(path);
+      const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      arrow.setAttribute("class", "execution-graph-arrow" + (skipped ? " skipped" : ""));
+      arrow.setAttribute("d", "M " + (x2 - 4) + " " + (y2 - 6) + " L " + x2 + " " + y2 + " L " + (x2 + 4) + " " + (y2 - 6) + " Z");
+      svg.appendChild(arrow);
+    });
+  });
 }
 
 function selectExecutionTodo(todoId) {
@@ -3020,6 +3807,7 @@ async function handleClarificationAction(value) {
     awaitingClarificationDone = false;
     executionState.status = "cancelled";
     executionState.approval = "cancelled";
+    applyOptimisticApprovalAction(normalized);
     renderExecutionState();
     return;
   }
@@ -3028,6 +3816,7 @@ async function handleClarificationAction(value) {
     awaitingClarificationDone = false;
     executionState.status = "resuming";
     executionState.approval = "approved";
+    applyOptimisticApprovalAction(normalized);
     renderExecutionState();
     await sendRequest(
       { ...lastRequestBody, session_key: continuationSessionKey, approved: true, approval_action: normalized },
@@ -3040,6 +3829,7 @@ async function handleClarificationAction(value) {
     awaitingClarificationDone = false;
     executionState.status = "resuming";
     executionState.approval = "report_only";
+    applyOptimisticApprovalAction(normalized);
     renderExecutionState();
     await sendRequest(
       { ...lastRequestBody, session_key: continuationSessionKey, approved: false, approval_action: normalized },
@@ -3137,23 +3927,124 @@ function addProcessMessageBefore(beforeEl, title, detail) {
   return addMsgBefore(beforeEl, "progress", { title: title, detail: detail });
 }
 
-function upsertProcessMessage(slot, title, detail, beforeEl) {
-  const container = document.getElementById("messages");
-  const existing = executionView.processMessageEls[slot];
-  if (existing && existing.parentNode === container) {
-    existing.innerHTML =
+function todoStatusLabel(status) {
+  const normalized = normalizeStatus(status);
+  if (["running", "in_progress", "retrying"].includes(normalized)) return "进行中";
+  if (normalized === "pending_approval") return "待审批";
+  if (["completed", "success"].includes(normalized)) return "已完成";
+  if (["cancelled", "skipped"].includes(normalized)) return "已取消";
+  if (["failed", "error"].includes(normalized)) return "失败";
+  return "待执行";
+}
+
+function renderProgressCardHtml(title, detail, slot) {
+  if (slot !== "live" || !Array.isArray(executionView.todos) || !executionView.todos.length) {
+    return (
       "<div class=\"progress-card\">" +
         "<div class=\"progress-title\">" + esc(title || "过程更新") + "</div>" +
         "<div class=\"progress-detail\">" + esc(detail || "") + "</div>" +
         "<div class=\"progress-meta\">process update</div>" +
-      "</div>";
+      "</div>"
+    );
+  }
+
+  const todos = executionView.todos;
+  let completed = 0;
+  let running = 0;
+  let pendingApproval = 0;
+  let pending = 0;
+  let cancelled = 0;
+  let failed = 0;
+  todos.forEach(todo => {
+    const normalized = getTodoDisplayStatus(todo);
+    if (["completed", "success"].includes(normalized)) completed += 1;
+    else if (["running", "in_progress", "retrying"].includes(normalized)) running += 1;
+    else if (normalized === "pending_approval") pendingApproval += 1;
+    else if (["cancelled", "skipped"].includes(normalized)) cancelled += 1;
+    else if (["failed", "error"].includes(normalized)) failed += 1;
+    else pending += 1;
+  });
+
+  const current = getPreferredExecutionTodo();
+  const summaryParts = [
+    "共 " + String(todos.length) + " 步",
+    "已完成 " + String(completed) + " 步",
+  ];
+  if (running) summaryParts.push("进行中 " + String(running) + " 步");
+  if (pendingApproval) summaryParts.push("待审批 " + String(pendingApproval) + " 步");
+  if (pending) summaryParts.push("待执行 " + String(pending) + " 步");
+  if (cancelled) summaryParts.push("已取消 " + String(cancelled) + " 步");
+  if (failed) summaryParts.push("失败 " + String(failed) + " 步");
+
+  let order = 0;
+  const itemsHtml = groupExecutionTodosByLevel(todos).map((group, groupIndex) => {
+    const stageTitle = "阶段 " + String(groupIndex + 1);
+    const stageBadge = group.items.length > 1 ? "并行 " + String(group.items.length) + " 步" : "单步骤";
+    const stageItems = group.items.map(todo => {
+      order += 1;
+      const normalized = getTodoDisplayStatus(todo);
+      const skippedDeps = getTodoSkippedDependencies(todo);
+      const statusLabel = todoStatusLabel(normalized);
+      let note = "";
+      if (normalized === "pending_approval") {
+        note = "等待你确认是否继续";
+      } else if (skippedDeps.length) {
+        note = "跳过前置：" + skippedDeps.join("、");
+      }
+      return (
+        "<li class=\"progress-check-item " + esc(normalized) + "\">" +
+          "<div class=\"progress-check-step\">" + esc(String(order)) + ".</div>" +
+          "<div class=\"progress-check-body\">" +
+            "<div class=\"progress-check-title\">" +
+              esc(todo.title || todo.id || "未命名步骤") +
+              "<span class=\"progress-check-status-inline " + esc(normalized) + "\">(" + esc(statusLabel) + ")</span>" +
+            "</div>" +
+            (note ? "<div class=\"progress-check-note\">" + esc(note) + "</div>" : "") +
+          "</div>" +
+        "</li>"
+      );
+    }).join("");
+    return (
+      "<li class=\"progress-stage\">" +
+        "<div class=\"progress-stage-head\">" +
+          "<div class=\"progress-stage-title\">" + esc(stageTitle) + "</div>" +
+          "<div class=\"progress-stage-badge\">" + esc(stageBadge) + "</div>" +
+        "</div>" +
+        "<ol class=\"progress-stage-items\">" + stageItems + "</ol>" +
+      "</li>"
+    );
+  }).join("");
+
+  return (
+    "<div class=\"progress-card\">" +
+      "<div class=\"progress-title\">执行清单</div>" +
+      "<div class=\"progress-summary\">" + esc(summaryParts.join("，")) + "</div>" +
+      "<ul class=\"progress-checklist\">" + itemsHtml + "</ul>" +
+      "<div class=\"progress-meta\">execution checklist</div>" +
+    "</div>"
+  );
+}
+
+function upsertProcessMessage(slot, title, detail, beforeEl) {
+  const container = document.getElementById("messages");
+  const existing = executionView.processMessageEls[slot];
+  if (existing && existing.parentNode === container) {
+    existing.innerHTML = renderProgressCardHtml(title, detail, slot);
     if (beforeEl && existing !== beforeEl && beforeEl.parentNode === container) {
       container.insertBefore(existing, beforeEl);
     }
     container.scrollTop = container.scrollHeight;
     return existing;
   }
-  const element = addProcessMessageBefore(beforeEl, title, detail);
+  const element = document.createElement("div");
+  element.className = "msg progress";
+  element.innerHTML = renderProgressCardHtml(title, detail, slot);
+  if (beforeEl && beforeEl.parentNode === container) {
+    container.insertBefore(element, beforeEl);
+  } else {
+    container.appendChild(element);
+  }
+  container.scrollTop = container.scrollHeight;
   executionView.processMessageEls[slot] = element;
   return element;
 }

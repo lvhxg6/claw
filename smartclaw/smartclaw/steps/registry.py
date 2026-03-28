@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from smartclaw.agent.orchestration_models import StepDefinition
+from smartclaw.agent.orchestration_models import StepDefinition, todo_identifier
 from smartclaw.capabilities.models import CapabilityPackDefinition
 from smartclaw.steps.loader import StepRegistryLoader
 
@@ -57,10 +57,12 @@ class StepRegistry:
         self,
         step_id: str,
         artifacts: list[dict[str, Any]] | None,
+        *,
+        plan_todos: list[dict[str, Any]] | None = None,
     ) -> list[str]:
         return [
             str(artifact.get("artifact_id"))
-            for artifact in self.match_ready_artifacts(step_id, artifacts)
+            for artifact in self.match_ready_artifacts(step_id, artifacts, plan_todos=plan_todos)
             if artifact.get("artifact_id")
         ]
 
@@ -68,6 +70,8 @@ class StepRegistry:
         self,
         step_id: str,
         artifacts: list[dict[str, Any]] | None,
+        *,
+        plan_todos: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         step = self.get(step_id) or {}
         consumes = {
@@ -77,13 +81,38 @@ class StepRegistry:
         }
         if not consumes or not artifacts:
             return []
-        return [
+        ready_artifacts = [
             artifact
             for artifact in artifacts
             if isinstance(artifact, dict)
             and artifact.get("status") == "ready"
             and str(artifact.get("artifact_type")) in consumes
         ]
+        if not plan_todos:
+            return ready_artifacts
+
+        completed_todo_ids = {
+            todo_identifier(todo)
+            for todo in plan_todos
+            if isinstance(todo, dict)
+            and str(todo.get("status")) == "completed"
+            and todo_identifier(todo)
+        }
+        if not completed_todo_ids:
+            return []
+
+        scoped: list[dict[str, Any]] = []
+        seen_keys: set[tuple[str, str]] = set()
+        for artifact in reversed(ready_artifacts):
+            todo_id = self._artifact_todo_id(artifact)
+            if not todo_id or todo_id not in completed_todo_ids:
+                continue
+            key = (str(artifact.get("artifact_type", "")), todo_id)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            scoped.append(artifact)
+        return list(reversed(scoped))
 
     def approval_required_for_step(self, step_id: str) -> bool:
         step = self.get(step_id) or {}
@@ -125,3 +154,11 @@ class StepRegistry:
                 continue
             filtered.append(step)
         return filtered
+
+    def _artifact_todo_id(self, artifact: dict[str, Any]) -> str:
+        metadata = artifact.get("metadata")
+        if isinstance(metadata, dict) and metadata.get("todo_id"):
+            return str(metadata.get("todo_id"))
+        if artifact.get("todo_id"):
+            return str(artifact.get("todo_id"))
+        return ""

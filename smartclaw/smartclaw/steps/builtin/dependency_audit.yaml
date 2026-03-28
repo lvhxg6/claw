@@ -1,0 +1,22 @@
+id: dependency_audit
+domain: security
+description: 对依赖清单、供应链风险和第三方组件配置执行专项安全审计
+required_inputs: []
+consumes_artifact_types: []
+outputs:
+  - dependency_audit_result
+preferred_skill: dependency-audit-skill
+can_parallel: true
+risk_level: low
+completion_signal: dependency_audit_result_ready
+side_effect_level: read_only
+kind: dependency_audit
+plan_role: core
+activation_mode: immediate
+display_policy: always_show
+intent_tags:
+  - inspection
+  - dependency_audit
+  - dependency
+  - supply_chain
+  - audit

@@ -34,6 +34,13 @@ DEFAULT_DENY_PATTERNS: list[str] = [
     r"\bkill\b",
     r"\bpkill\b",
     r"\bkillall\b",
+    # Security: Block command substitution and shell injection
+    r"\$\(",  # $(command) substitution
+    r"`[^`]*`",  # Backtick substitution
+    r"\|\s*sh\b",  # Pipe to shell
+    r"\|\s*bash\b",  # Pipe to bash
+    r">\s*/etc/",  # Write to system config
+    r">>\s*/etc/",  # Append to system config
 ]
 
 MAX_OUTPUT_CHARS = 10_000

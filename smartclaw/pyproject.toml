@@ -31,6 +31,9 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.25.0",
     "sse-starlette>=2.0.0",
     "watchdog>=4.0.0",
+    # Security fixes
+    "cryptography>=46.0.6",  # CVE-2026-34073
+    "requests>=2.33.0",  # CVE-2026-25645
 ]
 
 [project.optional-dependencies]

@@ -194,9 +194,11 @@ class GatewaySettings(BaseSettings):
     """API Gateway configuration."""
 
     enabled: bool = False
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8000
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:8000", "http://127.0.0.1:8000"]
+    )
     shutdown_timeout: int = 30
     reload_interval: int = 5
 

@@ -53,6 +53,8 @@ class TodoItem(TypedDict, total=False):
     status: TodoStatus
     parallelizable: bool
     depends_on: list[str]
+    original_depends_on: list[str]
+    skipped_depends_on: list[str]
     resolved_inputs: dict[str, Any]
     consumes_artifacts: list[str]
     execution_mode: ExecutionMode

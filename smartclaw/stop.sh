@@ -4,7 +4,7 @@
 
 set -e
 
-PIDFILE="/tmp/smartclaw.pid"
+PIDFILE="${HOME}/.smartclaw/smartclaw.pid"
 
 if [ -f "$PIDFILE" ]; then
     PID=$(cat "$PIDFILE")

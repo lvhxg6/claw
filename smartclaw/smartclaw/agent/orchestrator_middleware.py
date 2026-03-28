@@ -131,6 +131,7 @@ class GovernanceStageMiddleware:
                     "phase_index": (state.get("phase_index") or 0) + 1,
                     "action": approval_action,
                     "todo_ids": skipped_ids,
+                    "todos": ctx.serialize_todos(updated_plan.get("todos", [])) if updated_plan else [],
                 },
             )
             return {
@@ -148,6 +149,7 @@ class GovernanceStageMiddleware:
                     "phase_index": (state.get("phase_index") or 0) + 1,
                     "action": approval_action or "approve",
                     "todo_ids": approved_ids,
+                    "todos": ctx.serialize_todos(updated_plan.get("todos", [])) if updated_plan else [],
                 },
             )
             return {
@@ -174,6 +176,7 @@ class GovernanceStageMiddleware:
                     "phase_index": (state.get("phase_index") or 0) + 1,
                     "action": approval_action,
                     "todo_ids": skipped_ids,
+                    "todos": ctx.serialize_todos(updated_plan.get("todos", [])) if updated_plan else [],
                 },
             )
             return {
@@ -199,6 +202,7 @@ class GovernanceStageMiddleware:
                 "phase_index": (state.get("phase_index") or 0) + 1,
                 "todo_ids": [todo_identifier(todo) for todo in approval_pending],
                 "todo_titles": [str(todo.get("title", todo_identifier(todo))) for todo in approval_pending],
+                "todos": ctx.serialize_todos(updated_plan.get("todos", [])) if updated_plan else [],
             },
         )
         return {
@@ -409,6 +413,22 @@ class StepTrackingStageMiddleware:
                         "phase_status": update.get("phase_status"),
                         "planner_source": update.get("planner_source", "static"),
                         "replanning_count": update.get("replanning_count"),
+                        "ready_todo_ids": [todo_identifier(todo) for todo in ready_todos],
+                        "ready_todos": ctx.serialize_todos(ready_todos),
+                        "todos": ctx.serialize_todos(plan.get("todos", [])),
+                    },
+                )
+        elif ctx.stage == "finish":
+            plan = update.get("plan")
+            if isinstance(plan, dict):
+                ready_todos = ctx.plan_manager.get_ready_todos(plan)
+                await ctx.emit_diagnostic(
+                    "plan.updated",
+                    {
+                        "phase_index": update.get("phase_index") or state.get("phase_index") or 0,
+                        "phase_status": update.get("phase_status"),
+                        "planner_source": update.get("planner_source", state.get("planner_source", "static")),
+                        "replanning_count": update.get("replanning_count", state.get("replanning_count")),
                         "ready_todo_ids": [todo_identifier(todo) for todo in ready_todos],
                         "ready_todos": ctx.serialize_todos(ready_todos),
                         "todos": ctx.serialize_todos(plan.get("todos", [])),
