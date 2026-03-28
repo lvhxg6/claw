@@ -44,3 +44,11 @@ Temporary Items
 
 # Archive files
 smartclaw.zip
+smartclaw-*.zip
+*.zip
+
+# Hypothesis test cache
+.hypothesis/
+
+# Temporary upload samples
+tmp_upload_samples/

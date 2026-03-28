@@ -203,11 +203,10 @@
   .session-main-body {
     display: block;
   }
-  .session-title { flex: 1; font-size: 12px; font-weight: 500; color: #ececec; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .session-time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-  .session-preview { font-size: 11px; color: #9ea4ad; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
-  .session-tags { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
-  .session-tag { font-size: 10px; color: #d5d5d5; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 2px 7px; }
+  .session-title { flex: 1; font-size: 12px; font-weight: 600; color: #f1f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-time { font-size: 10px; color: #7d848d; flex-shrink: 0; }
+  .session-preview { font-size: 11px; color: #9ea4ad; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 5px; }
+  .session-meta { margin-top: 6px; font-size: 10px; color: #7d848d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .session-actions { display: flex; align-items: center; gap: 4px; opacity: 0; transition: 0.15s ease; }
   .session-item:hover .session-actions,
   .session-item.active .session-actions { opacity: 1; }
@@ -417,7 +416,13 @@
   .msg.error { align-self: flex-start; background: #2a1718; border: 1px solid #5a2628; color: #fecaca; }
   .msg.tool-call { align-self: flex-start; background: #162116; border: 1px solid #284a29; color: #86efac; font-size: 12px; max-width: min(100%, var(--content-width)); }
   .msg.tool-result { align-self: flex-start; background: #141a29; border: 1px solid #283a62; color: #93c5fd; font-size: 12px; max-width: min(100%, var(--content-width)); }
-  .msg.clarification { align-self: flex-start; background: #161d2d; border: 1px solid #2f4a7a; color: #dbeafe; width: min(100%, 760px); }
+  .msg.clarification {
+    align-self: center;
+    width: min(100%, var(--content-width));
+    background: transparent;
+    border: none;
+    color: var(--text);
+  }
   .msg-label { font-size: 11px; color: #7d93b8; margin-bottom: 4px; }
   .msg-meta { font-size: 11px; color: #6b7280; margin-top: 8px; }
   .cursor { display: inline-block; width: 2px; height: 14px; background: #60a5fa; animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
@@ -428,19 +433,95 @@
   .md-content ul, .md-content ol { margin: 4px 0 4px 20px; }
   .md-content code { background: #22242a; padding: 1px 4px; border-radius: 4px; }
   .md-content pre { background: #111214; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
-  .clarification-title { font-size: 12px; font-weight: 700; color: #93c5fd; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .clarification-options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-  .clarification-choice { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #2f4a7a; background: #1b2740; color: #e8f0ff; cursor: pointer; text-align: left; }
-  .clarification-choice:hover { background: #223050; border-color: #44669d; }
-  .clarification-choice.secondary { background: #1a202c; border-color: #384456; color: #d6dbe5; }
-  .clarification-choice.secondary:hover { background: #222a37; border-color: #526175; }
-  .clarification-index { flex-shrink: 0; width: 20px; color: #93c5fd; font-size: 12px; font-weight: 700; }
-  .clarification-choice.secondary .clarification-index { color: #a8b4c7; }
-  .clarification-choice-text { font-size: 12px; line-height: 1.5; }
-  .clarification-custom-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #334155; background: #111827; }
-  .clarification-custom-row input { flex: 1; height: 34px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; padding: 0 10px; }
-  .clarification-custom-row input:focus { outline: none; border-color: #60a5fa; }
-  .clarification-inline-submit { height: 34px; border: 1px solid #2b65d9; background: #2563eb; color: #fff; border-radius: 8px; padding: 0 11px; cursor: pointer; }
+  .clarification-card {
+    width: min(100%, 720px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #262626;
+    padding: 16px 16px 14px;
+  }
+  .clarification-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #b5bcc7;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .clarification-question {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #f3f4f6;
+    margin-bottom: 10px;
+  }
+  .clarification-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .clarification-choice {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #2d2d2d;
+    color: #eceff3;
+    cursor: pointer;
+    text-align: left;
+    transition: 0.15s ease;
+  }
+  .clarification-choice:hover {
+    background: #333333;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .clarification-choice.secondary {
+    background: #2a2a2a;
+    color: #dde2e8;
+  }
+  .clarification-choice.secondary:hover {
+    background: #313131;
+  }
+  .clarification-index {
+    flex-shrink: 0;
+    width: 22px;
+    color: #aeb6c2;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .clarification-choice-text { font-size: 12px; line-height: 1.55; }
+  .clarification-custom-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #222222;
+  }
+  .clarification-custom-row input {
+    flex: 1;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #181818;
+    color: #eef2f7;
+    padding: 0 12px;
+  }
+  .clarification-custom-row input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.18);
+    background: #1d1d1d;
+  }
+  .clarification-inline-submit {
+    height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #3b82f6;
+    color: #fff;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .clarification-inline-submit:hover { background: #4a8df6; }
   .attachment-list {
     display: flex;
     gap: 10px;
@@ -1197,9 +1278,9 @@ function renderSessionList() {
 
 function renderSessionItem(item) {
   const active = sessionKey === item.session_key ? " active" : "";
-  const modelTag = item.model_override ? "<span class=\"session-tag\">" + esc(item.model_override) + "</span>" : "";
   const effectiveTitle = getEffectiveSessionTitle(item);
   const previewText = getCompactSessionPreview(item);
+  const metaText = buildSessionMeta(item);
   return (
     "<div class=\"session-item" + active + "\">" +
       "<div class=\"session-title-row\">" +
@@ -1214,10 +1295,17 @@ function renderSessionItem(item) {
       "</div>" +
       "<button class=\"session-main session-main-body\" type=\"button\" onclick=\"openSession('" + escAttr(item.session_key) + "')\">" +
         "<div class=\"session-preview\">" + esc(previewText) + "</div>" +
-        "<div class=\"session-tags\">" + modelTag + "<span class=\"session-tag\">" + esc(String(item.message_count || 0)) + " msgs</span></div>" +
+        "<div class=\"session-meta\">" + esc(metaText) + "</div>" +
       "</button>" +
     "</div>"
   );
+}
+
+function buildSessionMeta(item) {
+  const parts = [];
+  if (item.model_override) parts.push(item.model_override);
+  parts.push(String(item.message_count || 0) + " 条消息");
+  return parts.join(" · ");
 }
 
 function getCompactSessionPreview(item) {
@@ -2238,8 +2326,9 @@ function renderClarificationCard(data) {
   card.className = "msg clarification";
   const options = Array.isArray(data.options) ? data.options : [];
   const title = isApprovalClarification(data) ? "执行审批" : "需要确认";
-  let html = "<div class=\"clarification-title\">" + esc(title) + "</div>";
-  html += "<div>" + esc(data.question || "请确认下一步") + "</div>";
+  let html = "<div class=\"clarification-card\">";
+  html += "<div class=\"clarification-title\">" + esc(title) + "</div>";
+  html += "<div class=\"clarification-question\">" + esc(data.question || "请确认下一步") + "</div>";
   html += "<div class=\"clarification-options\">";
   options.forEach((option, index) => {
     const normalized = String(option).toLowerCase();
@@ -2258,7 +2347,7 @@ function renderClarificationCard(data) {
         "<button class=\"clarification-inline-submit\" id=\"clarification-custom-submit\">提交</button>" +
       "</div>";
   }
-  html += "</div>";
+  html += "</div></div>";
   card.innerHTML = html;
   document.getElementById("messages").appendChild(card);
   document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
