@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from smartclaw.agent.plan_manager import TodoItem
+from smartclaw.agent.orchestration_models import TodoItem, todo_identifier
 
 
 class DispatchBatch(TypedDict):
@@ -43,7 +43,7 @@ class DispatchPolicy:
 
         for todo in ready_todos:
             if todo["parallelizable"]:
-                current_parallel.append(todo["id"])
+                current_parallel.append(todo_identifier(todo))
                 if len(current_parallel) >= self._max_batch_size:
                     flush_parallel()
                 continue
@@ -52,7 +52,7 @@ class DispatchPolicy:
             batches.append(
                 {
                     "batch_id": f"batch-{len(batches) + 1}",
-                    "todo_ids": [todo["id"]],
+                    "todo_ids": [todo_identifier(todo)],
                     "parallel": False,
                 }
             )

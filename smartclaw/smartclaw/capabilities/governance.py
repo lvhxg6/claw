@@ -16,11 +16,15 @@ def build_runtime_policy(pack: Any | None) -> dict[str, Any] | None:
         "name": pack.name,
         "approval_required": bool(getattr(pack, "approval_required", False)),
         "approval_message": getattr(pack, "approval_message", "") or "",
+        "allowed_steps": list(getattr(pack, "allowed_steps", []) or []),
+        "preferred_steps": list(getattr(pack, "preferred_steps", []) or []),
         "schema_enforced": bool(getattr(pack, "schema_enforced", False)),
         "result_schema": getattr(pack, "result_schema", "") or "",
         "result_format": getattr(pack, "result_format", "text") or "text",
         "max_schema_retries": int(getattr(pack, "max_schema_retries", 0) or 0),
         "max_task_retries": int(getattr(pack, "max_task_retries", 0) or 0),
+        "max_replanning_rounds": int(getattr(pack, "max_replanning_rounds", 0) or 0),
+        "repeated_error_threshold": int(getattr(pack, "repeated_error_threshold", 0) or 0),
         "retry_on_error": bool(getattr(pack, "retry_on_error", True)),
         "concurrency_limits": dict(getattr(pack, "concurrency_limits", {}) or {}),
     }
@@ -37,8 +41,14 @@ def build_approval_request(policy: dict[str, Any] | None) -> dict[str, Any]:
     if policy and policy.get("approval_message"):
         message = str(policy["approval_message"])
     return {
+        "kind": "approval",
         "question": message,
+        "details": None,
         "options": ["approve", "cancel"],
+        "option_descriptions": {
+            "approve": "Continue the pending execution.",
+            "cancel": "Stop the current execution.",
+        },
     }
 
 

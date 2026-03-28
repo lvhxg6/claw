@@ -91,8 +91,11 @@ def _build_approval_response(policy: dict | None, *, session_key: str) -> ChatRe
         error=None,
         token_stats=None,
         clarification=ClarificationData(
+            kind=clarification.get("kind"),
             question=clarification["question"],
+            details=clarification.get("details"),
             options=clarification.get("options"),
+            option_descriptions=clarification.get("option_descriptions"),
         ),
     )
 
@@ -393,8 +396,12 @@ def _format_sse(evt_dict: dict) -> dict | None:  # type: ignore[type-arg]
             "event": "clarification",
             "data": json.dumps(
                 {
+                    "session_key": evt_dict.get("session_key"),
+                    "kind": evt_dict.get("kind"),
                     "question": evt_dict.get("question", ""),
+                    "details": evt_dict.get("details"),
                     "options": evt_dict.get("options"),
+                    "option_descriptions": evt_dict.get("option_descriptions"),
                 },
                 ensure_ascii=False,
             ),
@@ -427,6 +434,24 @@ def _unregister_stream_handlers(handlers: dict[str, Any]) -> None:
 
     for hp, h in handlers.items():
         hook_registry.unregister(hp, h)
+
+
+def _clarification_event_data(
+    clarification_request: dict[str, Any],
+    *,
+    session_key: str,
+) -> str:
+    return json.dumps(
+        {
+            "session_key": session_key,
+            "kind": clarification_request.get("kind"),
+            "question": clarification_request["question"],
+            "details": clarification_request.get("details"),
+            "options": clarification_request.get("options"),
+            "option_descriptions": clarification_request.get("option_descriptions"),
+        },
+        ensure_ascii=False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -518,12 +543,18 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
                 mode=resolved_mode,
                 capability_pack=capability_pack,
                 capability_policy=capability_policy,
+                approved=request_body.approved,
+                approval_action=request_body.approval_action,
             )
         clarification = None
         cr = result.get("clarification_request")
         if cr:
             clarification = ClarificationData(
-                question=cr["question"], options=cr.get("options")
+                kind=cr.get("kind"),
+                question=cr["question"],
+                details=cr.get("details"),
+                options=cr.get("options"),
+                option_descriptions=cr.get("option_descriptions"),
             )
         await _persist_session_token_stats(
             memory_store=memory_store,
@@ -591,7 +622,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
             clarification = build_approval_request(capability_policy)
             yield {
                 "event": "clarification",
-                "data": json.dumps(clarification, ensure_ascii=False),
+                "data": _clarification_event_data(clarification, session_key=session_key),
             }
             yield {
                 "event": "done",
@@ -660,6 +691,8 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                     "mode": resolved_mode,
                     "capability_pack": capability_pack,
                     "capability_policy": capability_policy,
+                    "approved": request_body.approved,
+                    "approval_action": request_body.approval_action,
                 }
             queue: asyncio.Queue = asyncio.Queue(maxsize=200)  # type: ignore[type-arg]
             handlers = _register_stream_handlers(queue)
@@ -695,13 +728,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                 if cr:
                     yield {
                         "event": "clarification",
-                        "data": json.dumps(
-                            {
-                                "question": cr["question"],
-                                "options": cr.get("options"),
-                            },
-                            ensure_ascii=False,
-                        ),
+                        "data": _clarification_event_data(cr, session_key=session_key),
                     }
                 yield {
                     "event": "done",
@@ -766,13 +793,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
             if cr:
                 yield {
                     "event": "clarification",
-                    "data": json.dumps(
-                        {
-                            "question": cr["question"],
-                            "options": cr.get("options"),
-                        },
-                        ensure_ascii=False,
-                    ),
+                    "data": _clarification_event_data(cr, session_key=session_key),
                 }
             await _persist_session_token_stats(
                 memory_store=memory_store,

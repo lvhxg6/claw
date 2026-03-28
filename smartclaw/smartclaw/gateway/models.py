@@ -32,6 +32,10 @@ class ChatRequest(BaseModel):
         default=None,
         description="Explicit approval flag for capability packs that require approval",
     )
+    approval_action: str | None = Field(
+        default=None,
+        description="Optional approval decision such as approve/report_only/cancel",
+    )
     attachment_ids: list[str] | None = Field(
         default=None,
         description="Optional uploaded attachment ids linked to the request",
@@ -39,8 +43,11 @@ class ChatRequest(BaseModel):
 
 
 class ClarificationData(BaseModel):
+    kind: str | None = None
     question: str
+    details: list[str] | None = None
     options: list[str] | None = None
+    option_descriptions: dict[str, str] | None = None
 
 
 class ChatResponse(BaseModel):

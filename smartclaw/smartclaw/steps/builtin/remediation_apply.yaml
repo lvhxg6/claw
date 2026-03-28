@@ -1,0 +1,23 @@
+id: remediation_apply
+domain: security
+description: 根据整改方案执行受控修复或加固
+required_inputs: []
+consumes_artifact_types:
+  - inspection_result
+  - remediation_plan_result
+outputs:
+  - remediation_apply_result
+preferred_skill: remediation-apply-skill
+can_parallel: false
+risk_level: high
+completion_signal: remediation_apply_result_ready
+side_effect_level: write
+kind: remediation_apply
+plan_role: conditional
+activation_mode: approval_gated
+display_policy: always_show
+intent_tags:
+  - remediation
+  - remediation_apply
+  - fix
+  - apply

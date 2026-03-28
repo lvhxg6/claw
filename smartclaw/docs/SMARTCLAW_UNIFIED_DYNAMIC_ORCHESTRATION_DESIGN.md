@@ -139,8 +139,8 @@ Orchestrator 只负责“怎么跑”，不负责业务目标理解。
 
 Phase 1 采用轻量方案：
 
-- State 中只存 `ArtifactRef`
-- 实际内容存文件
+- State 中只存 `ArtifactEnvelope`
+- 实际正文存 `payload file`
 
 而不是一开始做很重的 artifact 平台。
 
@@ -227,11 +227,14 @@ Step Registry 在 Phase 1 不做复杂配置，只保留最小字段。
 id: baseline_check
 domain: security
 description: 对目标资产执行基线检查
-inputs: [asset_scope]
+required_inputs: [asset_scope]
+consumes_artifact_types: []
 outputs: [baseline_report]
 preferred_skill: baseline-check-skill
 can_parallel: true
 risk_level: low
+completion_signal: baseline_report_ready
+side_effect_level: read_only
 ```
 
 说明：
@@ -239,6 +242,18 @@ risk_level: low
 - 不引入复杂的 `applicable_when`
 - 不引入复杂的 `next_step_hints`
 - 不把 step 做成 mini workflow engine
+- 但必须保留最小“可执行契约”，否则 planner 无法稳定判断何时可选、何时缺输入
+
+这里建议 Phase 1 至少补 4 个最小字段：
+
+- `required_inputs`
+  - 表示执行该 step 前必须具备哪些输入键
+- `consumes_artifact_types`
+  - 表示它可直接消费哪些 artifact 类型
+- `completion_signal`
+  - 表示 orchestrator 如何判断这个 step 已产出可用结果
+- `side_effect_level`
+  - 表示只读、可写、高风险等副作用等级，供治理和审批使用
 
 step 只是 planner 的“可选步骤目录”。
 
@@ -250,9 +265,11 @@ Step Registry 的唯一目的，是告诉 planner：
 
 - 有哪些步骤可选
 - 每个步骤大概做什么
-- 每个步骤吃什么输入
+- 每个步骤要求什么输入
+- 每个步骤可消费什么 artifact
 - 每个步骤产出什么输出
 - 推荐调用哪个 skill
+- 这个步骤的完成信号和副作用级别是什么
 
 Planner 仍然动态决定：
 
@@ -260,6 +277,13 @@ Planner 仍然动态决定：
 - 何时选它
 - 是否并行
 - 是否跳过
+
+也就是说：
+
+- Step Registry 负责提供“稳定约束”
+- Planner 负责做“动态选择”
+
+Step Registry 仍然不是 workflow，也不负责替 planner 推导完整流程。
 
 ---
 
@@ -284,6 +308,34 @@ Pack 在 Phase 1 只做四类约束：
 
 Pack 不写死流程图。
 
+### 10.1 规则优先级
+
+为了避免 Step、Pack、治理逻辑三处重复定义规则，Phase 1 建议明确：
+
+- `Step Registry`
+  - 定义 step 的天然属性
+  - 例如：输入输出、默认风险等级、是否天然可并行、副作用级别
+
+- `Capability Pack`
+  - 定义业务域内“允许什么、偏好什么、限制什么”
+  - 例如：哪些 step 可用、哪些高风险 step 必须审批、默认最大并发
+
+- `governance_middleware`
+  - 负责运行时强制执行
+  - 例如：真正拦截未审批执行、真正限制并发、真正判断是否还能重试
+
+冲突覆盖顺序建议固定为：
+
+`governance runtime decision > capability pack policy > step default property`
+
+例如：
+
+- step 默认 `can_parallel: true`
+- 但当前 pack 规定 `max_concurrency: 1`
+- 则本次运行必须串行
+
+Planner 可以看到这些限制并提前规避，但最终强制权在 governance middleware。
+
 ---
 
 ## 11. Artifact 的轻量实现
@@ -293,11 +345,16 @@ Phase 1 不做重量级 artifact 模型，只做两层。
 ### 11.1 State 中的轻量引用
 
 ```yaml
-id: art_001
-type: baseline_report
+artifact_id: art_001
+artifact_type: baseline_report
+schema_version: v1
 producer_step: baseline_check
 status: ready
-path: /artifacts/art_001.json
+summary: 主机基线检查完成，发现 3 项不符合
+validation:
+  is_valid: true
+  errors: []
+payload_path: /artifacts/art_001.json
 ```
 
 ### 11.2 文件中的实际内容
@@ -320,6 +377,28 @@ path: /artifacts/art_001.json
 - planner 能快速引用
 - 复杂内容不挤进内存状态
 - 后续再升级也容易
+
+这里建议 Phase 1 统一采用两层模型：
+
+- `ArtifactEnvelope`
+  - 进入运行时 state
+  - 供 planner / orchestrator / middleware 快速消费
+- `payload file`
+  - 保存较大正文
+  - 供下游 step 或最终输出按需读取
+
+`ArtifactEnvelope` 最小建议字段：
+
+- `artifact_id`
+- `artifact_type`
+- `schema_version`
+- `producer_step`
+- `status`
+- `summary`
+- `validation`
+- `payload_path`
+
+这样仍然是轻量实现，但不再是“只有路径，没有统一外壳”。
 
 ### 11.3 与 Session 的关系
 
@@ -522,14 +601,19 @@ flowchart TD
 
 1. 最小 `Capability Pack` 运行机制
 2. 最小 `Step Registry`
-3. `Planner` 与 `Orchestrator` 职责切分
-4. 轻量 `ArtifactRef + 文件存储`
-5. 三个 middleware：
+3. 先冻结 4 个最小 schema：
+   - `StepDefinition`
+   - `TodoPlan`
+   - `ArtifactEnvelope`
+   - `StepRunRecord`
+4. `Planner` 与 `Orchestrator` 职责切分
+5. 轻量 `ArtifactEnvelope + payload file` 存储
+6. 三个 middleware：
    - `artifact_middleware`
    - `governance_middleware`
    - `step_tracking_middleware`
-6. Skill 按需加载
-7. 一个试点场景打通
+7. Skill 按需加载
+8. 一个试点场景打通
 
 ---
 
@@ -544,7 +628,7 @@ flowchart TD
 | Planner | [plan_manager.py](/Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/plan_manager.py) | 当前是关键词匹配型粗规划器，需要升级 |
 | Orchestrator | [orchestrator_graph.py](/Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/orchestrator_graph.py)、`dispatch_tasks.py`、`dispatch_policy.py` | 大体可复用 |
 | Capability Pack | `smartclaw/capabilities/` | 已有基础，需要补 `allowed_steps / preferred_steps` |
-| Artifact | 无正式层 | 需要新增轻量 `ArtifactRef + file` |
+| Artifact | 无正式层 | 需要新增轻量 `ArtifactEnvelope + payload file` |
 | Middleware | 治理逻辑散在 [governance.py](/Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/capabilities/governance.py) 与 graph 节点里 | 需要抽成统一机制 |
 | Runtime State | `AgentState`、`task_results`、`todos` | 已有部分骨架，可逐步增强 |
 
@@ -575,7 +659,7 @@ flowchart TD
   - 最小 step registry
   - 当前 artifacts
   - 用户目标
-  生成结构化 todos
+  生成结构化 `TodoPlan`
 
 #### Phase 1C：Rule Planner 退为兜底
 
@@ -591,7 +675,8 @@ flowchart TD
 - JSON schema 校验失败
 - 缺少必填字段，例如：
   - `todos`
-  - `todo.id`
+  - `todo.todo_id`
+  - `todo.step_id`
   - `todo.depends_on`
 
 满足上述任一条件时，应自动降级到 `RulePlanner`，而不是直接让 orchestrator 消费不稳定结果。
@@ -619,10 +704,12 @@ Planner 至少应看到：
 ```yaml
 - id: "baseline_check"
   description: "对目标资产执行基线检查"
-  inputs: ["asset_scope"]
+  required_inputs: ["asset_scope"]
+  consumes_artifact_types: []
   outputs: ["baseline_report"]
   can_parallel: true
   risk_level: "low"
+  side_effect_level: "read_only"
 ```
 
 ### 21.3 Planner 输出格式
@@ -631,27 +718,69 @@ Planner 至少应看到：
 
 ```json
 {
+  "plan_version": "v1",
   "objective": "执行安全治理闭环",
   "todos": [
     {
-      "id": "baseline_check",
+      "todo_id": "todo_001",
+      "step_id": "baseline_check",
       "title": "执行基线检查",
-      "inputs": ["asset_scope"],
+      "resolved_inputs": {
+        "asset_scope": "target_hosts"
+      },
+      "consumes_artifacts": [],
       "depends_on": [],
-      "parallelizable": true
+      "parallelizable": true,
+      "execution_mode": "subagent",
+      "approval_required": false
     }
   ],
+  "missing_inputs": [],
   "reasoning_summary": "先并行执行三个检查，再根据结果决定是否加固"
 }
 ```
 
-### 21.4 Planner 成功标准
+这份结构建议视为 Phase 1 的 `TodoPlan`。
+
+其中最关键的是：
+
+- `step_id`
+  - 标识选择的是哪个 step definition
+- `resolved_inputs`
+  - 标识 planner 已经把哪些输入绑定清楚
+- `consumes_artifacts`
+  - 标识本轮依赖哪些现有 artifact
+- `execution_mode`
+  - 标识倾向由 subagent、skill、tool 还是 orchestrator 内部能力执行
+- `approval_required`
+  - 标识治理判定后的执行前置条件
+- `missing_inputs`
+  - 标识继续执行前仍然缺什么，而不是让 orchestrator 自行猜测
+
+### 21.4 Planner -> Orchestrator 交接语义
+
+Phase 1 建议明确：
+
+- planner 输出的是 `TodoPlan`
+- orchestrator 消费的是“已解析的可执行计划”
+- orchestrator 不再自行推导业务目标，只根据 `TodoPlan` 执行、跟踪、回传结果
+
+因此 orchestrator 不应再负责：
+
+- 猜测某个 step 真正要吃什么输入
+- 猜测某个结果是否应被当成 artifact
+- 猜测某个 todo 是否需要审批
+
+这些应尽量在 `TodoPlan + governance decision + artifact normalization` 三层内明确下来。
+
+### 21.5 Planner 成功标准
 
 Planner 不要求一次推理出全流程，只要求每轮稳定产出：
 
 - 当前最合理的一组 todos
 - 每个 todo 的依赖关系
 - 是否还缺关键输入
+- 当前 todo 已解析到什么程度
 
 ---
 
@@ -670,21 +799,52 @@ Planner 不要求一次推理出全流程，只要求每轮稳定产出：
 
 即挂在 orchestrator graph 的阶段节点之间，而不是模型调用前后。
 
-### 22.1 建议挂载点
+### 22.1 Phase 1 统一运行时阶段
 
-- `planner before / after`
+为了避免架构图、middleware、日志、追踪各讲一套 stage 名字，Phase 1 建议先统一为：
+
+1. `plan`
+2. `dispatch`
+3. `execute`
+4. `normalize`
+5. `review`
+6. `synthesize`
+7. `finish`
+
+语义建议如下：
+
+- `plan`
+  - planner 基于目标、pack、steps、artifacts 生成 `TodoPlan`
+- `dispatch`
+  - orchestrator 根据 `TodoPlan` 分配执行单元
+- `execute`
+  - subagent / skill / tool 真正执行
+- `normalize`
+  - 原始结果被标准化为 artifact / step result record
+- `review`
+  - 统一判断 ready、blocked、failed、needs_replan
+- `synthesize`
+  - 汇总当前轮或最终输出
+- `finish`
+  - 会话完成、终止或进入等待用户输入
+
+后续 middleware 挂载、状态跟踪、日志埋点、回放语义都应引用这套统一阶段名。
+
+### 22.2 建议挂载点
+
+- `plan before / after`
 - `dispatch before / after`
-- `step result normalize`
+- `normalize before / after`
 - `synthesize before / after`
 
-### 22.2 Phase 1 三个 Middleware 的落点
+### 22.3 Phase 1 三个 Middleware 的落点
 
 #### artifact_middleware
 
 挂在：
 
 - `execute -> review`
-- `synthesize -> final`
+- `synthesize -> finish`
 
 作用：
 
@@ -755,7 +915,25 @@ Planner 不要求一次推理出全流程，只要求每轮稳定产出：
 - approval 被拒绝
 - planner 判断当前路径已不适合继续
 
-### 23.4 当前代码复用点
+### 23.4 Replanning 止损边界
+
+动态规划不是无限重试。Phase 1 建议至少加 4 个 guardrail：
+
+1. `max_replanning_rounds`
+   - 单 session 最多允许多少轮 replanning
+
+2. `max_failures_per_step`
+   - 同一个 step 最多失败多少次
+
+3. `repeated_error_guard`
+   - 连续出现同类错误时，直接升级为人工确认或终止
+
+4. `budget_exceeded_fallback`
+   - 超出预算时，返回“当前可交付结果 + 阻塞原因 + 建议下一步”
+
+这样可以避免系统在“失败 -> 重试 -> replanning -> 再失败”的循环里空转。
+
+### 23.5 当前代码复用点
 
 当前 [orchestrator_graph.py](/Users/liubu/hx/hxWork/35.AI测试/claw/smartclaw/smartclaw/agent/orchestrator_graph.py) 中已经具备部分 review 语义：
 
@@ -805,7 +983,356 @@ Phase 1 不应推翻它，而应在这套 review 机制上补充：
 
 ---
 
-## 25. 最终结论
+## 25. 当前开发进度
+
+截至 `2026-03-28`，这份设计对应的 Phase 1 主骨架已经基本落地完成。
+
+可以把当前状态理解为：
+
+- 动态规划框架主链路已完成
+- 文档中的 Phase 1 最小实现清单已基本兑现
+- 剩余工作已主要转为增强项，而不是主骨架缺口
+
+### 25.1 已完成
+
+当前已经完成的核心能力包括：
+
+- `Capability Pack` 运行机制
+  - 已接入 runtime
+  - 已支持 `allowed_steps / preferred_steps / approval_required / max_replanning_rounds`
+
+- `Step Registry`
+  - 已支持最小 step 契约
+  - 已支持 `required_inputs / consumes_artifact_types / outputs / preferred_skill / side_effect_level`
+
+- 4 个最小 schema
+  - `StepDefinition`
+  - `TodoPlan`
+  - `ArtifactEnvelope`
+  - `StepRunRecord`
+
+- `Planner -> Orchestrator` 统一交接
+  - 已有 `RulePlanner fallback`
+  - 已有 `LLMPlanner`
+  - 已有 review 后 `replan`
+
+- 统一运行时阶段
+  - `plan`
+  - `dispatch`
+  - `execute`
+  - `normalize`
+  - `review`
+  - `synthesize`
+  - `finish`
+
+- 轻量 artifact 两层模型
+  - State 中的 `ArtifactEnvelope`
+  - 文件中的 `payload file`
+
+- 审批 gate
+  - `approval_required` 已真正接入 dispatch 前拦截
+  - 未批准 todo 会进入 `pending_approval`
+
+- graph-stage middleware 基础版
+  - 已有 `GovernanceStageMiddleware`
+  - 已有 `ArtifactStageMiddleware`
+  - 已有 `StepTrackingStageMiddleware`
+
+- skill 按需加载基础版
+  - runtime 不再在 setup 阶段全量激活 skills
+  - orchestrator 请求会按 step 的 `preferred_skill` 延迟加载
+
+- replanning guardrail 基础版
+  - `max_replanning_rounds`
+  - `repeated_error_guard`
+  - `budget_exceeded_fallback`
+
+### 25.2 当前测试状态
+
+当前主链路相关回归已通过：
+
+- capability packs
+- skills registry
+- planner / orchestrator
+- runtime
+- gateway integration
+
+最近一次主回归结果为：
+
+- `67 passed`
+
+这说明当前实现已经不只是“设计草图”，而是处于可持续扩业务的运行状态。
+
+### 25.3 已完成但仍属于基础版的部分
+
+以下能力已经有，但仍属于 Phase 1 的基础实现，不算最终形态：
+
+- `middleware runner`
+  - 目前已抽成统一执行层
+  - 但还不是完全开放式插件注册机制
+
+- `skill 按需加载`
+  - 当前是按请求与 step `preferred_skill` 做延迟加载
+  - 还没有做到更细粒度的执行时动态卸载或跨请求最优缓存策略
+
+- `budget guardrail`
+  - 当前已能止损并返回明确 fallback
+  - 但预算维度还主要是 `phase / replanning`
+  - 还没有扩展到 token / time / monetary cost
+
+### 25.4 当前剩余工作定位
+
+从本设计文档角度看，剩余工作已经主要是增强项：
+
+- middleware 挂载改成可配置注册机制
+- 更细的 budget / timeout / cost guardrail
+- 更丰富的试点业务 pack 与 step 扩展
+- 更强的 artifact schema 校验与复用能力
+
+换句话说：
+
+- **Phase 1 主骨架：已基本完成**
+- **后续工作重点：稳定性增强、工程化扩展、业务域扩展**
+
+---
+
+## 26. Phase 2 / 增强项规划
+
+Phase 2 的目标不是再补“能不能跑”，而是补“能不能稳、能不能扩、能不能产品化”。
+
+如果说 Phase 1 的目标是把 SmartClaw 做成一个真正可运行的动态规划框架，那么 Phase 2 的目标就是把它推进成一个可长期演进的超级智能体平台。
+
+### 26.1 总体目标
+
+Phase 2 主要解决 4 类问题：
+
+- 让动态规划在失败场景下更稳定、更可解释
+- 让治理、artifact、middleware 从“已接入”变成“可扩展平台能力”
+- 让 step / skill / pack 的业务扩展成本继续下降
+- 让运行过程具备更强的可观测性、可回放性、可产品化交付能力
+
+### 26.2 建议范围
+
+建议把 Phase 2 的增强项划分为 6 个方向。
+
+#### A. 运行时治理增强
+
+目标：
+
+- 把当前已有的 guardrail 从基础版推进到可上线版
+
+建议内容：
+
+- 增加更细的 budget 维度
+  - `timeout`
+  - `token budget`
+  - `monetary cost budget`
+
+- 强化失败分类
+  - 环境错误
+  - 权限错误
+  - 输入缺失
+  - 模型输出结构错误
+  - 外部系统错误
+
+- 细化 guardrail 触发策略
+  - 区分 step 级 repeated error
+  - 区分 session 级 repeated error
+  - 区分 retry 失败与 replan 失败
+
+- 统一 fallback contract
+  - 停止原因
+  - 已完成步骤
+  - 未完成步骤
+  - 建议下一步
+
+价值：
+
+- 降低空转
+- 降低成本
+- 提升失败时可解释性
+- 让“止损”也成为稳定产品行为
+
+#### B. Middleware 可配置化
+
+目标：
+
+- 把当前 graph 内建 middleware 机制升级成真正可插拔的扩展框架
+
+建议内容：
+
+- 增加 middleware registry
+- 支持 runtime / capability pack 声明启用哪些 middleware
+- 支持按 stage 配置 before / after hook
+- 支持业务域追加自定义 governance / audit / tracing middleware
+
+价值：
+
+- 降低核心 orchestrator 的膨胀速度
+- 让业务扩展不必频繁修改核心 graph
+- 为多业务域并行演进提供隔离能力
+
+#### C. Artifact 体系增强
+
+目标：
+
+- 让 artifact 从“轻量中间结果”升级成稳定的数据总线
+
+建议内容：
+
+- 为主要 artifact type 定义 schema
+- 增加 validation / invalid_reason / lineage
+- 支持 artifact 复用与回放
+- 支持从 session 级进一步扩展到 project 级或 knowledge 级沉淀
+
+价值：
+
+- 提升 planner 消费 artifact 的稳定性
+- 降低松散文本依赖
+- 让跨 step、跨阶段、跨业务复用成为可能
+
+#### D. Skill / Step 扩展体系增强
+
+目标：
+
+- 让 SmartClaw 真正具备持续扩业务域的结构化能力
+
+建议内容：
+
+- step versioning
+- step pack 管理
+- 更细粒度的 skill capability metadata
+- step 与 skill / tool / MCP 的绑定策略规范化
+- 建立业务域 step library
+
+价值：
+
+- 提升新业务接入效率
+- 降低 step 演进带来的兼容性风险
+- 让“超级智能体框架”具备持续沉淀能力
+
+#### E. Planner 智能增强
+
+目标：
+
+- 提升计划质量，而不只是保证协议打通
+
+建议内容：
+
+- 强化 candidate ranking
+- 优化并行决策
+- 提升 clarification / missing inputs 判断
+- 增加 verification-driven replanning
+- 提升多业务域场景下的 plan 稳定性
+
+价值：
+
+- 减少低质量计划
+- 减少不必要 replan
+- 提高复杂任务场景下的完成率
+
+#### F. 产品化与可观测性
+
+目标：
+
+- 让运行过程可被前端、运营、平台工程消费
+
+建议内容：
+
+- session replay
+- plan / todo / artifact / step run 可视化
+- 审批流状态展示
+- replan 原因追踪
+- 成本、耗时、失败热点统计
+
+价值：
+
+- 提高调试效率
+- 提高平台可运营性
+- 为后续产品化提供基础
+
+### 26.3 推荐优先级
+
+建议优先级如下：
+
+1. 运行时治理增强
+2. Artifact 体系增强
+3. Middleware 可配置化
+4. Planner 智能增强
+5. Skill / Step 扩展体系增强
+6. 产品化与可观测性
+
+这个顺序的核心考虑是：
+
+- 先补稳定性与失败控制
+- 再补结构化数据与平台扩展点
+- 最后再补更完整的运营与产品化能力
+
+### 26.4 推荐实施顺序
+
+如果按工程推进顺序，我建议分 3 个小阶段做。
+
+#### Phase 2A: 稳定性收口
+
+先做：
+
+- 细粒度 budget / timeout / cost guardrail
+- 更完整的 repeated error 分类
+- 统一 fallback contract
+- artifact schema validation
+
+这是最优先的，因为它直接影响生产可用性。
+
+#### Phase 2B: 扩展机制收口
+
+再做：
+
+- middleware registry
+- step versioning
+- pack 级扩展能力
+- artifact lineage 与复用
+
+这是把框架从“可运行”推进到“可长期扩展”。
+
+#### Phase 2C: 质量与产品化增强
+
+最后做：
+
+- planner 质量提升
+- replay / tracing / 可视化
+- 审批流与运行过程前端消费能力
+- 成本与效果统计
+
+这是把系统从工程框架推进到平台产品。
+
+### 26.5 当前建议的不做项
+
+Phase 2 不建议一开始就做以下内容：
+
+- 重型 workflow designer
+- 复杂 BPMN 建模
+- 过早引入多层平台配置中心
+- 过早追求完全自动化自治 agent
+
+原因很简单：
+
+- 这些东西实现成本高
+- 会显著拖慢核心框架演进
+- 当前阶段的主要矛盾仍然是稳定性、扩展性、可观测性
+
+### 26.6 一句话总结
+
+Phase 2 不是改方向，而是在当前设计方向不变的前提下，把 SmartClaw 从：
+
+- 一个已经跑通的动态规划框架
+
+推进成：
+
+- 一个可治理、可扩展、可观测、可产品化的超级智能体平台
+
+---
+
+## 27. 最终结论
 
 SmartClaw 后续要做的，不是固定 workflow 平台，也不是完全自由的 agent。
 

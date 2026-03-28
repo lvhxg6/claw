@@ -1,0 +1,19 @@
+id: api_doc_generate
+domain: development
+description: 根据 API 契约生成接口文档
+required_inputs: []
+consumes_artifact_types:
+  - api_contract
+outputs:
+  - api_doc
+preferred_skill: api-doc-skill
+can_parallel: false
+risk_level: low
+completion_signal: api_doc_ready
+side_effect_level: read_only
+kind: documentation
+plan_role: terminal
+activation_mode: after_artifact
+display_policy: always_show
+intent_tags:
+  - documentation

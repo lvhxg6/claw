@@ -258,6 +258,7 @@ def test_post_chat_stream_clarification_event() -> None:
         body = resp.text
         assert "event: clarification" in body
         assert "Which file?" in body
+        assert "\"session_key\"" in body
         # clarification event should appear before done event
         clar_pos = body.index("event: clarification")
         done_pos = body.index("event: done")

@@ -12,9 +12,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import suppress
 from functools import partial
+import json
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    message_to_dict,
+    messages_from_dict,
+)
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph as _CompiledStateGraph
@@ -40,6 +48,90 @@ from smartclaw.tools.browser_tools import get_all_browser_tools
 type CompiledStateGraph = _CompiledStateGraph[Any, Any, Any, Any]
 
 logger = get_logger("agent.graph")
+
+_ORCHESTRATOR_CHECKPOINT_KEY = "orchestrator_checkpoint"
+_RERUN_KEYWORDS = ("重新", "重跑", "再检查一次", "重新检查", "重新生成", "忽略之前", "基于最新", "再来一次")
+
+
+async def _load_orchestrator_checkpoint(
+    memory_store: Any | None,
+    session_key: str | None,
+) -> dict[str, Any] | None:
+    if memory_store is None or not session_key:
+        return None
+    cfg = await memory_store.get_session_config(session_key) or {}
+    config = dict(cfg.get("config") or {})
+    checkpoint = config.get(_ORCHESTRATOR_CHECKPOINT_KEY)
+    if not isinstance(checkpoint, dict):
+        return None
+    return checkpoint
+
+
+async def _persist_orchestrator_checkpoint(
+    memory_store: Any | None,
+    session_key: str | None,
+    state: dict[str, Any] | None,
+) -> None:
+    if memory_store is None or not session_key:
+        return
+    cfg = await memory_store.get_session_config(session_key) or {}
+    config = dict(cfg.get("config") or {})
+    if not state or str(state.get("mode")) != "orchestrator":
+        if _ORCHESTRATOR_CHECKPOINT_KEY in config:
+            config.pop(_ORCHESTRATOR_CHECKPOINT_KEY, None)
+            await memory_store.set_session_config(
+                session_key,
+                model_override=cfg.get("model_override"),
+                config_json=json.dumps(config, ensure_ascii=False),
+            )
+        return
+
+    serializable = {
+        "messages": [message_to_dict(msg) for msg in state.get("messages", []) if isinstance(msg, BaseMessage)],
+        "mode": state.get("mode"),
+        "plan": state.get("plan"),
+        "todos": state.get("todos"),
+        "current_phase": state.get("current_phase"),
+        "phase_status": state.get("phase_status"),
+        "phase_index": state.get("phase_index"),
+        "capability_pack": state.get("capability_pack"),
+        "capability_policy": state.get("capability_policy"),
+        "dispatch_batches": state.get("dispatch_batches"),
+        "raw_task_results": state.get("raw_task_results"),
+        "task_results": state.get("task_results"),
+        "artifacts": state.get("artifacts"),
+        "step_run_records": state.get("step_run_records"),
+        "replanning_count": state.get("replanning_count"),
+        "structured_result": state.get("structured_result"),
+        "schema_validation": state.get("schema_validation"),
+        "guardrail_status": state.get("guardrail_status"),
+    }
+    config[_ORCHESTRATOR_CHECKPOINT_KEY] = {
+        "awaiting_approval": bool(state.get("clarification_request")),
+        "state": serializable,
+    }
+    await memory_store.set_session_config(
+        session_key,
+        model_override=cfg.get("model_override"),
+        config_json=json.dumps(config, ensure_ascii=False),
+    )
+
+
+def _compute_recursion_limit(max_iterations: int) -> int:
+    """Return a LangGraph recursion limit aligned with agent loop iterations.
+
+    A single ReAct iteration typically spans at least two graph transitions:
+    `reasoning -> action -> reasoning`. If we only set `max_iterations` in
+    state but leave LangGraph at its default recursion cap, sub-agents can hit
+    `GRAPH_RECURSION_LIMIT` before the agent-level iteration guard runs.
+    """
+    bounded_iterations = max(1, int(max_iterations))
+    return max(25, (bounded_iterations * 2) + 8)
+
+
+def _requests_rerun(user_message: str) -> bool:
+    lowered = user_message.lower()
+    return any(keyword in user_message or keyword in lowered for keyword in _RERUN_KEYWORDS)
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +375,8 @@ async def invoke(
     mode: str | None = None,
     capability_pack: str | None = None,
     capability_policy: dict[str, Any] | None = None,
+    approved: bool | None = None,
+    approval_action: str | None = None,
 ) -> AgentState:
     """Run the agent graph and return the final AgentState.
 
@@ -306,6 +400,7 @@ async def invoke(
 
     _max = max_iterations if max_iterations is not None else 50
 
+    resume_checkpoint: dict[str, Any] | None = None
     messages: list[BaseMessage] = []
     if system_prompt:
         messages.append(SystemMessage(content=system_prompt))
@@ -328,33 +423,98 @@ async def invoke(
             messages = await summarizer.build_context(
                 session_key, messages, system_prompt=system_prompt
             )
+        resume_checkpoint = await _load_orchestrator_checkpoint(memory_store, session_key)
 
-    messages.append(HumanMessage(content=user_message))
+    history_message_count = len(messages)
+    if (
+        isinstance(resume_checkpoint, dict)
+        and resume_checkpoint.get("awaiting_approval")
+        and isinstance(resume_checkpoint.get("state"), dict)
+    ):
+        checkpoint_state = dict(resume_checkpoint.get("state") or {})
+        checkpoint_messages = checkpoint_state.get("messages") or []
+        restored_messages = messages_from_dict(checkpoint_messages) if checkpoint_messages else messages
+        initial_state: AgentState = {
+            "messages": restored_messages,
+            "iteration": 0,
+            "max_iterations": _max,
+            "final_answer": None,
+            "error": None,
+            "session_key": session_key,
+            "summary": None,
+            "sub_agent_depth": None,
+            "mode": checkpoint_state.get("mode") if checkpoint_state.get("mode") in {"classic", "orchestrator"} else mode,
+            "plan": checkpoint_state.get("plan"),
+            "todos": checkpoint_state.get("todos"),
+            "current_phase": checkpoint_state.get("current_phase"),
+            "phase_status": checkpoint_state.get("phase_status"),
+            "phase_index": checkpoint_state.get("phase_index"),
+            "capability_pack": checkpoint_state.get("capability_pack", capability_pack),
+            "capability_policy": checkpoint_state.get("capability_policy", capability_policy),
+            "approval_granted": approved,
+            "approval_action": approval_action,
+            "dispatch_batches": checkpoint_state.get("dispatch_batches"),
+            "raw_task_results": checkpoint_state.get("raw_task_results"),
+            "task_results": checkpoint_state.get("task_results"),
+            "artifacts": checkpoint_state.get("artifacts"),
+            "step_run_records": checkpoint_state.get("step_run_records"),
+            "replanning_count": checkpoint_state.get("replanning_count", 0),
+            "structured_result": checkpoint_state.get("structured_result"),
+            "schema_validation": checkpoint_state.get("schema_validation"),
+            "guardrail_status": checkpoint_state.get("guardrail_status"),
+            "token_stats": None,
+            "clarification_request": None,
+        }
+        history_message_count = len(restored_messages)
+    else:
+        messages.append(HumanMessage(content=user_message))
+        checkpoint_state = (
+            dict(resume_checkpoint.get("state") or {})
+            if isinstance(resume_checkpoint, dict) and isinstance(resume_checkpoint.get("state"), dict)
+            else {}
+        )
+        checkpoint_awaiting_approval = bool(resume_checkpoint.get("awaiting_approval")) if isinstance(resume_checkpoint, dict) else False
+        reuse_runtime_state = bool(
+            bool(checkpoint_state)
+            and not checkpoint_awaiting_approval
+            and str(checkpoint_state.get("mode")) == "orchestrator"
+            and str(mode or checkpoint_state.get("mode") or "") == "orchestrator"
+            and not approved
+            and not approval_action
+            and not _requests_rerun(user_message)
+        )
 
-    initial_state: AgentState = {
-        "messages": messages,
-        "iteration": 0,
-        "max_iterations": _max,
-        "final_answer": None,
-        "error": None,
-        "session_key": session_key,
-        "summary": None,
-        "sub_agent_depth": None,
-        "mode": mode if mode in {"classic", "orchestrator"} else None,
-        "plan": None,
-        "todos": None,
-        "current_phase": None,
-        "phase_status": None,
-        "phase_index": None,
-        "capability_pack": capability_pack,
-        "capability_policy": capability_policy,
-        "dispatch_batches": None,
-        "task_results": None,
-        "structured_result": None,
-        "schema_validation": None,
-        "token_stats": None,
-        "clarification_request": None,
-    }
+        initial_state: AgentState = {
+            "messages": messages,
+            "iteration": 0,
+            "max_iterations": _max,
+            "final_answer": None,
+            "error": None,
+            "session_key": session_key,
+            "summary": None,
+            "sub_agent_depth": None,
+            "mode": mode if mode in {"classic", "orchestrator"} else None,
+            "plan": checkpoint_state.get("plan") if reuse_runtime_state else None,
+            "todos": checkpoint_state.get("todos") if reuse_runtime_state else None,
+            "current_phase": None,
+            "phase_status": None,
+            "phase_index": None,
+            "capability_pack": capability_pack,
+            "capability_policy": capability_policy,
+            "approval_granted": approved,
+            "approval_action": approval_action,
+            "dispatch_batches": None,
+            "raw_task_results": None,
+            "task_results": None,
+            "artifacts": checkpoint_state.get("artifacts") if reuse_runtime_state else None,
+            "step_run_records": checkpoint_state.get("step_run_records") if reuse_runtime_state else None,
+            "replanning_count": 0,
+            "structured_result": None,
+            "schema_validation": None,
+            "guardrail_status": None,
+            "token_stats": None,
+            "clarification_request": None,
+        }
 
     if session_key is not None:
         try:
@@ -391,13 +551,17 @@ async def invoke(
         pass
 
     logger.info("invoke start", user_message=user_message[:100], max_iterations=_max, session_key=session_key)
-    result = await graph.ainvoke(initial_state)
+    result = await graph.ainvoke(
+        initial_state,
+        {"recursion_limit": _compute_recursion_limit(_max)},
+    )
     logger.info("invoke done", iteration=result.get("iteration", 0))
 
     # P1: Persist new messages and check summarization when memory is enabled
     if session_key is not None and memory_store is not None:
         result_messages = result.get("messages", [])
-        for msg in result_messages:
+        new_messages = result_messages[history_message_count:] if history_message_count > 0 else result_messages
+        for msg in new_messages:
             await memory_store.add_full_message(session_key, msg)
 
         # Post-turn: prefer context_engine, fall back to summarizer
@@ -440,6 +604,9 @@ async def invoke(
             await _hook_registry.trigger("session:end", SessionEndEvent(session_key=session_key))
         except Exception:
             pass
+
+        with suppress(Exception):
+            await _persist_orchestrator_checkpoint(memory_store, session_key, result)
 
     return result  # type: ignore[return-value]
 
@@ -603,10 +770,17 @@ async def invoke_multimodal(
         "phase_index": None,
         "capability_pack": None,
         "capability_policy": None,
+        "approval_granted": None,
+        "approval_action": None,
         "dispatch_batches": None,
+        "raw_task_results": None,
         "task_results": None,
+        "artifacts": None,
+        "step_run_records": None,
+        "replanning_count": 0,
         "structured_result": None,
         "schema_validation": None,
+        "guardrail_status": None,
         "token_stats": None,
         "clarification_request": None,
     }

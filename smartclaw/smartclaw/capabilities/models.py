@@ -28,9 +28,13 @@ class CapabilityPackDefinition:
     approval_message: str = ""
     allowed_tools: list[str] = field(default_factory=list)
     denied_tools: list[str] = field(default_factory=list)
+    allowed_steps: list[str] = field(default_factory=list)
+    preferred_steps: list[str] = field(default_factory=list)
     tool_groups: dict[str, list[str]] = field(default_factory=dict)
     concurrency_limits: dict[str, int] = field(default_factory=dict)
     max_task_retries: int = 0
+    max_replanning_rounds: int = 0
+    repeated_error_threshold: int = 0
     retry_on_error: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
     manifest_path: str | None = None
@@ -52,6 +56,10 @@ class CapabilityPackDefinition:
             errors.append("max_schema_retries must be >= 0")
         if self.max_task_retries < 0:
             errors.append("max_task_retries must be >= 0")
+        if self.max_replanning_rounds < 0:
+            errors.append("max_replanning_rounds must be >= 0")
+        if self.repeated_error_threshold < 0:
+            errors.append("repeated_error_threshold must be >= 0")
         if self.allowed_tools and self.denied_tools:
             overlap = sorted(set(self.allowed_tools) & set(self.denied_tools))
             if overlap:

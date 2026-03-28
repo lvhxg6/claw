@@ -1,0 +1,18 @@
+id: inspect
+domain: security
+description: 对目标执行检查或巡检任务
+required_inputs: []
+consumes_artifact_types: []
+outputs:
+  - inspection_result
+preferred_skill: inspection-skill
+can_parallel: true
+risk_level: low
+completion_signal: inspection_result_ready
+side_effect_level: read_only
+kind: inspection
+plan_role: core
+activation_mode: immediate
+display_policy: always_show
+intent_tags:
+  - inspection

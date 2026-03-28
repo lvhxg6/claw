@@ -11,7 +11,9 @@ cd "$SCRIPT_DIR"
 
 # 加载 .env
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    . ./.env
+    set +a
 fi
 
 MODE="${1:-gateway}"

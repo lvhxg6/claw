@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+import structlog
+
 from smartclaw.tools.base import SmartClawTool
 
 # ---------------------------------------------------------------------------
@@ -72,6 +74,9 @@ class ShellTool(SmartClawTool):
             # Check deny patterns
             for pattern in self.deny_patterns:
                 if re.search(pattern, command):
+                    # Log security event for audit
+                    logger = structlog.get_logger(component="security.shell")
+                    logger.warning("command_blocked_by_policy", command=command, pattern=pattern)
                     return "Error: Command blocked by security policy"
 
             # Validate working_dir

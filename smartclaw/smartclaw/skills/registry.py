@@ -97,147 +97,160 @@ class SkillsRegistry:
         For skills with Python entry_points, uses the existing import mechanism.
         Logs errors and continues on individual skill/tool failures.
         """
-        skill_infos = self._loader.list_skills()
+        self.load_and_register_names([info.name for info in self._loader.list_skills()])
 
-        for info in skill_infos:
-            try:
-                result_or_body, definition = self._loader.load_skill(info.name)
+    def load_and_register_names(self, names: list[str]) -> None:
+        """Load and register only the requested skills."""
+        skill_infos = {info.name: info for info in self._loader.list_skills()}
+        for name in names:
+            info = skill_infos.get(name)
+            if info is None:
+                logger.warning("skill_not_found", name=name)
+                continue
+            self._load_and_register_info(info)
 
-                # Pure SKILL.md skill (no definition) — register as prompt skill
-                # Also discover scripts/ subdirectory for auto-registered tools
-                if definition is None:
-                    self._skills[info.name] = result_or_body
-                    script_tool_names: list[str] = []
+    def reload_loaded_skills(self) -> None:
+        """Reload only the skills that have already been activated."""
+        self.load_and_register_names(self.list_skills())
 
-                    # Resolve skill_dir from info.path (SKILL.md path)
-                    import pathlib as _pathlib
-                    md_skill_dir = str(_pathlib.Path(info.path).parent.resolve())
+    def _load_and_register_info(self, info: Any) -> None:
+        try:
+            result_or_body, definition = self._loader.load_skill(info.name)
 
-                    try:
-                        script_defs = self._loader.discover_scripts(info.name)
-                        for script_def in script_defs:
-                            try:
-                                bt = NativeCommandTool.from_tool_def(
-                                    script_def, skill_dir=md_skill_dir
-                                )
-                                self._tool_registry.register(bt)
-                                script_tool_names.append(bt.name)
-                            except Exception as exc:
-                                logger.error(
-                                    "script_tool_registration_failed",
-                                    skill=info.name,
-                                    tool=script_def.name,
-                                    error=str(exc),
-                                )
-                    except Exception as exc:
-                        logger.error(
-                            "script_discovery_failed",
-                            skill=info.name,
-                            error=str(exc),
-                        )
+            # Pure SKILL.md skill (no definition) — register as prompt skill
+            # Also discover scripts/ subdirectory for auto-registered tools
+            if definition is None:
+                self._skills[info.name] = result_or_body
+                script_tool_names: list[str] = []
 
-                    self._skill_tools[info.name] = script_tool_names
-                    logger.info(
-                        "skill_registered",
-                        name=info.name,
-                        tool_count=len(script_tool_names),
-                        tools=script_tool_names,
-                        skill_type="markdown",
-                    )
-                    continue
+                # Resolve skill_dir from info.path (SKILL.md path)
+                import pathlib as _pathlib
+                md_skill_dir = str(_pathlib.Path(info.path).parent.resolve())
 
-                # Register native command tools from the definition
-                native_tool_names: list[str] = []
-                skill_dir_path: str | None = None
-                if isinstance(definition, SkillDefinition):
-                    # Resolve skill directory path for {skill_dir} placeholder
-                    info_path = info.path  # path to skill.yaml or SKILL.md
-                    skill_dir_path = str(
-                        __import__("pathlib").Path(info_path).parent.resolve()
+                try:
+                    script_defs = self._loader.discover_scripts(info.name)
+                    for script_def in script_defs:
+                        try:
+                            bt = NativeCommandTool.from_tool_def(
+                                script_def, skill_dir=md_skill_dir
+                            )
+                            self._tool_registry.register(bt)
+                            script_tool_names.append(bt.name)
+                        except Exception as exc:
+                            logger.error(
+                                "script_tool_registration_failed",
+                                skill=info.name,
+                                tool=script_def.name,
+                                error=str(exc),
+                            )
+                except Exception as exc:
+                    logger.error(
+                        "script_discovery_failed",
+                        skill=info.name,
+                        error=str(exc),
                     )
 
-                    for tool_def in definition.tools:
-                        if tool_def.type in ("shell", "script", "exec"):
-                            try:
-                                errors = tool_def.validate()
-                                if errors:
-                                    logger.error(
-                                        "tool_def_validation_failed",
-                                        skill=info.name,
-                                        tool=tool_def.name,
-                                        errors=errors,
-                                    )
-                                    continue
-                                bt = NativeCommandTool.from_tool_def(
-                                    tool_def, skill_dir=skill_dir_path
-                                )
-                                self._tool_registry.register(bt)
-                                native_tool_names.append(bt.name)
-                            except Exception as exc:
-                                logger.error(
-                                    "native_tool_registration_failed",
-                                    skill=info.name,
-                                    tool=tool_def.name,
-                                    error=str(exc),
-                                )
-                                continue
-
-                    # Auto-discover scripts/ subdirectory
-                    try:
-                        script_defs = self._loader.discover_scripts(info.name)
-                        for script_def in script_defs:
-                            try:
-                                bt = NativeCommandTool.from_tool_def(
-                                    script_def, skill_dir=skill_dir_path
-                                )
-                                self._tool_registry.register(bt)
-                                native_tool_names.append(bt.name)
-                            except Exception as exc:
-                                logger.error(
-                                    "script_tool_registration_failed",
-                                    skill=info.name,
-                                    tool=script_def.name,
-                                    error=str(exc),
-                                )
-                    except Exception as exc:
-                        logger.error(
-                            "script_discovery_failed",
-                            skill=info.name,
-                            error=str(exc),
-                        )
-
-                # If there's a Python entry_point, call it and register
-                if isinstance(definition, SkillDefinition) and definition.entry_point:
-                    entry_fn = result_or_body
-                    result = entry_fn()
-                    self._skills[info.name] = result
-
-                    # Extract Python tools
-                    py_tool_names: list[str] = []
-                    py_tools = self._extract_tools(result)
-                    for tool in py_tools:
-                        self._tool_registry.register(tool)
-                        py_tool_names.append(tool.name)
-
-                    self._skill_tools[info.name] = py_tool_names + native_tool_names
-                else:
-                    # Pure YAML skill (native command tools only, no entry_point)
-                    self._skills[info.name] = definition
-                    self._skill_tools[info.name] = native_tool_names
-
+                self._skill_tools[info.name] = script_tool_names
                 logger.info(
                     "skill_registered",
                     name=info.name,
-                    tool_count=len(self._skill_tools.get(info.name, [])),
-                    tools=self._skill_tools.get(info.name, []),
+                    tool_count=len(script_tool_names),
+                    tools=script_tool_names,
+                    skill_type="markdown",
                 )
-            except Exception as exc:
-                logger.error(
-                    "skill_load_failed",
-                    name=info.name,
-                    error=str(exc),
+                return
+
+            # Register native command tools from the definition
+            native_tool_names: list[str] = []
+            skill_dir_path: str | None = None
+            if isinstance(definition, SkillDefinition):
+                # Resolve skill directory path for {skill_dir} placeholder
+                info_path = info.path  # path to skill.yaml or SKILL.md
+                skill_dir_path = str(
+                    __import__("pathlib").Path(info_path).parent.resolve()
                 )
-                continue
+
+                for tool_def in definition.tools:
+                    if tool_def.type in ("shell", "script", "exec"):
+                        try:
+                            errors = tool_def.validate()
+                            if errors:
+                                logger.error(
+                                    "tool_def_validation_failed",
+                                    skill=info.name,
+                                    tool=tool_def.name,
+                                    errors=errors,
+                                )
+                                continue
+                            bt = NativeCommandTool.from_tool_def(
+                                tool_def, skill_dir=skill_dir_path
+                            )
+                            self._tool_registry.register(bt)
+                            native_tool_names.append(bt.name)
+                        except Exception as exc:
+                            logger.error(
+                                "native_tool_registration_failed",
+                                skill=info.name,
+                                tool=tool_def.name,
+                                error=str(exc),
+                            )
+                            continue
+
+                # Auto-discover scripts/ subdirectory
+                try:
+                    script_defs = self._loader.discover_scripts(info.name)
+                    for script_def in script_defs:
+                        try:
+                            bt = NativeCommandTool.from_tool_def(
+                                script_def, skill_dir=skill_dir_path
+                            )
+                            self._tool_registry.register(bt)
+                            native_tool_names.append(bt.name)
+                        except Exception as exc:
+                            logger.error(
+                                "script_tool_registration_failed",
+                                skill=info.name,
+                                tool=script_def.name,
+                                error=str(exc),
+                            )
+                except Exception as exc:
+                    logger.error(
+                        "script_discovery_failed",
+                        skill=info.name,
+                        error=str(exc),
+                    )
+
+            # If there's a Python entry_point, call it and register
+            if isinstance(definition, SkillDefinition) and definition.entry_point:
+                entry_fn = result_or_body
+                result = entry_fn()
+                self._skills[info.name] = result
+
+                # Extract Python tools
+                py_tool_names: list[str] = []
+                py_tools = self._extract_tools(result)
+                for tool in py_tools:
+                    self._tool_registry.register(tool)
+                    py_tool_names.append(tool.name)
+
+                self._skill_tools[info.name] = py_tool_names + native_tool_names
+            else:
+                # Pure YAML skill (native command tools only, no entry_point)
+                self._skills[info.name] = definition
+                self._skill_tools[info.name] = native_tool_names
+
+            logger.info(
+                "skill_registered",
+                name=info.name,
+                tool_count=len(self._skill_tools.get(info.name, [])),
+                tools=self._skill_tools.get(info.name, []),
+            )
+        except Exception as exc:
+            logger.error(
+                "skill_load_failed",
+                name=info.name,
+                error=str(exc),
+            )
 
     @staticmethod
     def _extract_tools(module: object) -> list[BaseTool]:

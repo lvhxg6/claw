@@ -283,3 +283,39 @@ def test_get_session_stats_returns_estimates_and_last_token_stats() -> None:
         assert data["provider_cache_supported"] is False
     finally:
         graph_module.invoke = original  # type: ignore[assignment]
+
+
+def test_set_session_config_preserves_existing_config_json() -> None:
+    """PUT /api/sessions/{key}/config should merge model override without erasing stored config."""
+    import json
+    import smartclaw.agent.graph as graph_module
+
+    original = graph_module.invoke
+    try:
+        client, _, mock_memory, _ = make_test_client()
+        mock_memory.get_session_config = AsyncMock(
+            return_value={
+                "model_override": "glm/glm-5",
+                "config": {
+                    "orchestrator_checkpoint": {
+                        "awaiting_approval": True,
+                        "state": {"phase_index": 1},
+                    }
+                },
+            }
+        )
+        with client:
+            resp = client.put(
+                "/api/sessions/sess-1/config",
+                json={"model": "kimi/kimi-k2.5"},
+            )
+        assert resp.status_code == 200
+        mock_memory.set_session_config.assert_awaited_once()
+        call = mock_memory.set_session_config.await_args
+        assert call.args[0] == "sess-1"
+        assert call.kwargs["model_override"] == "kimi/kimi-k2.5"
+        config_json = json.loads(call.kwargs["config_json"])
+        assert config_json["orchestrator_checkpoint"]["awaiting_approval"] is True
+        assert config_json["orchestrator_checkpoint"]["state"]["phase_index"] == 1
+    finally:
+        graph_module.invoke = original  # type: ignore[assignment]

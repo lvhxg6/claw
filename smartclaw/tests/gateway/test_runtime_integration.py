@@ -123,6 +123,38 @@ class TestChatPassesRuntimeParams:
         finally:
             graph_module.invoke = original_invoke
 
+    def test_chat_passes_approved_flag_to_invoke(self):
+        import smartclaw.agent.graph as graph_module
+        original_invoke = graph_module.invoke
+
+        try:
+            client, mock_invoke, _, _ = make_test_client()
+
+            with client:
+                resp = client.post("/api/chat", json={"message": "hello", "approved": True})
+            assert resp.status_code == 200
+
+            mock_invoke.assert_awaited_once()
+            assert mock_invoke.call_args.kwargs["approved"] is True
+        finally:
+            graph_module.invoke = original_invoke
+
+    def test_chat_passes_approval_action_to_invoke(self):
+        import smartclaw.agent.graph as graph_module
+        original_invoke = graph_module.invoke
+
+        try:
+            client, mock_invoke, _, _ = make_test_client()
+
+            with client:
+                resp = client.post("/api/chat", json={"message": "hello", "approval_action": "report_only"})
+            assert resp.status_code == 200
+
+            mock_invoke.assert_awaited_once()
+            assert mock_invoke.call_args.kwargs["approval_action"] == "report_only"
+        finally:
+            graph_module.invoke = original_invoke
+
 
 class TestCapabilityPackEndpoints:
     """Verify gateway endpoints expose capability pack metadata for the UI."""
@@ -315,6 +347,45 @@ class TestCapabilityPackEndpoints:
             assert resp.status_code == 200
             payload = resp.json()
             assert payload["clarification"]["question"] == "Please approve governance execution"
+            mock_invoke.assert_not_called()
+        finally:
+            graph_module.invoke = original_invoke
+
+    def test_chat_stream_approval_clarification_includes_session_key(self):
+        import smartclaw.agent.graph as graph_module
+        original_invoke = graph_module.invoke
+
+        try:
+            client, mock_invoke, _, _ = make_test_client()
+
+            with client:
+                runtime = client.app.state.runtime
+                runtime.resolve_capability_pack.return_value = CapabilityResolution(
+                    requested_name="security-governance",
+                    resolved_name="security-governance",
+                    reason="explicit_request",
+                    pack=MagicMock(
+                        preferred_mode="orchestrator",
+                        task_profile="multi_stage",
+                        scenario_types=["inspection"],
+                    ),
+                )
+                runtime.build_capability_policy.return_value = {
+                    "approval_required": True,
+                    "approval_message": "Please approve governance execution",
+                }
+
+                resp = client.post(
+                    "/api/chat/stream",
+                    json={
+                        "message": "执行巡检",
+                        "capability_pack": "security-governance",
+                    },
+                )
+            assert resp.status_code == 200
+            body = resp.text
+            assert "event: clarification" in body
+            assert "\"session_key\"" in body
             mock_invoke.assert_not_called()
         finally:
             graph_module.invoke = original_invoke

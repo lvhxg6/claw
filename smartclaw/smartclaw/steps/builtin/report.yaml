@@ -1,0 +1,22 @@
+id: report
+domain: cross_domain
+description: 汇总检查结果、整改方案与实际执行状态，生成最终输出或报告
+required_inputs: []
+consumes_artifact_types:
+  - inspection_result
+  - remediation_plan_result
+  - remediation_apply_result
+  - api_doc
+outputs:
+  - report_result
+preferred_skill: reporting-skill
+can_parallel: false
+risk_level: low
+completion_signal: report_result_ready
+side_effect_level: read_only
+kind: report
+plan_role: terminal
+activation_mode: after_artifact
+display_policy: always_show
+intent_tags:
+  - reporting

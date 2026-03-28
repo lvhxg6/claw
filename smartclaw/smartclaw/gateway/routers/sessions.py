@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Query, Request
 from langchain_core.messages import message_to_dict
 
@@ -227,8 +229,14 @@ async def set_session_config(
     if memory_store is None:
         return {"error": "Memory store not available"}
     try:
+        existing = await memory_store.get_session_config(session_key) or {}
+        existing_config = existing.get("config") or {}
+        if not isinstance(existing_config, dict):
+            existing_config = {}
         await memory_store.set_session_config(
-            session_key, model_override=body.model
+            session_key,
+            model_override=body.model,
+            config_json=json.dumps(existing_config, ensure_ascii=False),
         )
         return {"session_key": session_key, "model_override": body.model}
     except Exception as exc:

@@ -118,6 +118,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "dispatch.created",
         "dispatch.batch_started",
         "dispatch.batch_ended",
+        "governance.approval_required",
         "phase.started",
         "phase.ended",
         "subagent.spawned",

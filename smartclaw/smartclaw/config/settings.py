@@ -114,6 +114,14 @@ class CapabilityPackSettings(BaseSettings):
     global_dir: str = "~/.smartclaw/capability_packs"
 
 
+class StepRegistrySettings(BaseSettings):
+    """Step registry configuration."""
+
+    enabled: bool = Field(default=True, description="Enable step registry loading")
+    workspace_dir: str = "{workspace}/steps"
+    global_dir: str = "~/.smartclaw/steps"
+
+
 class UploadSettings(BaseSettings):
     """Attachment upload and extraction configuration."""
 
@@ -251,6 +259,7 @@ class SmartClawSettings(BaseSettings):
     bootstrap: BootstrapSettings = Field(default_factory=BootstrapSettings)
     config: ConfigSettings = Field(default_factory=ConfigSettings)
     capability_packs: CapabilityPackSettings = Field(default_factory=CapabilityPackSettings)
+    step_registry: StepRegistrySettings = Field(default_factory=StepRegistrySettings)
     uploads: UploadSettings = Field(default_factory=UploadSettings)
     sub_agent: SubAgentSettings = Field(default_factory=SubAgentSettings)
     multi_agent: MultiAgentSettings = Field(default_factory=MultiAgentSettings)

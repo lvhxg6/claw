@@ -176,6 +176,8 @@ async def test_setup_loads_capability_packs_and_builds_summary(mock_build_graph,
     rt = await setup_agent_runtime(settings)
 
     assert rt.capability_registry is not None
+    assert rt.step_registry is not None
+    assert "inspect" in rt.step_registry.list_ids()
     assert rt.capability_registry.list_names() == ["security-governance"]
     assert "Available Capability Packs" in rt.system_prompt
 
@@ -226,11 +228,17 @@ async def test_build_capability_policy_exposes_governance_fields(mock_build_grap
                 "description: Security governance workflows",
                 "approval_required: true",
                 "approval_message: Please approve execution",
+                "allowed_steps:",
+                "  - inspect",
+                "  - report",
+                "preferred_steps:",
+                "  - report",
                 "result_format: json",
                 "schema_enforced: true",
                 "result_schema: '{\"type\":\"object\",\"required\":[\"status\"]}'",
                 "max_schema_retries: 1",
                 "max_task_retries: 2",
+                "repeated_error_threshold: 3",
                 "retry_on_error: true",
                 "concurrency_limits:",
                 "  inspection: 2",
@@ -254,7 +262,136 @@ async def test_build_capability_policy_exposes_governance_fields(mock_build_grap
     assert policy["schema_enforced"] is True
     assert policy["max_schema_retries"] == 1
     assert policy["max_task_retries"] == 2
+    assert policy["repeated_error_threshold"] == 3
     assert policy["concurrency_limits"] == {"inspection": 2}
+    assert policy["allowed_steps"] == ["inspect", "report"]
+    assert policy["preferred_steps"] == ["report"]
+
+
+@pytest.mark.asyncio
+async def test_create_request_graph_passes_capability_pack_to_graph_factory(mock_build_graph, tmp_path: Path):
+    pack_dir = tmp_path / "capability_packs" / "security-governance"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "manifest.yaml").write_text(
+        "\n".join(
+            [
+                "name: security-governance",
+                "description: Security governance workflows",
+                "allowed_tools:",
+                "  - read_file",
+                "allowed_steps:",
+                "  - inspect",
+                "  - report",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = _make_settings(
+        **{
+            "agent_defaults.workspace": str(tmp_path),
+            "capability_packs.enabled": True,
+            "capability_packs.workspace_dir": "{workspace}/capability_packs",
+        }
+    )
+    rt = await setup_agent_runtime(settings)
+    rt.graph_factory.create = MagicMock(return_value="graph")
+
+    result = rt.create_request_graph(mode="orchestrator", capability_pack="security-governance")
+
+    assert result == "graph"
+    kwargs = rt.graph_factory.create.call_args.kwargs
+    assert kwargs["capability_pack"] == "security-governance"
+
+
+@pytest.mark.asyncio
+async def test_create_request_graph_lazy_loads_skills_for_orchestrator(mock_build_graph, tmp_path: Path):
+    skill_dir = tmp_path / "skills" / "inspection-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "skill.yaml").write_text(
+        "\n".join(
+            [
+                "name: inspection-skill",
+                "description: Inspection helpers",
+                "tools:",
+                "  - name: inspect-native",
+                "    description: Run inspection helper",
+                "    type: shell",
+                "    command: echo inspect",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    steps_dir = tmp_path / "steps"
+    steps_dir.mkdir(parents=True)
+    (steps_dir / "inspect.yaml").write_text(
+        "\n".join(
+            [
+                "id: inspect",
+                "domain: security",
+                "description: 对目标执行检查任务",
+                "outputs:",
+                "  - inspection_result",
+                "preferred_skill: inspection-skill",
+                "can_parallel: true",
+                "risk_level: low",
+                "completion_signal: inspection_result_ready",
+                "side_effect_level: read_only",
+                "kind: inspection",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    pack_dir = tmp_path / "capability_packs" / "security-governance"
+    pack_dir.mkdir(parents=True)
+    (pack_dir / "manifest.yaml").write_text(
+        "\n".join(
+            [
+                "name: security-governance",
+                "description: Security governance workflows",
+                "allowed_steps:",
+                "  - inspect",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = _make_settings(
+        **{
+            "agent_defaults.workspace": str(tmp_path),
+            "skills.enabled": True,
+            "skills.workspace_dir": "{workspace}/skills",
+            "capability_packs.enabled": True,
+            "capability_packs.workspace_dir": "{workspace}/capability_packs",
+            "step_registry.enabled": True,
+            "step_registry.workspace_dir": "{workspace}/steps",
+        }
+    )
+    rt = await setup_agent_runtime(settings)
+
+    assert rt.registry.get("inspect-native") is None
+    assert "Available Skills" not in rt.system_prompt
+
+    rt.create_request_graph(mode="orchestrator", capability_pack="security-governance")
+
+    assert rt.registry.get("inspect-native") is not None
+
+
+@pytest.mark.asyncio
+async def test_setup_agent_runtime_exposes_builtin_security_skills(mock_build_graph, tmp_path: Path):
+    settings = _make_settings(
+        **{
+            "agent_defaults.workspace": str(tmp_path),
+            "skills.enabled": True,
+            "skills.workspace_dir": "{workspace}/skills",
+        }
+    )
+
+    rt = await setup_agent_runtime(settings)
+
+    assert rt.skills_loader is not None
+    names = {info.name for info in rt.skills_loader.list_skills()}
+    assert {"inspection-skill", "remediation-skill", "reporting-skill"} <= names
 
 
 # -----------------------------------------------------------------------

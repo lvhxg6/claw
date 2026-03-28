@@ -7,11 +7,15 @@ from typing import Any, TypedDict
 
 from langchain_core.tools import BaseTool
 
+from smartclaw.agent.orchestration_models import todo_identifier, todo_step_identifier
+
 
 class DispatchTaskResult(TypedDict, total=False):
     """Normalized result returned by orchestrator task dispatch."""
 
     todo_id: str
+    step_id: str
+    title: str
     batch_id: str
     phase_index: int
     status: str
@@ -30,6 +34,7 @@ class DispatchTasks:
         max_task_retries: int = 0,
         retry_on_error: bool = True,
         concurrency_limits: dict[str, int] | None = None,
+        skill_context_provider: Any | None = None,
     ) -> None:
         self._spawn_tool = spawn_tool
         self._max_concurrent_workers = max(1, max_concurrent_workers)
@@ -39,6 +44,7 @@ class DispatchTasks:
             str(group): max(1, int(limit))
             for group, limit in (concurrency_limits or {}).items()
         }
+        self._skill_context_provider = skill_context_provider
 
     @property
     def enabled(self) -> bool:
@@ -98,7 +104,8 @@ class DispatchTasks:
                 "todo_ids": todo_ids,
                 "todos": [
                     {
-                        "id": todo_id,
+                        "todo_id": todo_id,
+                        "step_id": str((_find_todo(plan, todo_id) or {}).get("step_id", todo_id)),
                         "title": str((_find_todo(plan, todo_id) or {}).get("title", todo_id)),
                         "kind": str((_find_todo(plan, todo_id) or {}).get("kind", "generic")),
                     }
@@ -109,13 +116,28 @@ class DispatchTasks:
         )
 
         async def _execute_todo(todo_id: str) -> DispatchTaskResult:
-            todo = _find_todo(plan, todo_id) or {"id": todo_id, "title": todo_id, "kind": "generic"}
-            task_prompt = _build_subtask_prompt(objective, todo)
+            todo = _find_todo(plan, todo_id) or {
+                "todo_id": todo_id,
+                "step_id": todo_id,
+                "title": todo_id,
+                "kind": "generic",
+                "resolved_inputs": {},
+                "execution_mode": "subagent",
+            }
+            task_prompt = _build_subtask_prompt(
+                objective,
+                todo,
+                skill_context=_resolve_skill_context(
+                    self._skill_context_provider,
+                    str(todo.get("preferred_skill", "") or ""),
+                ),
+            )
             task_group = str(todo.get("kind", "default") or "default")
             await _emit_diagnostic(
                 "subagent.spawned",
                 {
                     "todo_id": todo_id,
+                    "step_id": todo_step_identifier(todo),
                     "todo_title": str(todo.get("title", todo_id)),
                     "batch_id": batch.get("batch_id"),
                     "phase_index": phase_index,
@@ -151,6 +173,7 @@ class DispatchTasks:
                     "subagent.retry_scheduled",
                     {
                         "todo_id": todo_id,
+                        "step_id": todo_step_identifier(todo),
                         "todo_title": str(todo.get("title", todo_id)),
                         "batch_id": batch.get("batch_id"),
                         "phase_index": phase_index,
@@ -163,6 +186,7 @@ class DispatchTasks:
                 "subagent.completed",
                 {
                     "todo_id": todo_id,
+                    "step_id": todo_step_identifier(todo),
                     "todo_title": str(todo.get("title", todo_id)),
                     "batch_id": batch.get("batch_id"),
                     "phase_index": phase_index,
@@ -175,6 +199,8 @@ class DispatchTasks:
             )
             return {
                 "todo_id": todo_id,
+                "step_id": todo_step_identifier(todo),
+                "title": str(todo.get("title", todo_id)),
                 "batch_id": str(batch.get("batch_id", "")),
                 "phase_index": phase_index,
                 "status": status,
@@ -207,18 +233,39 @@ def _find_todo(plan: dict[str, Any] | None, todo_id: str) -> dict[str, Any] | No
     if plan is None:
         return None
     for todo in plan.get("todos", []):
-        if isinstance(todo, dict) and todo.get("id") == todo_id:
+        if isinstance(todo, dict) and todo_identifier(todo) == todo_id:
             return todo
     return None
 
 
-def _build_subtask_prompt(objective: str, todo: dict[str, Any]) -> str:
-    return (
+def _build_subtask_prompt(
+    objective: str,
+    todo: dict[str, Any],
+    *,
+    skill_context: str = "",
+) -> str:
+    resolved_inputs = todo.get("resolved_inputs") or {}
+    prompt = (
         f"Objective: {objective}\n"
-        f"Current task: {todo.get('title', todo.get('id', 'task'))}\n"
+        f"Current task: {todo.get('title', todo_identifier(todo) or 'task')}\n"
+        f"Step ID: {todo_step_identifier(todo)}\n"
         f"Task kind: {todo.get('kind', 'generic')}\n"
+        f"Resolved inputs: {resolved_inputs}\n"
         "Return a concise result including findings, actions taken, and remaining risks."
     )
+    if skill_context:
+        prompt += f"\n\nPreferred skill guidance:\n{skill_context}\n"
+    return prompt
+
+
+def _resolve_skill_context(provider: Any | None, skill_name: str) -> str:
+    if provider is None or not skill_name:
+        return ""
+    try:
+        content = provider(skill_name)
+    except Exception:
+        return ""
+    return str(content or "").strip()
 
 
 async def _emit_diagnostic(event_name: str, payload: dict[str, Any]) -> None:

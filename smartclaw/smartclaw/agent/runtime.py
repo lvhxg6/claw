@@ -25,9 +25,14 @@ from smartclaw.observability.logging import get_logger
 from smartclaw.providers.capabilities import ModelCapabilities, resolve_model_capabilities
 from smartclaw.providers.config import ModelConfig
 from smartclaw.providers.factory import ProviderFactory
+from smartclaw.steps.registry import StepRegistry
 from smartclaw.tools.registry import ToolRegistry, create_system_tools
 
 logger = get_logger("agent.runtime")
+
+_BUILTIN_SKILLS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "skills", "builtin")
+)
 
 SYSTEM_PROMPT = """\
 You are SmartClaw, a helpful AI assistant with access to tools.
@@ -91,6 +96,9 @@ class AgentRuntime:
     mode: str = "auto"
     mode_router: ModeRouter | None = None
     capability_registry: CapabilityPackRegistry | None = None
+    step_registry: StepRegistry | None = None
+    skills_loader: Any | None = None  # SkillsLoader | None
+    skills_registry: Any | None = None  # SkillsRegistry | None
     skills_watcher: Any | None = None  # SkillsWatcher | None
     memory_loader: Any | None = None  # MemoryLoader | None
     bootstrap_loader: Any | None = None  # BootstrapLoader | None
@@ -198,6 +206,7 @@ class AgentRuntime:
     ) -> Any:
         """Create a request-scoped graph with mode and capability scoping."""
         resolved_mode = "orchestrator" if mode == "orchestrator" else "classic"
+        self._ensure_request_skills(resolved_mode=resolved_mode, capability_pack=capability_pack)
         tools = self.registry.get_all()
         if self.capability_registry is not None and capability_pack:
             tools = self.capability_registry.filter_tools(tools, pack_name=capability_pack)
@@ -213,8 +222,41 @@ class AgentRuntime:
                 self.model_config,
                 tools,
                 mode=resolved_mode,
+                capability_pack=capability_pack,
             )
-        return self.graph_factory.create(self.model_config, tools, mode=resolved_mode)
+        return self.graph_factory.create(
+            self.model_config,
+            tools,
+            mode=resolved_mode,
+            capability_pack=capability_pack,
+        )
+
+    def _ensure_request_skills(
+        self,
+        *,
+        resolved_mode: str,
+        capability_pack: str | None,
+    ) -> None:
+        """Lazy-load skills only when the current request can use them."""
+        if self.skills_registry is None:
+            return
+        skill_names: list[str] = []
+        if resolved_mode == "orchestrator" and self.step_registry is not None:
+            step_ids = self.step_registry.list_ids()
+            if self.capability_registry is not None and capability_pack:
+                pack = self.capability_registry.get(capability_pack)
+                if pack is not None and pack.allowed_steps:
+                    step_ids = [step_id for step_id in step_ids if step_id in set(pack.allowed_steps)]
+            for step_id in step_ids:
+                step = self.step_registry.get(step_id) or {}
+                preferred_skill = str(step.get("preferred_skill", "")).strip()
+                if preferred_skill:
+                    skill_names.append(preferred_skill)
+        else:
+            if self.skills_loader is not None:
+                skill_names = [info.name for info in self.skills_loader.list_skills()]
+        if skill_names:
+            self.skills_registry.load_and_register_names(sorted(set(skill_names)))
 
     @property
     def is_busy(self) -> bool:
@@ -365,18 +407,21 @@ async def setup_agent_runtime(
     skills_summary = ""
     capability_summary = ""
     skills_watcher = None
+    skills_loader = None
+    skills_reg = None
     if settings.skills.enabled:
         try:
             from smartclaw.skills.loader import SkillsLoader
             from smartclaw.skills.registry import SkillsRegistry
 
             ws_dir = settings.skills.workspace_dir.replace("{workspace}", workspace)
-            loader = SkillsLoader(workspace_dir=ws_dir, global_dir=settings.skills.global_dir)
-            skills_reg = SkillsRegistry(loader=loader, tool_registry=registry)
-            skills_reg.load_and_register_all()
-            skills_summary = loader.build_skills_summary()
-            if skills_summary:
-                logger.info("skills_loaded", count=len(skills_reg.list_skills()))
+            skills_loader = SkillsLoader(
+                workspace_dir=ws_dir,
+                global_dir=settings.skills.global_dir,
+                builtin_dir=_BUILTIN_SKILLS_DIR,
+            )
+            skills_reg = SkillsRegistry(loader=skills_loader, tool_registry=registry)
+            logger.info("skills_catalog_ready", count=len(skills_loader.list_skills()))
 
             # 3.1 SkillsWatcher (hot reload)
             if getattr(settings.skills, "hot_reload", False):
@@ -384,7 +429,8 @@ async def setup_agent_runtime(
                     from smartclaw.skills.watcher import SkillsWatcher
 
                     def on_skills_reload():
-                        skills_reg.load_and_register_all()
+                        if skills_reg is not None:
+                            skills_reg.reload_loaded_skills()
 
                     skills_watcher = SkillsWatcher(
                         workspace_dir=ws_dir,
@@ -469,6 +515,26 @@ async def setup_agent_runtime(
 
     # 7. System prompt
     capability_registry = None
+    step_registry = None
+    if getattr(settings, "step_registry", None) and getattr(settings.step_registry, "enabled", False):
+        try:
+            from smartclaw.steps.loader import StepRegistryLoader
+            from smartclaw.steps.registry import StepRegistry
+
+            builtin_steps_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "steps", "builtin"))
+            step_loader = StepRegistryLoader(
+                workspace_dir=settings.step_registry.workspace_dir.replace("{workspace}", workspace),
+                global_dir=settings.step_registry.global_dir,
+                builtin_dir=builtin_steps_dir,
+            )
+            step_registry = StepRegistry(loader=step_loader)
+            step_registry.load_all()
+            if step_registry.list_ids():
+                logger.info("step_registry_loaded", count=len(step_registry.list_ids()))
+        except Exception as exc:
+            logger.warning("step_registry_load_failed", error=str(exc))
+            step_registry = None
+
     if getattr(settings, "capability_packs", None) and getattr(settings.capability_packs, "enabled", False):
         try:
             from smartclaw.capabilities.loader import CapabilityPackLoader
@@ -595,6 +661,9 @@ async def setup_agent_runtime(
             settings.orchestrator, "max_concurrent_workers", 4
         ),
         orchestrator_max_phases=getattr(settings.orchestrator, "max_phases", 8),
+        capability_registry=capability_registry,
+        step_registry=step_registry,
+        skills_loader=skills_loader,
     )
 
     if sub_agent_tool is not None:
@@ -637,6 +706,9 @@ async def setup_agent_runtime(
         mode=runtime_mode,
         mode_router=mode_router,
         capability_registry=capability_registry,
+        step_registry=step_registry,
+        skills_loader=skills_loader,
+        skills_registry=skills_reg,
         skills_watcher=skills_watcher,
         memory_loader=memory_loader,
         bootstrap_loader=bootstrap_loader,

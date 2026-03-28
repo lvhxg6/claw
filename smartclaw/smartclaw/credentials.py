@@ -34,7 +34,9 @@ def load_dotenv() -> None:
     working directory (or its parents).  Silently continues if the
     file does not exist.
     """
-    _dotenv_load(override=False)
+    # Override inherited shell placeholders or stale IDE-injected values.
+    # In local development the project .env should win.
+    _dotenv_load(override=True)
 
 
 def get_credential(service: str, key: str) -> str:

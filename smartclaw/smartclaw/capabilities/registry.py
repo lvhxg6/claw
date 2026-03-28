@@ -122,10 +122,16 @@ class CapabilityPackRegistry:
             parts.append(f"Allowed tools: {', '.join(pack.allowed_tools)}")
         if pack.denied_tools:
             parts.append(f"Denied tools: {', '.join(pack.denied_tools)}")
+        if pack.allowed_steps:
+            parts.append(f"Allowed steps: {', '.join(pack.allowed_steps)}")
+        if pack.preferred_steps:
+            parts.append(f"Preferred steps: {', '.join(pack.preferred_steps)}")
         if pack.approval_required:
             parts.append("Approval: required before execution")
         if pack.max_task_retries:
             parts.append(f"Task retries: {pack.max_task_retries}")
+        if pack.max_replanning_rounds:
+            parts.append(f"Replanning limit: {pack.max_replanning_rounds}")
         if pack.concurrency_limits:
             limits = ", ".join(f"{key}={value}" for key, value in sorted(pack.concurrency_limits.items()))
             parts.append(f"Concurrency limits: {limits}")

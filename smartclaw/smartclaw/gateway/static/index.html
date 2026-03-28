@@ -414,6 +414,13 @@
   }
   .msg.system { align-self: center; width: auto; max-width: 720px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: #97a0ad; font-size: 12px; padding: 10px 14px; box-shadow: none; }
   .msg.error { align-self: flex-start; background: #2a1718; border: 1px solid #5a2628; color: #fecaca; }
+  .msg.progress {
+    align-self: center;
+    width: min(100%, var(--content-width));
+    background: transparent;
+    border: none;
+    color: var(--text);
+  }
   .msg.tool-call { align-self: flex-start; background: #162116; border: 1px solid #284a29; color: #86efac; font-size: 12px; max-width: min(100%, var(--content-width)); }
   .msg.tool-result { align-self: flex-start; background: #141a29; border: 1px solid #283a62; color: #93c5fd; font-size: 12px; max-width: min(100%, var(--content-width)); }
   .msg.clarification {
@@ -522,6 +529,32 @@
     cursor: pointer;
   }
   .clarification-inline-submit:hover { background: #4a8df6; }
+  .progress-card {
+    width: min(100%, 720px);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: linear-gradient(180deg, rgba(35, 39, 45, 0.9) 0%, rgba(28, 31, 36, 0.94) 100%);
+    padding: 12px 14px;
+  }
+  .progress-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #edf2f7;
+    margin-bottom: 4px;
+  }
+  .progress-detail {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #aeb6c2;
+    white-space: pre-wrap;
+  }
+  .progress-meta {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
   .attachment-list {
     display: flex;
     gap: 10px;
@@ -783,6 +816,161 @@
   .exec-kv { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 12px; }
   .exec-k { color: #6b7280; }
   .exec-v { color: #e5e7eb; text-align: right; word-break: break-word; }
+  .execution-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .execution-overview-card {
+    background: #16171b;
+    border: 1px solid #262830;
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .execution-overview-card.wide { grid-column: 1 / -1; }
+  .execution-overview-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    margin-bottom: 5px;
+  }
+  .execution-overview-value {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #eef2f7;
+  }
+  .execution-overview-note {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.55;
+    color: #9aa3af;
+    white-space: pre-wrap;
+  }
+  .execution-status-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border: 1px solid #303744;
+    background: #17202b;
+    color: #bfdbfe;
+  }
+  .execution-status-pill.running,
+  .execution-status-pill.in_progress,
+  .execution-status-pill.ready { background: #2a220e; border-color: #5b4612; color: #fcd34d; }
+  .execution-status-pill.completed,
+  .execution-status-pill.success { background: #13261a; border-color: #255e38; color: #86efac; }
+  .execution-status-pill.failed,
+  .execution-status-pill.error { background: #2a1718; border-color: #6b2528; color: #fca5a5; }
+  .execution-status-pill.pending_approval,
+  .execution-status-pill.awaiting_clarification { background: #261d2c; border-color: #55306d; color: #e9d5ff; }
+  .execution-status-pill.cancelled,
+  .execution-status-pill.skipped { background: #1d2128; border-color: #394150; color: #cbd5e1; }
+  .execution-graph {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .execution-graph-level {
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid #242a33;
+    background: rgba(16, 19, 24, 0.7);
+  }
+  .execution-graph-level-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .execution-level-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #dbeafe;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .execution-level-badge {
+    font-size: 10px;
+    color: #9ca3af;
+  }
+  .execution-graph-lane {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 8px;
+  }
+  .execution-node {
+    border: 1px solid #2a313b;
+    background: #171a20;
+    border-radius: 12px;
+    padding: 10px;
+    cursor: pointer;
+    transition: 0.15s ease;
+  }
+  .execution-node:hover {
+    border-color: #3b82f6;
+    transform: translateY(-1px);
+  }
+  .execution-node.active {
+    border-color: #60a5fa;
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.32);
+    background: #192331;
+  }
+  .execution-node-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .execution-node-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #eef2f7;
+    line-height: 1.45;
+  }
+  .execution-node-meta,
+  .execution-node-deps {
+    font-size: 11px;
+    color: #97a0ad;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .execution-node-deps {
+    margin-top: 6px;
+    color: #7f8895;
+  }
+  .execution-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .execution-detail-row {
+    background: #16171b;
+    border: 1px solid #262830;
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .execution-detail-key {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+  .execution-detail-value {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #dbe2eb;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
   .todo-status, .worker-status { font-weight: 600; }
   .worker-status.completed { color: #86efac; }
   .worker-status.failed { color: #fca5a5; }
@@ -992,16 +1180,16 @@
               <div class="execution-toggle" id="execution-toggle-overview">▾</div>
             </div>
             <div class="execution-section-content">
-              <div id="execution-state"></div>
+              <div id="execution-overview"></div>
             </div>
           </div>
-          <div class="execution-section" id="execution-section-plan">
-            <div class="execution-section-header" onclick="toggleExecutionSection('plan')">
-              <div class="execution-section-title">Plan</div>
-              <div class="execution-toggle" id="execution-toggle-plan">▾</div>
+          <div class="execution-section" id="execution-section-graph">
+            <div class="execution-section-header" onclick="toggleExecutionSection('graph')">
+              <div class="execution-section-title">Flow</div>
+              <div class="execution-toggle" id="execution-toggle-graph">▾</div>
             </div>
             <div class="execution-section-content">
-              <div id="execution-plan"><div class="empty">等待计划生成...</div></div>
+              <div id="execution-graph"><div class="empty">等待计划生成...</div></div>
             </div>
           </div>
           <div class="execution-section" id="execution-section-timeline">
@@ -1013,22 +1201,22 @@
               <div id="execution-timeline"><div class="empty">等待执行事件...</div></div>
             </div>
           </div>
-          <div class="execution-section" id="execution-section-workers">
-            <div class="execution-section-header" onclick="toggleExecutionSection('workers')">
-              <div class="execution-section-title">SubAgents</div>
-              <div class="execution-toggle" id="execution-toggle-workers">▾</div>
+          <div class="execution-section" id="execution-section-details">
+            <div class="execution-section-header" onclick="toggleExecutionSection('details')">
+              <div class="execution-section-title">Details</div>
+              <div class="execution-toggle" id="execution-toggle-details">▾</div>
             </div>
             <div class="execution-section-content">
-              <div id="execution-workers"><div class="empty">暂无 subAgent 记录</div></div>
+              <div id="execution-details"><div class="empty">等待步骤详情...</div></div>
             </div>
           </div>
-          <div class="execution-section collapsed" id="execution-section-raw">
-            <div class="execution-section-header" onclick="toggleExecutionSection('raw')">
-              <div class="execution-section-title">Raw Events</div>
-              <div class="execution-toggle" id="execution-toggle-raw">▸</div>
+          <div class="execution-section collapsed" id="execution-section-debug">
+            <div class="execution-section-header" onclick="toggleExecutionSection('debug')">
+              <div class="execution-section-title">Debug</div>
+              <div class="execution-toggle" id="execution-toggle-debug">▸</div>
             </div>
             <div class="execution-section-content">
-              <div id="execution-raw"><div class="empty">等待原始事件...</div></div>
+              <div id="execution-debug"><div class="empty">等待调试事件...</div></div>
             </div>
           </div>
         </div>
@@ -1068,10 +1256,10 @@ let uploadedAttachments = [];
 let sessionStats = null;
 let executionSections = {
   overview: true,
-  plan: true,
+  graph: true,
   timeline: true,
-  workers: true,
-  raw: false,
+  details: true,
+  debug: false,
 };
 let executionView = createExecutionView();
 let executionState = createExecutionState();
@@ -1084,6 +1272,10 @@ function createExecutionView() {
     batches: [],
     workers: {},
     timeline: [],
+    debugEntries: [],
+    selectedTodoId: null,
+    processKeys: {},
+    processMessageEls: {},
   };
 }
 
@@ -1749,21 +1941,12 @@ function renderExecutionSectionState() {
 }
 
 function addExecutionEvent(data) {
-  const container = document.getElementById("execution-raw");
-  const empty = container.querySelector(".empty");
-  if (empty) empty.remove();
-  const card = document.createElement("div");
-  card.className = "execution-raw-card";
-  const time = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  card.innerHTML =
-    "<div class=\"event-title\">" + esc(data.event_type || "") + "</div>" +
-    "<div class=\"event-meta\">" + esc(time) + "</div>" +
-    "<div class=\"execution-raw-payload\">" + esc(JSON.stringify(data, null, 2)) + "</div>";
-  card.querySelector(".execution-raw-payload").onclick = function() {
-    this.classList.toggle("expanded");
-  };
-  container.appendChild(card);
-  while (container.children.length > 30) container.removeChild(container.firstChild);
+  pushExecutionDebugEntry({
+    kind: "event",
+    title: data.event_type || "execution.event",
+    meta: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    payload: JSON.stringify(data, null, 2),
+  });
 }
 
 function updateExecutionFromEvent(data) {
@@ -1775,33 +1958,64 @@ function updateExecutionFromEvent(data) {
     executionView.strategy = data.strategy || "";
     executionView.todos = Array.isArray(data.todos) ? data.todos.slice() : [];
     addTimelineEntry("已生成执行计划", buildPlanSummary(data), "info");
+    publishProcessUpdate(
+      "plan.created",
+      "已生成执行计划",
+      buildPlanHeadline(data) + "\n" + buildPlanSummary(data),
+    );
   } else if (eventType === "dispatch.created") {
     executionState.status = "dispatched";
     executionState.batchCount = Number(data.batch_count || 0);
     executionView.batches = Array.isArray(data.batches) ? data.batches.slice() : [];
     addTimelineEntry("已生成调度批次", buildDispatchSummary(data), "info");
+    publishProcessUpdate(
+      "dispatch.created",
+      "开始执行首批任务",
+      buildDispatchHeadline(data) + "\n" + buildDispatchSummary(data),
+    );
   } else if (eventType === "dispatch.batch_started") {
     executionState.status = "running";
     executionState.currentBatch = data.batch_id || executionState.currentBatch;
     addTimelineEntry("批次开始执行", buildBatchSummary(data), "running");
+    publishProcessUpdate(
+      "dispatch.batch_started:" + String(data.batch_id || ""),
+      "开始执行当前批次",
+      buildBatchSummary(data),
+    );
   } else if (eventType === "dispatch.batch_ended") {
     executionState.currentBatch = data.batch_id || executionState.currentBatch;
     addTimelineEntry("批次执行完成", buildBatchEndSummary(data), "info");
   } else if (eventType === "subagent.spawned") {
+    updateTodoExecutionStatus(data.todo_id || data.todoId, "running");
     upsertWorkerFromEvent(data, "running");
-    addTimelineEntry("SubAgent 已启动", buildWorkerSummary(data, "running"), "running");
+    addTimelineEntry("SubAgent 已启动", buildWorkerSummary(data, "running"), "running", { todoId: data.todo_id || data.todoId });
+    publishProcessUpdate(
+      "subagent.spawned:" + String(data.todo_id || data.todoId || ""),
+      "开始执行步骤：" + String(data.todo_title || data.todo_id || "未命名步骤"),
+      buildWorkerStartHeadline(data),
+    );
   } else if (eventType === "subagent.retry_scheduled") {
     executionState.retryCount += 1;
+    updateTodoExecutionStatus(data.todo_id || data.todoId, "retrying");
     upsertWorkerFromEvent(data, "retrying");
-    addTimelineEntry("SubAgent 重试", buildWorkerSummary(data, "retrying"), "warning");
+    addTimelineEntry("SubAgent 重试", buildWorkerSummary(data, "retrying"), "warning", { todoId: data.todo_id || data.todoId });
   } else if (eventType === "subagent.completed") {
     executionState.resultCount += 1;
+    updateTodoExecutionStatus(data.todo_id || data.todoId, data.status || "completed");
     upsertWorkerFromEvent(data, data.status || "completed");
-    addTimelineEntry("SubAgent 完成", buildWorkerSummary(data, data.status || "completed"), data.status === "failed" ? "error" : "success");
+    addTimelineEntry("SubAgent 完成", buildWorkerSummary(data, data.status || "completed"), data.status === "failed" ? "error" : "success", { todoId: data.todo_id || data.todoId });
+    publishProcessUpdate(
+      "subagent.completed:" + String(data.todo_id || data.todoId || "") + ":" + String(data.status || "completed"),
+      (data.status === "failed" ? "步骤执行失败：" : "步骤执行完成：") + String(data.todo_title || data.todo_id || "未命名步骤"),
+      buildWorkerCompletionHeadline(data),
+    );
   } else if (eventType === "phase.started") {
     executionState.phase = data.phase || executionState.phase;
     executionState.status = "running";
     addTimelineEntry("阶段开始", "阶段：" + (data.phase || "unknown") + "\n阶段序号：" + (data.phase_index || 0), "running");
+    if (data.phase === "synthesize") {
+      publishProcessUpdate("phase.synthesize", "正在整理最终结果", "前面的检查与处理已经结束，正在汇总输出。");
+    }
   } else if (eventType === "phase.ended") {
     executionState.phase = data.phase || executionState.phase;
     if (data.phase === "synthesize") executionState.status = data.completed ? "completed" : "failed";
@@ -1810,33 +2024,57 @@ function updateExecutionFromEvent(data) {
     executionState.status = data.phase_status || executionState.status;
     executionView.todos = Array.isArray(data.todos) ? data.todos.slice() : executionView.todos;
     addTimelineEntry("计划状态更新", buildPlanUpdateSummary(data), "info");
+    publishProcessUpdate(
+      "plan.updated:" + String(data.phase_index || "") + ":" + String(data.replanning_count || 0) + ":" + String(data.phase_status || ""),
+      "计划状态已更新",
+      buildPlanUpdateHeadline(data),
+    );
+  } else if (eventType === "governance.approval_required") {
+    executionState.status = "awaiting_clarification";
+    executionState.approval = "pending";
+    addTimelineEntry("等待审批", buildApprovalSummary(data), "warning", {
+      todoId: Array.isArray(data.todo_ids) && data.todo_ids.length ? data.todo_ids[0] : null,
+    });
+    publishProcessUpdate(
+      "approval:" + String((data.todo_ids || []).join(",")),
+      "等待你确认下一步",
+      buildApprovalSummary(data),
+    );
   } else if (eventType === "schema.validation") {
     executionState.schema = data.valid ? "valid" : "invalid";
     executionState.schemaReason = data.reason || "—";
     addTimelineEntry("Schema 校验", data.valid ? "结构化输出校验通过" : "结构化输出校验失败：" + (data.reason || "unknown"), data.valid ? "success" : "warning");
   }
+  syncSelectedExecutionTodo();
   renderExecutionState();
   renderExecutionPanels();
 }
 
 function renderExecutionState() {
-  document.getElementById("execution-state").innerHTML =
-    execRow("status", executionState.status) +
-    execRow("mode", executionState.mode || "auto") +
-    execRow("image route", executionState.imageRoute || "none") +
-    execRow("scenario", executionState.scenarioType || "—") +
-    execRow("task profile", executionState.taskProfile || "—") +
-    execRow("capability pack", executionState.capabilityPack || "—") +
-    execRow("phase", executionState.phase || "—") +
-    execRow("batch", executionState.currentBatch || "—") +
-    execRow("batch count", String(executionState.batchCount || 0)) +
-    execRow("results", String(executionState.resultCount || 0)) +
-    execRow("retries", String(executionState.retryCount || 0)) +
-    execRow("approval", executionState.approval || "not_required") +
-    execRow("schema", executionState.schema || "n/a") +
-    execRow("schema reason", executionState.schemaReason || "—") +
-    execRow("last event", executionState.lastEvent || "—") +
-    execRow("session", executionState.session || "—");
+  const currentTodo = getSelectedExecutionTodo() || getPreferredExecutionTodo();
+  const nextTodo = getNextExecutionTodo();
+  const progress = summarizeExecutionProgress();
+  let html = "<div class=\"execution-overview-grid\">";
+  html += renderOverviewCard("当前状态", executionStatusPill(executionState.status), [
+    "阶段：" + (executionState.phase || "—"),
+    "审批：" + (executionState.approval || "not_required"),
+  ].join("\n"));
+  html += renderOverviewCard("当前步骤", currentTodo ? esc(currentTodo.title || currentTodo.id || "未命名步骤") : "等待计划", currentTodo ? buildTodoSnapshot(currentTodo) : "尚未生成可视步骤。");
+  html += renderOverviewCard("下一步", nextTodo ? esc(nextTodo.title || nextTodo.id || "未命名步骤") : "等待后续决策", nextTodo ? buildNextTodoNote(nextTodo) : "当前没有明确的后续步骤。");
+  html += renderOverviewCard("运行概况", esc(String(executionState.resultCount || 0)) + " 个结果 / " + esc(String(executionState.retryCount || 0)) + " 次重试", [
+    "批次：" + (executionState.currentBatch || "—") + " / " + String(executionState.batchCount || 0),
+    "Schema：" + (executionState.schema || "n/a"),
+  ].join("\n"));
+  html += renderOverviewCard("计划进度", esc(progress.summary), progress.detail, true);
+  html += renderOverviewCard("执行目标", esc(executionView.objective || "等待请求发出"), executionView.strategy ? "策略：" + esc(executionView.strategy) : "", true);
+  html += renderOverviewCard("当前上下文", [
+    "mode: " + (executionState.mode || "auto"),
+    "scenario: " + (executionState.scenarioType || "—"),
+    "task profile: " + (executionState.taskProfile || "—"),
+    "capability pack: " + (executionState.capabilityPack || "—"),
+  ].join("\n"), "last event: " + (executionState.lastEvent || "—") + "\nsession: " + (executionState.session || "—"), true);
+  html += "</div>";
+  document.getElementById("execution-overview").innerHTML = html;
   renderExecutionSectionState();
 }
 
@@ -1845,37 +2083,35 @@ function execRow(key, value) {
 }
 
 function renderExecutionPanels() {
-  renderExecutionPlan();
+  renderExecutionGraph();
   renderExecutionTimeline();
-  renderExecutionWorkers();
+  renderExecutionDetails();
+  renderExecutionDebug();
   renderExecutionSectionState();
 }
 
-function renderExecutionPlan() {
-  const container = document.getElementById("execution-plan");
+function renderExecutionGraph() {
+  const container = document.getElementById("execution-graph");
   const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
-  if (!executionView.objective && !todos.length) {
+  if (!todos.length) {
     container.innerHTML = "<div class=\"empty\">等待计划生成...</div>";
     return;
   }
-  let html = "";
-  if (executionView.objective) {
-    html += "<div class=\"execution-item\"><div class=\"execution-item-title\">执行目标</div><div class=\"execution-item-text\">" + esc(executionView.objective) + "</div>";
-    if (executionView.strategy) {
-      html += "<div class=\"execution-item-meta\">策略：" + esc(executionView.strategy) + "</div>";
-    }
-    html += "</div>";
-  }
-  todos.forEach(todo => {
-    const deps = Array.isArray(todo.depends_on) && todo.depends_on.length ? todo.depends_on.join(", ") : "无";
+  const levels = groupExecutionTodosByLevel(todos);
+  let html = "<div class=\"execution-graph\">";
+  levels.forEach((group, index) => {
     html +=
-      "<div class=\"execution-item\">" +
-        "<div class=\"execution-item-title\">" + esc(todo.title || todo.id || "task") + "</div>" +
-        "<div class=\"execution-item-meta\">ID: " + esc(todo.id || "—") + " · kind: " + esc(todo.kind || "generic") + "</div>" +
-        "<div class=\"execution-item-text\">状态：<span class=\"todo-status\">" + esc(todo.status || "unknown") + "</span> · " + (todo.parallelizable ? "可并行" : "串行") + "</div>" +
-        "<div class=\"execution-item-text\">依赖：" + esc(deps) + "</div>" +
+      "<div class=\"execution-graph-level\">" +
+        "<div class=\"execution-graph-level-header\">" +
+          "<div class=\"execution-level-title\">第 " + esc(String(index + 1)) + " 层</div>" +
+          "<div class=\"execution-level-badge\">" + esc(group.items.length > 1 ? "并行候选 " + group.items.length + " 个" : "串行步骤") + "</div>" +
+        "</div>" +
+        "<div class=\"execution-graph-lane\">" +
+          group.items.map(todo => renderExecutionNode(todo)).join("") +
+        "</div>" +
       "</div>";
   });
+  html += "</div>";
   container.innerHTML = html;
 }
 
@@ -1894,29 +2130,67 @@ function renderExecutionTimeline() {
   ).join("");
 }
 
-function renderExecutionWorkers() {
-  const container = document.getElementById("execution-workers");
-  const workers = Object.values(executionView.workers || {}).sort((a, b) => String(a.updatedAt || "").localeCompare(String(b.updatedAt || "")));
-  if (!workers.length) {
-    container.innerHTML = "<div class=\"empty\">暂无 subAgent 记录</div>";
+function renderExecutionDetails() {
+  const container = document.getElementById("execution-details");
+  const todo = getSelectedExecutionTodo() || getPreferredExecutionTodo();
+  if (!todo) {
+    container.innerHTML = "<div class=\"empty\">等待步骤详情...</div>";
     return;
   }
-  container.innerHTML = workers.map(worker =>
-    "<div class=\"execution-item\">" +
-      "<div class=\"execution-item-title\">" + esc(worker.title || worker.todoId || "subagent") + "</div>" +
-      "<div class=\"execution-item-meta\">batch: " + esc(worker.batchId || "—") + " · phase: " + esc(String(worker.phaseIndex || "—")) + "</div>" +
-      "<div class=\"execution-item-text\">状态：<span class=\"worker-status " + esc((worker.status || "pending").toLowerCase()) + "\">" + esc(worker.status || "pending") + "</span> · attempts: " + esc(String(worker.attempts || 0)) + " · group: " + esc(worker.taskGroup || "default") + "</div>" +
-      "<div class=\"execution-item-text\">" + esc(worker.resultPreview || "暂无结果摘要") + "</div>" +
-      (worker.error ? "<div class=\"execution-item-text\">错误：" + esc(worker.error) + "</div>" : "") +
+  const worker = executionView.workers[getTodoIdentifier(todo)] || null;
+  const detailRows = [
+    ["步骤", todo.title || todo.id || "未命名步骤"],
+    ["状态", todo.status || "unknown"],
+    ["执行方式", todo.parallelizable ? "可并行" : "串行"],
+    ["依赖", getTodoDependencies(todo).length ? getTodoDependencies(todo).join("、") : "无"],
+    ["步骤类型", todo.kind || todo.step_id || "generic"],
+    ["审批", todo.approval_required ? "需要审批" : "无需审批"],
+    ["输入绑定", summarizeTodoInputs(todo)],
+  ];
+  if (worker) {
+    detailRows.push(["SubAgent", [
+      "状态：" + (worker.status || "pending"),
+      "批次：" + (worker.batchId || "—"),
+      "尝试：" + String(worker.attempts || 0),
+      "任务组：" + (worker.taskGroup || "default"),
+    ].join("\n")]);
+    if (worker.resultPreview) detailRows.push(["结果摘要", worker.resultPreview]);
+    if (worker.error) detailRows.push(["错误", worker.error]);
+  }
+  container.innerHTML =
+    "<div class=\"execution-detail-list\">" +
+      detailRows.map(([key, value]) =>
+        "<div class=\"execution-detail-row\">" +
+          "<div class=\"execution-detail-key\">" + esc(key) + "</div>" +
+          "<div class=\"execution-detail-value\">" + esc(value) + "</div>" +
+        "</div>"
+      ).join("") +
+    "</div>";
+}
+
+function renderExecutionDebug() {
+  const container = document.getElementById("execution-debug");
+  const entries = Array.isArray(executionView.debugEntries) ? executionView.debugEntries : [];
+  if (!entries.length) {
+    container.innerHTML = "<div class=\"empty\">等待调试事件...</div>";
+    return;
+  }
+  container.innerHTML = entries.map((entry, index) =>
+    "<div class=\"execution-raw-card\">" +
+      "<div class=\"event-title\">" + esc(entry.title || "debug") + "</div>" +
+      "<div class=\"event-meta\">" + esc(entry.meta || "—") + (entry.kind ? " · " + esc(entry.kind) : "") + "</div>" +
+      "<div class=\"execution-raw-payload\" onclick=\"toggleDebugPayload(" + escAttr(String(index)) + ")\">" + esc(entry.payload || "") + "</div>" +
     "</div>"
   ).join("");
 }
 
-function addTimelineEntry(title, detail, level) {
+function addTimelineEntry(title, detail, level, options) {
+  const meta = options || {};
   executionView.timeline.push({
     title: title,
     detail: detail,
     level: level || "info",
+    todoId: meta.todoId || null,
     time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
   });
   executionView.timeline = executionView.timeline.slice(-40);
@@ -1942,8 +2216,19 @@ function upsertWorkerFromEvent(data, status) {
 
 function buildPlanSummary(data) {
   const lines = ["目标：" + (data.objective || "—")];
-  (data.todos || []).forEach((todo, index) => {
-    lines.push((index + 1) + ". " + (todo.title || todo.id || "task") + " [" + (todo.status || "unknown") + "]");
+  const todos = Array.isArray(data.todos) ? data.todos : [];
+  const grouped = {
+    core: todos.filter(todo => getTodoPlanRole(todo) === "core"),
+    conditional: todos.filter(todo => getTodoPlanRole(todo) === "conditional"),
+    terminal: todos.filter(todo => getTodoPlanRole(todo) === "terminal"),
+  };
+  ["core", "conditional", "terminal"].forEach(groupName => {
+    const items = grouped[groupName];
+    if (!items.length) return;
+    lines.push(planRoleLabel(groupName) + "步骤：");
+    items.forEach((todo, index) => {
+      lines.push("  " + (index + 1) + ". " + (todo.title || todo.id || "task") + " [" + (todo.status || "unknown") + "]");
+    });
   });
   return lines.join("\n");
 }
@@ -1985,11 +2270,300 @@ function buildPlanUpdateSummary(data) {
   return lines.join("\n");
 }
 
+function buildPlanUpdateHeadline(data) {
+  const ready = Array.isArray(data.ready_todos) ? data.ready_todos : [];
+  const todos = Array.isArray(data.todos) ? data.todos : [];
+  const progress = summarizeExecutionProgress(todos);
+  const lines = ["当前状态：" + String(data.phase_status || "unknown"), progress.summary];
+  if (ready.length) {
+    lines.push("下一步：" + ready.map(todo => todo.title || todo.id || "task").join("、"));
+  }
+  return lines.join("\n");
+}
+
 function buildPhaseEndSummary(data) {
   const lines = ["阶段：" + (data.phase || "unknown")];
   if (typeof data.result_count !== "undefined") lines.push("结果数：" + String(data.result_count));
   if (typeof data.completed !== "undefined") lines.push("完成：" + (data.completed ? "是" : "否"));
   return lines.join("\n");
+}
+
+function buildPlanHeadline(data) {
+  const todos = Array.isArray(data.todos) ? data.todos : [];
+  if (!todos.length) return data.objective || "已收到任务，等待下一步。";
+  const core = todos.filter(todo => getTodoPlanRole(todo) === "core").length;
+  const conditional = todos.filter(todo => getTodoPlanRole(todo) === "conditional").length;
+  const terminal = todos.filter(todo => getTodoPlanRole(todo) === "terminal").length;
+  return "共 " + String(todos.length) + " 步：主干 " + core + " / 条件 " + conditional + " / 终态 " + terminal;
+}
+
+function buildDispatchHeadline(data) {
+  const batches = Array.isArray(data.batches) ? data.batches : [];
+  if (!batches.length) return "当前没有可立即执行的步骤。";
+  const first = batches[0] || {};
+  const titles = Array.isArray(first.todo_titles) && first.todo_titles.length
+    ? first.todo_titles.join("、")
+    : (Array.isArray(first.todo_ids) ? first.todo_ids.join("、") : "未命名步骤");
+  return (first.parallel ? "并行启动：" : "先执行：") + titles;
+}
+
+function buildWorkerStartHeadline(data) {
+  return [
+    "当前步骤：" + String(data.todo_title || data.todo_id || "未命名步骤"),
+    "批次：" + String(data.batch_id || "—"),
+    "执行组：" + String(data.task_group || "default"),
+    "执行方式：已启动 subagent",
+  ].join("\n");
+}
+
+function buildWorkerCompletionHeadline(data) {
+  const lines = [
+    "当前步骤：" + String(data.todo_title || data.todo_id || "未命名步骤"),
+    "状态：" + String(data.status || "completed"),
+    "尝试次数：" + String(data.attempts || 0),
+  ];
+  if (data.result_preview) lines.push("结果摘要：" + String(data.result_preview));
+  if (data.error) lines.push("错误：" + String(data.error));
+  return lines.join("\n");
+}
+
+function buildApprovalSummary(data) {
+  const titles = Array.isArray(data.todo_titles) && data.todo_titles.length
+    ? data.todo_titles.join("、")
+    : "存在待审批步骤";
+  return "待确认步骤：" + titles + "\n原因：下一步涉及整改、写入或其他具有副作用的动作。";
+}
+
+function renderOverviewCard(label, value, note, wide) {
+  return (
+    "<div class=\"execution-overview-card" + (wide ? " wide" : "") + "\">" +
+      "<div class=\"execution-overview-label\">" + esc(label) + "</div>" +
+      "<div class=\"execution-overview-value\">" + value + "</div>" +
+      (note ? "<div class=\"execution-overview-note\">" + esc(note) + "</div>" : "") +
+    "</div>"
+  );
+}
+
+function executionStatusPill(status) {
+  const normalized = normalizeStatus(status);
+  return "<span class=\"execution-status-pill " + esc(normalized) + "\">" + esc(status || "unknown") + "</span>";
+}
+
+function normalizeStatus(status) {
+  return String(status || "unknown").toLowerCase().replace(/[^a-z0-9_-]+/g, "_");
+}
+
+function getTodoIdentifier(todo) {
+  return String((todo && (todo.id || todo.todo_id || todo.step_id)) || "");
+}
+
+function getTodoDependencies(todo) {
+  return Array.isArray(todo && todo.depends_on) ? todo.depends_on.filter(Boolean).map(String) : [];
+}
+
+function getTodoPlanRole(todo) {
+  return String((todo && todo.plan_role) || "core");
+}
+
+function getTodoActivationMode(todo) {
+  return String((todo && todo.activation_mode) || "immediate");
+}
+
+function planRoleLabel(role) {
+  const normalized = String(role || "core");
+  if (normalized === "terminal") return "终态";
+  if (normalized === "conditional") return "条件";
+  return "主干";
+}
+
+function syncSelectedExecutionTodo() {
+  const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
+  const ids = new Set(todos.map(getTodoIdentifier).filter(Boolean));
+  if (executionView.selectedTodoId && ids.has(executionView.selectedTodoId)) return;
+  executionView.selectedTodoId = getPreferredExecutionTodoId();
+}
+
+function getPreferredExecutionTodoId() {
+  const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
+  const priority = ["running", "in_progress", "ready", "pending_approval", "completed", "failed", "cancelled"];
+  for (const status of priority) {
+    const matched = todos.find(todo => normalizeStatus(todo.status) === status);
+    if (matched) return getTodoIdentifier(matched);
+  }
+  return todos.length ? getTodoIdentifier(todos[0]) : null;
+}
+
+function getSelectedExecutionTodo() {
+  const selected = executionView.selectedTodoId;
+  return (executionView.todos || []).find(todo => getTodoIdentifier(todo) === selected) || null;
+}
+
+function getPreferredExecutionTodo() {
+  return (executionView.todos || []).find(todo => getTodoIdentifier(todo) === getPreferredExecutionTodoId()) || null;
+}
+
+function getNextExecutionTodo() {
+  const todos = Array.isArray(executionView.todos) ? executionView.todos : [];
+  return todos.find(todo => ["ready", "pending_approval"].includes(normalizeStatus(todo.status))) || null;
+}
+
+function buildTodoSnapshot(todo) {
+  return [
+    "状态：" + (todo.status || "unknown"),
+    "规划：" + planRoleLabel(getTodoPlanRole(todo)),
+    "依赖：" + (getTodoDependencies(todo).length ? getTodoDependencies(todo).join("、") : "无"),
+    "模式：" + (todo.parallelizable ? "可并行" : "串行"),
+  ].join("\n");
+}
+
+function buildNextTodoNote(todo) {
+  return [
+    "状态：" + (todo.status || "unknown"),
+    "规划：" + planRoleLabel(getTodoPlanRole(todo)),
+    "是否审批：" + (todo.approval_required ? "需要" : "不需要"),
+  ].join("\n");
+}
+
+function summarizeTodoInputs(todo) {
+  const resolved = todo && typeof todo.resolved_inputs === "object" && todo.resolved_inputs
+    ? Object.keys(todo.resolved_inputs)
+    : [];
+  const artifacts = Array.isArray(todo && todo.consumes_artifacts) ? todo.consumes_artifacts : [];
+  const lines = [];
+  if (resolved.length) lines.push("resolved_inputs: " + resolved.join(", "));
+  if (artifacts.length) lines.push("artifacts: " + artifacts.join(", "));
+  return lines.length ? lines.join("\n") : "暂无结构化输入信息";
+}
+
+function summarizeExecutionProgress(todoList) {
+  const todos = Array.isArray(todoList) ? todoList : (Array.isArray(executionView.todos) ? executionView.todos : []);
+  if (!todos.length) {
+    return {
+      summary: "还没有可展示的步骤",
+      detail: "等待 planner 生成 todo 计划。",
+    };
+  }
+  const counts = {
+    total: todos.length,
+    completed: 0,
+    running: 0,
+    pendingApproval: 0,
+    ready: 0,
+    failed: 0,
+    cancelled: 0,
+    core: 0,
+    conditional: 0,
+    terminal: 0,
+  };
+  todos.forEach(todo => {
+    const status = normalizeStatus(todo.status);
+    const role = getTodoPlanRole(todo);
+    if (role === "terminal") counts.terminal += 1;
+    else if (role === "conditional") counts.conditional += 1;
+    else counts.core += 1;
+    if (["completed", "success"].includes(status)) counts.completed += 1;
+    else if (["running", "in_progress", "retrying"].includes(status)) counts.running += 1;
+    else if (status === "pending_approval") counts.pendingApproval += 1;
+    else if (status === "ready") counts.ready += 1;
+    else if (["failed", "error"].includes(status)) counts.failed += 1;
+    else if (["cancelled", "skipped"].includes(status)) counts.cancelled += 1;
+  });
+  const detailLines = todos.map((todo, index) => {
+    const label = index + 1;
+    const title = todo.title || todo.id || "task";
+    const status = String(todo.status || "unknown");
+    const role = planRoleLabel(getTodoPlanRole(todo));
+    const deps = getTodoDependencies(todo);
+    return label + ". " + title + " [" + role + " · " + status + "]" + (deps.length ? " <- " + deps.join("、") : "");
+  });
+  return {
+    summary: "共 " + counts.total + " 步，主干 " + counts.core + " / 条件 " + counts.conditional + " / 终态 " + counts.terminal,
+    detail: detailLines.join("\n"),
+  };
+}
+
+function updateTodoExecutionStatus(todoId, status) {
+  if (!todoId || !Array.isArray(executionView.todos)) return;
+  executionView.todos = executionView.todos.map(todo => {
+    if (getTodoIdentifier(todo) !== String(todoId)) return todo;
+    return { ...todo, status: status };
+  });
+  executionView.selectedTodoId = String(todoId);
+}
+
+function groupExecutionTodosByLevel(todos) {
+  const todoMap = new Map();
+  todos.forEach(todo => {
+    const id = getTodoIdentifier(todo);
+    if (id) todoMap.set(id, todo);
+  });
+  const memo = new Map();
+  function resolveLevel(todoId, stack) {
+    if (memo.has(todoId)) return memo.get(todoId);
+    if (stack.has(todoId)) return 0;
+    stack.add(todoId);
+    const todo = todoMap.get(todoId);
+    const deps = getTodoDependencies(todo).filter(depId => todoMap.has(depId));
+    const level = deps.length ? 1 + Math.max(...deps.map(depId => resolveLevel(depId, new Set(stack)))) : 0;
+    memo.set(todoId, level);
+    return level;
+  }
+  const grouped = new Map();
+  todos.forEach(todo => {
+    const id = getTodoIdentifier(todo);
+    const level = resolveLevel(id, new Set());
+    if (!grouped.has(level)) grouped.set(level, []);
+    grouped.get(level).push(todo);
+  });
+  return Array.from(grouped.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([level, items]) => ({
+      level: level,
+      items: items.sort((left, right) => String(left.title || left.id || "").localeCompare(String(right.title || right.id || ""))),
+    }));
+}
+
+function renderExecutionNode(todo) {
+  const status = normalizeStatus(todo.status);
+  const todoId = getTodoIdentifier(todo);
+  const deps = getTodoDependencies(todo);
+  const role = planRoleLabel(getTodoPlanRole(todo));
+  const activation = getTodoActivationMode(todo);
+  return (
+    "<div class=\"execution-node" + (executionView.selectedTodoId === todoId ? " active" : "") + "\" onclick=\"selectExecutionTodo('" + escAttr(todoId) + "')\">" +
+      "<div class=\"execution-node-head\">" +
+        "<div class=\"execution-node-title\">" + esc(todo.title || todo.id || "task") + "</div>" +
+        executionStatusPill(todo.status || status) +
+      "</div>" +
+      "<div class=\"execution-node-meta\">" + esc(role) + " · " + esc(todo.parallelizable ? "可并行执行" : "串行执行") + " · " + esc(todo.kind || todo.step_id || "generic") + "</div>" +
+      "<div class=\"execution-node-deps\">" + esc("激活：" + activation) + "</div>" +
+      "<div class=\"execution-node-deps\">" + esc(deps.length ? "依赖：" + deps.join("、") : "依赖：无") + "</div>" +
+    "</div>"
+  );
+}
+
+function selectExecutionTodo(todoId) {
+  executionView.selectedTodoId = todoId;
+  renderExecutionPanels();
+}
+
+function pushExecutionDebugEntry(entry) {
+  executionView.debugEntries.push(entry);
+  executionView.debugEntries = executionView.debugEntries.slice(-50);
+}
+
+function toggleDebugPayload(indexText) {
+  const index = Number(indexText);
+  const nodes = document.querySelectorAll("#execution-debug .execution-raw-payload");
+  const node = nodes[index];
+  if (node) node.classList.toggle("expanded");
+}
+
+function publishProcessUpdate(key, title, detail) {
+  if (!key || executionView.processKeys[key]) return;
+  const slot = resolveProcessSlot(key);
+  executionView.processKeys[key] = true;
+  upsertProcessMessage(slot, title, detail, streamEl);
 }
 
 async function sendMessage() {
@@ -2152,30 +2726,35 @@ async function removeAttachment(assetId) {
 
 async function sendRequest(body, options) {
   const opts = options || {};
-  const text = body.message || "";
+  const requestBody = { ...(body || {}) };
+  if (sessionKey && !requestBody.session_key) requestBody.session_key = sessionKey;
+  const text = requestBody.message || "";
   let doneReceived = false;
   awaitingClarificationDone = false;
   pendingClarification = null;
-  lastRequestBody = { ...body };
-  executionView = createExecutionView();
-  executionState = createExecutionState();
-  executionState.mode = body.mode || "auto";
+  lastRequestBody = { ...requestBody };
+  if (!opts.preserveClarificationCard) {
+    executionView = createExecutionView();
+    executionState = createExecutionState();
+  }
+  executionState.mode = requestBody.mode || "auto";
   executionState.imageRoute = resolveImageRouteHint();
-  executionState.scenarioType = body.scenario_type || "";
-  executionState.taskProfile = body.task_profile || "";
-  executionState.capabilityPack = body.capability_pack || "";
+  executionState.scenarioType = requestBody.scenario_type || "";
+  executionState.taskProfile = requestBody.task_profile || "";
+  executionState.capabilityPack = requestBody.capability_pack || "";
   executionState.status = "requesting";
   executionState.lastEvent = "request.sent";
-  const selectedPack = capabilityPackMap[body.capability_pack || ""];
-  executionState.approval = body.approved
+  const selectedPack = capabilityPackMap[requestBody.capability_pack || ""];
+  executionState.approval = requestBody.approved
     ? "approved"
-    : (selectedPack && selectedPack.approval_required ? "pending" : "not_required");
+    : (requestBody.approval_action ? String(requestBody.approval_action) : (selectedPack && selectedPack.approval_required ? "pending" : "not_required"));
   renderExecutionState();
   renderExecutionPanels();
   hideWelcomeCard();
-  removeClarificationCard();
+  if (!opts.preserveClarificationCard) {
+    removeClarificationCard();
+  }
   if (opts.addUserMessage) addMsg("user", text);
-  if (opts.systemNotice) addMsg("system", opts.systemNotice);
   streamEl = addMsg("assistant", "⏳ 思考中...", true);
   setStreaming(true);
 
@@ -2183,7 +2762,7 @@ async function sendRequest(body, options) {
     const response = await fetch(API + "/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
     if (!response.ok) {
       executionState.status = "failed";
@@ -2245,15 +2824,15 @@ function handleEvent(type, data) {
   if (type === "thinking") {
     executionState.status = "reasoning";
     renderExecutionState();
-    updateStream("⏳ 思考中...（第 " + (data.iteration || 0) + " 轮）");
+    updateStream("⏳ 思考中...");
     return;
   }
   if (type === "tool_call") {
-    addMsgBefore(streamEl, "tool-call", "🔧 " + (data.tool_name || "?") + "\n" + JSON.stringify(data.args || {}, null, 2));
+    recordToolActivity("tool_call", data);
     return;
   }
   if (type === "tool_result") {
-    addMsgBefore(streamEl, "tool-result", (data.success ? "✅ " : "❌ ") + (data.tool_name || "?") + "\n" + (data.result || ""));
+    recordToolActivity("tool_result", data);
     return;
   }
   if (type === "iteration") {
@@ -2261,6 +2840,15 @@ function handleEvent(type, data) {
     return;
   }
   if (type === "clarification") {
+    if (data.session_key) {
+      sessionKey = data.session_key;
+      if (lastRequestBody && !lastRequestBody.session_key) {
+        lastRequestBody = { ...lastRequestBody, session_key: data.session_key };
+      }
+      updateSessionUI();
+      syncCurrentSessionMeta();
+      updateChatHeader();
+    }
     awaitingClarificationDone = true;
     executionState.status = "awaiting_clarification";
     executionState.approval = isApprovalClarification(data) ? "pending" : executionState.approval;
@@ -2280,6 +2868,9 @@ function handleEvent(type, data) {
     }
     if (data.session_key) {
       sessionKey = data.session_key;
+      if (lastRequestBody && !lastRequestBody.session_key) {
+        lastRequestBody = { ...lastRequestBody, session_key: data.session_key };
+      }
       updateSessionUI();
       syncCurrentSessionMeta();
     }
@@ -2315,6 +2906,7 @@ function handleEvent(type, data) {
 }
 
 function isApprovalClarification(data) {
+  if (String(data.kind || "").toLowerCase() === "approval") return true;
   const options = Array.isArray(data.options) ? data.options.map(item => String(item).toLowerCase()) : [];
   return options.includes("approve") && options.includes("cancel");
 }
@@ -2329,14 +2921,25 @@ function renderClarificationCard(data) {
   let html = "<div class=\"clarification-card\">";
   html += "<div class=\"clarification-title\">" + esc(title) + "</div>";
   html += "<div class=\"clarification-question\">" + esc(data.question || "请确认下一步") + "</div>";
+  const details = Array.isArray(data.details) ? data.details : [];
+  if (details.length) {
+    html += "<div class=\"clarification-question\" style=\"margin-top:8px; font-size:12px; color:#b7bec8;\">";
+    details.forEach((detail, index) => {
+      html += (index > 0 ? "<br>" : "") + esc("• " + String(detail || ""));
+    });
+    html += "</div>";
+  }
   html += "<div class=\"clarification-options\">";
   options.forEach((option, index) => {
     const normalized = String(option).toLowerCase();
     const secondary = normalized === "cancel" ? " secondary" : "";
+    const description = getClarificationOptionDescription(data, option);
     html +=
       "<button class=\"clarification-choice" + secondary + "\" data-option=\"" + esc(option) + "\">" +
         "<span class=\"clarification-index\">" + esc(String(index + 1) + ".") + "</span>" +
-        "<span class=\"clarification-choice-text\">" + esc(getClarificationOptionLabel(option)) + "</span>" +
+        "<span class=\"clarification-choice-text\">" + esc(getClarificationOptionLabel(option)) +
+          (description ? "<br><span style=\"font-size:11px; color:#9aa3af;\">" + esc(description) + "</span>" : "") +
+        "</span>" +
       "</button>";
   });
   if (!isApprovalClarification(data)) {
@@ -2373,11 +2976,31 @@ function renderClarificationCard(data) {
   }
 }
 
+function resolveClarificationCard(text) {
+  const card = document.querySelector(".msg.clarification");
+  if (!card) return;
+  card.classList.add("resolved");
+  card.innerHTML =
+    "<div class=\"clarification-card\">" +
+      "<div class=\"clarification-title\">已确认</div>" +
+      "<div class=\"clarification-question\">" + esc(text || "已处理当前确认") + "</div>" +
+    "</div>";
+}
+
 function getClarificationOptionLabel(option) {
   const normalized = String(option || "").toLowerCase();
   if (normalized === "approve") return "批准";
+  if (normalized === "report_only") return "仅生成报告，跳过整改";
   if (normalized === "cancel") return "取消";
   return String(option || "");
+}
+
+function getClarificationOptionDescription(data, option) {
+  const map = (data && data.option_descriptions && typeof data.option_descriptions === "object")
+    ? data.option_descriptions
+    : {};
+  const value = map[option];
+  return value ? String(value) : "";
 }
 
 function removeClarificationCard() {
@@ -2386,23 +3009,42 @@ function removeClarificationCard() {
 
 async function handleClarificationAction(value) {
   const normalized = String(value || "").toLowerCase();
+  const continuationSessionKey =
+    sessionKey ||
+    (pendingClarification && pendingClarification.session_key) ||
+    (lastRequestBody && lastRequestBody.session_key) ||
+    null;
   if (normalized === "cancel") {
-    removeClarificationCard();
+    resolveClarificationCard("已取消本次执行");
     pendingClarification = null;
     awaitingClarificationDone = false;
     executionState.status = "cancelled";
     executionState.approval = "cancelled";
     renderExecutionState();
-    addMsg("system", "已取消本次执行");
     return;
   }
   if (isApprovalClarification(pendingClarification || { options: [] }) && normalized === "approve" && lastRequestBody) {
-    removeClarificationCard();
+    resolveClarificationCard("已批准，继续执行…");
     awaitingClarificationDone = false;
     executionState.status = "resuming";
     executionState.approval = "approved";
     renderExecutionState();
-    await sendRequest({ ...lastRequestBody, approved: true }, { addUserMessage: false, systemNotice: "已批准，继续执行…" });
+    await sendRequest(
+      { ...lastRequestBody, session_key: continuationSessionKey, approved: true, approval_action: normalized },
+      { addUserMessage: false, preserveClarificationCard: true },
+    );
+    return;
+  }
+  if (isApprovalClarification(pendingClarification || { options: [] }) && normalized === "report_only" && lastRequestBody) {
+    resolveClarificationCard("已选择跳过整改，继续生成报告…");
+    awaitingClarificationDone = false;
+    executionState.status = "resuming";
+    executionState.approval = "report_only";
+    renderExecutionState();
+    await sendRequest(
+      { ...lastRequestBody, session_key: continuationSessionKey, approved: false, approval_action: normalized },
+      { addUserMessage: false, preserveClarificationCard: true },
+    );
     return;
   }
   removeClarificationCard();
@@ -2451,6 +3093,13 @@ function addMsg(type, text, streaming, renderMarkdown) {
     bubble.className = "msg-bubble";
     bubble.textContent = text;
     element.appendChild(bubble);
+  } else if (type === "progress") {
+    element.innerHTML =
+      "<div class=\"progress-card\">" +
+        "<div class=\"progress-title\">" + esc(text.title || "过程更新") + "</div>" +
+        "<div class=\"progress-detail\">" + esc(text.detail || "") + "</div>" +
+        "<div class=\"progress-meta\">process update</div>" +
+      "</div>";
   } else if (type === "tool-call" || type === "tool-result") {
     element.innerHTML = "<div class=\"msg-label\">" + esc(type === "tool-call" ? "TOOL CALL" : "TOOL RESULT") + "</div><pre>" + esc(text) + "</pre>";
   } else {
@@ -2465,7 +3114,16 @@ function addMsgBefore(beforeEl, type, text) {
   const container = document.getElementById("messages");
   const element = document.createElement("div");
   element.className = "msg " + type;
-  element.innerHTML = "<div class=\"msg-label\">" + esc(type === "tool-call" ? "TOOL CALL" : "TOOL RESULT") + "</div><pre>" + esc(text) + "</pre>";
+  if (type === "progress") {
+    element.innerHTML =
+      "<div class=\"progress-card\">" +
+        "<div class=\"progress-title\">" + esc((text && text.title) || "过程更新") + "</div>" +
+        "<div class=\"progress-detail\">" + esc((text && text.detail) || "") + "</div>" +
+        "<div class=\"progress-meta\">process update</div>" +
+      "</div>";
+  } else {
+    element.innerHTML = "<div class=\"msg-label\">" + esc(type === "tool-call" ? "TOOL CALL" : "TOOL RESULT") + "</div><pre>" + esc(text) + "</pre>";
+  }
   if (beforeEl && beforeEl.parentNode === container) {
     container.insertBefore(element, beforeEl);
   } else {
@@ -2473,6 +3131,60 @@ function addMsgBefore(beforeEl, type, text) {
   }
   container.scrollTop = container.scrollHeight;
   return element;
+}
+
+function addProcessMessageBefore(beforeEl, title, detail) {
+  return addMsgBefore(beforeEl, "progress", { title: title, detail: detail });
+}
+
+function upsertProcessMessage(slot, title, detail, beforeEl) {
+  const container = document.getElementById("messages");
+  const existing = executionView.processMessageEls[slot];
+  if (existing && existing.parentNode === container) {
+    existing.innerHTML =
+      "<div class=\"progress-card\">" +
+        "<div class=\"progress-title\">" + esc(title || "过程更新") + "</div>" +
+        "<div class=\"progress-detail\">" + esc(detail || "") + "</div>" +
+        "<div class=\"progress-meta\">process update</div>" +
+      "</div>";
+    if (beforeEl && existing !== beforeEl && beforeEl.parentNode === container) {
+      container.insertBefore(existing, beforeEl);
+    }
+    container.scrollTop = container.scrollHeight;
+    return existing;
+  }
+  const element = addProcessMessageBefore(beforeEl, title, detail);
+  executionView.processMessageEls[slot] = element;
+  return element;
+}
+
+function resolveProcessSlot(key) {
+  const value = String(key || "");
+  if (value.startsWith("plan.created")) return "plan";
+  if (value.startsWith("dispatch.") || value.startsWith("subagent.") || value.startsWith("plan.updated") || value.startsWith("phase.") || value.startsWith("approval:")) {
+    return "live";
+  }
+  return "misc";
+}
+
+function recordToolActivity(type, data) {
+  const toolName = data.tool_name || "?";
+  const payload = type === "tool_call"
+    ? JSON.stringify(data.args || {}, null, 2)
+    : String(data.result || "");
+  pushExecutionDebugEntry({
+    kind: type,
+    title: (type === "tool_call" ? "TOOL CALL" : "TOOL RESULT") + " · " + toolName,
+    meta: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    payload: truncateDebugPayload(payload),
+  });
+  renderExecutionDebug();
+}
+
+function truncateDebugPayload(payload) {
+  const text = String(payload || "");
+  if (text.length <= 2000) return text;
+  return text.slice(0, 2000) + "\n... [truncated]";
 }
 
 function updateStream(text, renderMarkdown) {

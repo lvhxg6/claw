@@ -90,6 +90,40 @@ class TestRegistrationFailureContinues:
         assert registry.get("crash-skill") is None
         assert registry.get("ok-skill") is ok_module
 
+    def test_load_and_register_names_only_loads_requested_skills(self) -> None:
+        """Named loading should not eagerly activate unrelated skills."""
+        loader = MagicMock(spec=SkillsLoader)
+        tool_registry = ToolRegistry()
+        registry = SkillsRegistry(loader, tool_registry)
+
+        loader.list_skills.return_value = [
+            SkillInfo(name="inspect-skill", path="/fake/inspect", source="workspace", description="Inspect"),
+            SkillInfo(name="report-skill", path="/fake/report", source="workspace", description="Report"),
+        ]
+
+        inspect_module = object()
+        report_module = object()
+
+        def side_effect(name: str) -> Any:
+            if name == "inspect-skill":
+                return (lambda: inspect_module, SkillDefinition(
+                    name="inspect-skill",
+                    description="Inspect",
+                    entry_point="pkg:inspect",
+                ))
+            return (lambda: report_module, SkillDefinition(
+                name="report-skill",
+                description="Report",
+                entry_point="pkg:report",
+            ))
+
+        loader.load_skill.side_effect = side_effect
+
+        registry.load_and_register_names(["inspect-skill"])
+
+        assert registry.get("inspect-skill") is inspect_module
+        assert registry.get("report-skill") is None
+
 
 class TestDuplicateRegistration:
     """Tests that duplicate registration overwrites the old skill."""

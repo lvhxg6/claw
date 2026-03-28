@@ -1,0 +1,18 @@
+id: requirement_analysis
+domain: development
+description: 分析需求并生成结构化需求摘要
+required_inputs: []
+consumes_artifact_types: []
+outputs:
+  - requirement_summary
+preferred_skill: requirement-analysis-skill
+can_parallel: false
+risk_level: low
+completion_signal: requirement_summary_ready
+side_effect_level: read_only
+kind: analysis
+plan_role: core
+activation_mode: immediate
+display_policy: always_show
+intent_tags:
+  - analysis

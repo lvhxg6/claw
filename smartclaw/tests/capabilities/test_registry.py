@@ -49,6 +49,7 @@ def _write_pack(base_dir: Path) -> None:
                 "concurrency_limits:",
                 "  inspection: 2",
                 "max_task_retries: 1",
+                "repeated_error_threshold: 2",
                 "retry_on_error: true",
                 "prompt_file: prompt.md",
                 "result_schema_file: schema.json",
@@ -104,6 +105,7 @@ def test_capability_registry_resolves_and_filters_tools(tmp_path: Path) -> None:
     assert policy is not None
     assert policy["schema_enforced"] is True
     assert policy["max_task_retries"] == 1
+    assert policy["repeated_error_threshold"] == 2
     structured, validation = validate_structured_output('{"status":"ok"}', policy)
     assert validation["valid"] is True
     assert structured == {"status": "ok"}

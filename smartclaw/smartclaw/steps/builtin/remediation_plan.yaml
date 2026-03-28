@@ -1,0 +1,20 @@
+id: remediation_plan
+domain: security
+description: 根据检查结果生成整改方案、修复建议或加固计划
+required_inputs: []
+consumes_artifact_types:
+  - inspection_result
+outputs:
+  - remediation_plan_result
+preferred_skill: remediation-plan-skill
+can_parallel: false
+risk_level: medium
+completion_signal: remediation_plan_result_ready
+side_effect_level: read_only
+kind: remediation
+plan_role: conditional
+activation_mode: after_artifact
+display_policy: always_show
+intent_tags:
+  - remediation
+  - remediation_plan

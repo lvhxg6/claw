@@ -126,6 +126,31 @@ class TestInvoke:
         # Should have completed within max_iterations
         assert result["iteration"] <= 5
 
+    @pytest.mark.asyncio
+    async def test_invoke_passes_recursion_limit_to_langgraph(self) -> None:
+        """invoke aligns LangGraph recursion_limit with max_iterations."""
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "messages": [HumanMessage(content="Hi"), AIMessage(content="Done")],
+                "iteration": 1,
+                "max_iterations": 5,
+                "final_answer": "Done",
+                "error": None,
+                "session_key": None,
+                "summary": None,
+                "sub_agent_depth": None,
+            }
+        )
+
+        await invoke(mock_graph, "Hi", max_iterations=5)
+
+        mock_graph.ainvoke.assert_called_once()
+        _, call_kwargs = mock_graph.ainvoke.call_args
+        assert call_kwargs == {}
+        call_args = mock_graph.ainvoke.call_args.args
+        assert call_args[1]["recursion_limit"] == 25
+
 
 # ---------------------------------------------------------------------------
 # Non-streaming return (Requirement 4.4)

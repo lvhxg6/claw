@@ -1,0 +1,43 @@
+name: security-governance
+description: Security governance workflows for local workspace inspection and controlled remediation
+version: "0.1.0"
+
+scenario_types:
+  - inspection
+  - hardening
+  - security_governance
+
+preferred_mode: orchestrator
+task_profile: multi_stage
+
+approval_required: false
+approval_message: 请确认是否允许继续执行整改或加固类步骤。
+
+allowed_steps:
+  - inspect
+  - remediation_plan
+  - remediation_apply
+  - report
+
+preferred_steps:
+  - inspect
+  - remediation_plan
+  - remediation_apply
+  - report
+
+max_task_retries: 1
+max_replanning_rounds: 2
+repeated_error_threshold: 2
+retry_on_error: true
+
+concurrency_limits:
+  inspection: 2
+  remediation_plan: 1
+  remediation_apply: 1
+  report: 1
+
+metadata:
+  scope: local_workspace_only
+  remediation_mode: plan_then_apply
+  apply_requires_approval: true
+  default_target: repository_and_local_configs

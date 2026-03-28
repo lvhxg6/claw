@@ -10,7 +10,10 @@ from langchain_core.tools import BaseTool
 from smartclaw.agent.graph import build_graph
 from smartclaw.agent.loop_detector import LoopDetector
 from smartclaw.agent.orchestrator_graph import build_orchestrator_graph
+from smartclaw.capabilities.registry import CapabilityPackRegistry
 from smartclaw.providers.config import ModelConfig, parse_model_ref
+from smartclaw.skills.loader import SkillsLoader
+from smartclaw.steps.registry import StepRegistry
 
 
 class GraphFactory:
@@ -34,6 +37,9 @@ class GraphFactory:
         orchestrator_batch_size: int = 4,
         orchestrator_max_concurrent_workers: int = 4,
         orchestrator_max_phases: int = 8,
+        capability_registry: CapabilityPackRegistry | None = None,
+        step_registry: StepRegistry | None = None,
+        skills_loader: SkillsLoader | None = None,
     ) -> None:
         self._stream_callback = stream_callback
         self._tool_result_guard = tool_result_guard
@@ -45,6 +51,9 @@ class GraphFactory:
         self._orchestrator_batch_size = max(1, orchestrator_batch_size)
         self._orchestrator_max_concurrent_workers = max(1, orchestrator_max_concurrent_workers)
         self._orchestrator_max_phases = max(1, orchestrator_max_phases)
+        self._capability_registry = capability_registry
+        self._step_registry = step_registry
+        self._skills_loader = skills_loader
 
     def create(
         self,
@@ -53,6 +62,7 @@ class GraphFactory:
         *,
         session_key: str | None = None,
         mode: str | None = None,
+        capability_pack: str | None = None,
     ) -> Any:
         """Build a graph with consistent runtime dependencies."""
         loop_detector = self._loop_detector_factory() if self._loop_detector_factory else None
@@ -66,6 +76,10 @@ class GraphFactory:
                 summarizer=self._summarizer,
                 session_key=session_key,
                 loop_detector=loop_detector,
+                capability_registry=self._capability_registry,
+                step_registry=self._step_registry,
+                skills_loader=self._skills_loader,
+                capability_pack=capability_pack,
                 max_batch_size=self._orchestrator_batch_size,
                 max_concurrent_workers=self._orchestrator_max_concurrent_workers,
                 max_phases=self._orchestrator_max_phases,
@@ -89,6 +103,7 @@ class GraphFactory:
         *,
         session_key: str | None = None,
         mode: str | None = None,
+        capability_pack: str | None = None,
     ) -> Any:
         """Clone *base_model_config* with a new primary model and build a graph."""
         parse_model_ref(primary_model)
@@ -103,4 +118,10 @@ class GraphFactory:
             identifier_policy=base_model_config.identifier_policy,
             identifier_patterns=list(base_model_config.identifier_patterns),
         )
-        return self.create(temp_config, tools, session_key=session_key, mode=mode)
+        return self.create(
+            temp_config,
+            tools,
+            session_key=session_key,
+            mode=mode,
+            capability_pack=capability_pack,
+        )

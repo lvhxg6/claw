@@ -113,4 +113,8 @@ class PathPolicy:
     def check(self, path: str) -> None:
         """Raise ``PathDeniedError`` if *path* is not allowed."""
         if not self.is_allowed(path):
+            # Log security event for audit
+            import structlog
+            logger = structlog.get_logger(component="security.path_policy")
+            logger.warning("path_access_denied", path=path, denied_patterns=self._denied_patterns)
             raise PathDeniedError(path)

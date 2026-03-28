@@ -116,6 +116,8 @@ class CapabilityPackLoader:
             approval_message=str(raw.get("approval_message", "")).strip(),
             allowed_tools=[str(item).strip() for item in raw.get("allowed_tools", []) if str(item).strip()],
             denied_tools=[str(item).strip() for item in raw.get("denied_tools", []) if str(item).strip()],
+            allowed_steps=[str(item).strip() for item in raw.get("allowed_steps", []) if str(item).strip()],
+            preferred_steps=[str(item).strip() for item in raw.get("preferred_steps", []) if str(item).strip()],
             tool_groups={
                 str(group): [str(item).strip() for item in items if str(item).strip()]
                 for group, items in (raw.get("tool_groups", {}) or {}).items()
@@ -126,6 +128,8 @@ class CapabilityPackLoader:
                 for group, limit in (raw.get("concurrency_limits", {}) or {}).items()
             },
             max_task_retries=int(raw.get("max_task_retries", 0) or 0),
+            max_replanning_rounds=int(raw.get("max_replanning_rounds", 0) or 0),
+            repeated_error_threshold=int(raw.get("repeated_error_threshold", 0) or 0),
             retry_on_error=bool(raw.get("retry_on_error", True)),
             metadata=dict(raw.get("metadata", {}) or {}),
             manifest_path=str(manifest_path),

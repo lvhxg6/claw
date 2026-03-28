@@ -1,0 +1,19 @@
+id: api_design
+domain: development
+description: 根据需求设计 API 契约与接口结构
+required_inputs: []
+consumes_artifact_types:
+  - requirement_summary
+outputs:
+  - api_contract
+preferred_skill: api-design-skill
+can_parallel: false
+risk_level: low
+completion_signal: api_contract_ready
+side_effect_level: read_only
+kind: design
+plan_role: core
+activation_mode: after_artifact
+display_policy: always_show
+intent_tags:
+  - design
