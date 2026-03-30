@@ -42,7 +42,6 @@
 | Thinking/推理模式 | ✅ 保留 DeerFlow | DeerFlow `supports_thinking` + `when_thinking_enabled` | DeerFlow 原生支持，SmartClaw 没有 |
 | Vision/多模态 | ✅ 保留 DeerFlow | DeerFlow `supports_vision` + `ViewImageMiddleware` | 完整的视觉链路（标记→中间件→工具），比 SmartClaw 更完善 |
 | **Fallback Chain** | 🔴 需新增，借鉴 SmartClaw | SmartClaw `FallbackChain` | DeerFlow 最大短板。需实现：primary→fallbacks 列表、错误分类、指数退避 Cooldown、AuthProfile 多 Key 轮转 |
-| **分层模型路由** | 🔴 需新增，自研 | 参考 SmartClaw + OpenClaw 社区实践 | 简单任务用便宜模型，复杂任务用贵模型。可在 config.yaml 中配置路由规则 |
 | 运行时模型切换 | ✅ 保留 DeerFlow | DeerFlow `configurable.model_name` | 前端选择 + 运行时配置，够用 |
 
 **砍掉的：**
@@ -50,7 +49,6 @@
 
 **需要开发的核心工作：**
 - Fallback Chain 引擎（参考 SmartClaw 的 `FallbackChain` + `CooldownTracker` + `classify_error()`）
-- 模型路由配置（在 config.yaml 中增加 `routing` 段，按任务类型/复杂度路由到不同模型）
 
 
 ---
@@ -99,7 +97,6 @@
 | MCP 协议支持 | ✅ 保留 DeerFlow | DeerFlow `mcp/` | stdio + SSE + HTTP + OAuth + 懒加载 + mtime 缓存，实现完善 |
 | Skills 技能系统 | ✅ 保留 DeerFlow 框架机制 | DeerFlow `skills/` | SKILL.md + 渐进式加载 + .skill 安装 + public/custom 分离，机制很好 |
 | 工具注册/组装 | ✅ 保留 DeerFlow | DeerFlow `get_available_tools()` | 动态组装沙箱+内置+MCP+社区+子代理工具 |
-| **浏览器自动化** | 🟡 后续通过 MCP 接入 | SmartClaw Playwright 或 browser-use MCP | 不内置，通过 MCP Server 按需接入（如 playwright-mcp-server），保持框架轻量 |
 
 **内置 Skills 精简方案（重点砍的地方）：**
 
@@ -248,7 +245,7 @@
 |------|--------|------|------|
 | ✅ 保留 DeerFlow | 约 32 个 | ~65% | DeerFlow 的核心架构、沙箱、Guardrail、API、UI、部署 |
 | 🔴 借鉴 SmartClaw | 约 10 个 | ~20% | Fallback Chain、多级压缩、Capability Pack、OTEL、审计、脱敏、循环检测、Bootstrap |
-| 🔴 需自研 | 约 4 个 | ~8% | 分层模型路由、RAG、成本追踪/预算 |
+| 🔴 需自研 | 约 3 个 | ~7% | RAG、成本追踪/预算 |
 | 🟡 后续迭代 | 约 3 个 | ~7% | Orchestrator 动态编排、Debug UI、语义缓存 |
 | 🔴 砍掉 | 约 11 个 | — | 6 个内置 Skills + 图片搜索工具 + CLI Provider + 3 个 IM 渠道 |
 
@@ -291,9 +288,8 @@
 1. RAG/知识库集成（ContextEngine 插件）
 2. Decision Record 审计
 3. 循环检测
-4. 分层模型路由
-5. 诊断事件总线 + Debug UI
-6. 管理后台（Skills/MCP/模型/成本仪表盘）
+4. 诊断事件总线 + Debug UI
+5. 管理后台（Skills/MCP/模型/成本仪表盘）
 
 产出：功能完整的企业级多 Agent 框架。
 
