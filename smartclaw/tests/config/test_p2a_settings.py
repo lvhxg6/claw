@@ -62,7 +62,8 @@ class TestGatewaySettingsDefaults:
 
     def test_host_default(self) -> None:
         s = GatewaySettings()
-        assert s.host == "0.0.0.0"
+        # Security: Default to localhost only to prevent accidental public exposure
+        assert s.host == "127.0.0.1"
 
     def test_port_default(self) -> None:
         s = GatewaySettings()
@@ -70,7 +71,8 @@ class TestGatewaySettingsDefaults:
 
     def test_cors_origins_default(self) -> None:
         s = GatewaySettings()
-        assert s.cors_origins == ["*"]
+        # Security: Default to localhost only, not wildcard
+        assert s.cors_origins == ["http://localhost:8000", "http://127.0.0.1:8000"]
 
     def test_shutdown_timeout_default(self) -> None:
         s = GatewaySettings()
@@ -135,7 +137,8 @@ class TestSmartClawSettingsP2AFields:
     def test_gateway_defaults_disabled(self) -> None:
         s = SmartClawSettings()
         assert s.gateway.enabled is False
-        assert s.gateway.host == "0.0.0.0"
+        # Security: Default to localhost only to prevent accidental public exposure
+        assert s.gateway.host == "127.0.0.1"
         assert s.gateway.port == 8000
 
     def test_observability_field_present(self) -> None:

@@ -85,10 +85,35 @@ class PlanManager:
         completed_todos: list[TodoItem] = []
         for todo in plan["todos"]:
             updated = dict(todo)
-            updated["status"] = "completed"
+            if str(updated.get("status", "") or "") != "cancelled":
+                updated["status"] = "completed"
             completed_todos.append(updated)  # type: ignore[arg-type]
         updated_plan = dict(plan)
         updated_plan["todos"] = completed_todos
+        return updated_plan  # type: ignore[return-value]
+
+    def finalize_successful_synthesis(self, plan: TodoPlan | None) -> TodoPlan | None:
+        """Close out successful terminal synthesis without rewriting cancelled todos.
+
+        In report-only flows, mutation todos may be intentionally cancelled. When the
+        final reporting/synthesis step succeeds, we still need the remaining terminal
+        todo to settle to ``completed`` so the UI and final plan state converge.
+        """
+        if plan is None:
+            return None
+        finalized_todos: list[TodoItem] = []
+        for todo in plan["todos"]:
+            updated = dict(todo)
+            status = str(updated.get("status", "") or "")
+            plan_role = str(updated.get("plan_role", "") or "")
+            step_id = str(updated.get("step_id", "") or "")
+            if (
+                plan_role == "terminal" or step_id == "report"
+            ) and status not in {"completed", "failed", "cancelled"}:
+                updated["status"] = "completed"
+            finalized_todos.append(updated)  # type: ignore[arg-type]
+        updated_plan = dict(plan)
+        updated_plan["todos"] = finalized_todos
         return updated_plan  # type: ignore[return-value]
 
     def apply_results(
@@ -259,8 +284,17 @@ class PlanManager:
         return any(todo["status"] == "pending_approval" for todo in plan["todos"])
 
     def is_plan_completed(self, plan: TodoPlan | None) -> bool:
-        """Return True when all todos are completed."""
-        return bool(plan and plan["todos"] and all(todo["status"] == "completed" for todo in plan["todos"]))
+        """Return True when all todos are settled successfully.
+
+        ``cancelled`` todos are treated as settled, because governance flows may
+        intentionally skip mutation steps while still allowing the overall plan to
+        complete via reporting.
+        """
+        return bool(
+            plan
+            and plan["todos"]
+            and all(todo["status"] in {"completed", "cancelled"} for todo in plan["todos"])
+        )
 
     def has_remaining_work(self, plan: TodoPlan | None) -> bool:
         """Return True when at least one todo still needs processing."""
@@ -308,6 +342,7 @@ class PlanManager:
         if (
             "inspect" not in terminal_step_ids
             and any(keyword in text for keyword in ("检查", "巡检", "基线", "弱口令", "firewall", "防火墙"))
+            and self._fallback_step_allowed("inspect")
         ):
             todos.append(
                 self._build_todo(
@@ -323,6 +358,7 @@ class PlanManager:
         if (
             "remediate" not in terminal_step_ids
             and any(keyword in text for keyword in ("根据结果", "加固", "整改", "修复", "hardening"))
+            and self._fallback_step_allowed("remediate")
         ):
             depends_on = [todo_identifier(todo) for todo in todos] or completed_todo_ids[:1]
             todos.append(
@@ -339,8 +375,11 @@ class PlanManager:
         if (
             "report" not in terminal_step_ids
             and any(keyword in text for keyword in ("报告", "汇总", "总结", "输出"))
+            and self._fallback_step_allowed("report")
         ):
-            deps = [todo_identifier(todo) for todo in todos] or completed_todo_ids or ["execute"]
+            deps = [todo_identifier(todo) for todo in todos] or completed_todo_ids
+            if not deps and self._fallback_step_allowed("execute"):
+                deps = ["execute"]
             todos.append(
                 self._build_todo(
                     todo_id="report",
@@ -352,7 +391,7 @@ class PlanManager:
                 )
             )
 
-        if not todos and not terminal_step_ids:
+        if not todos and not terminal_step_ids and self._fallback_step_allowed("execute"):
             todos.append(
                 self._build_todo(
                     todo_id="execute",
@@ -403,6 +442,12 @@ class PlanManager:
             "activation_mode": activation_mode,  # type: ignore[typeddict-item]
             "display_policy": display_policy,  # type: ignore[typeddict-item]
         }
+
+    def _fallback_step_allowed(self, step_id: str) -> bool:
+        """Only allow fallback todos that map to known steps when registry is active."""
+        if self._step_registry is None:
+            return True
+        return self._step_registry.get(step_id) is not None
 
     def _infer_registry_todos(
         self,

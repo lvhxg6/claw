@@ -291,8 +291,6 @@ def build_orchestrator_graph(
         else:
             phase_status = "completed"
 
-        if phase_status == "ready" and planner_source == "static":
-            replanning_count += 1
         return {
             "plan": updated_plan,
             "todos": updated_plan["todos"] if updated_plan else state.get("todos"),
@@ -380,8 +378,25 @@ def build_orchestrator_graph(
 
         merged_error = _merge_result_error(result.get("error"), validation)
 
+        if merged_error is None:
+            plan = plan_manager.finalize_successful_synthesis(plan)
         if plan_manager.is_plan_completed(plan):
             plan = plan_manager.mark_plan_completed(plan)
+
+        if isinstance(plan, dict):
+            ready_todos = plan_manager.get_ready_todos(plan)
+            await _emit_session_diagnostic(
+                "plan.updated",
+                {
+                    "phase_index": state.get("phase_index") or 0,
+                    "phase_status": "completed" if merged_error is None else "failed",
+                    "planner_source": state.get("planner_source", "static"),
+                    "replanning_count": state.get("replanning_count"),
+                    "ready_todo_ids": [todo_identifier(todo) for todo in ready_todos],
+                    "ready_todos": _serialize_todos(ready_todos),
+                    "todos": _serialize_todos(plan.get("todos", [])),
+                },
+            )
 
         return {
             "messages": result.get("messages", []),
@@ -597,7 +612,7 @@ def _should_attempt_replan(
     if plan_manager.has_pending_approval(plan):
         return False
     if plan_manager.is_plan_completed(plan):
-        return True
+        return False
     return not ready_todos and plan_manager.has_remaining_work(plan)
 
 

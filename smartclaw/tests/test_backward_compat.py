@@ -273,9 +273,11 @@ class TestP2ANewFieldsDefaultDisabled:
 
         g = GatewaySettings()
         assert g.enabled is False
-        assert g.host == "0.0.0.0"
+        # Security: Default to localhost only to prevent accidental public exposure
+        assert g.host == "127.0.0.1"
         assert g.port == 8000
-        assert g.cors_origins == ["*"]
+        # Security: Default to localhost only, not wildcard
+        assert g.cors_origins == ["http://localhost:8000", "http://127.0.0.1:8000"]
         assert g.shutdown_timeout == 30
         assert g.reload_interval == 5
 

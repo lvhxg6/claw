@@ -4,7 +4,9 @@
 
 set -e
 
-PIDFILE="${HOME}/.smartclaw/smartclaw.pid"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RUNTIME_DIR="${SMARTCLAW_RUNTIME_DIR:-${SCRIPT_DIR}/.smartclaw}"
+PIDFILE="${SMARTCLAW_PIDFILE:-${RUNTIME_DIR}/smartclaw.pid}"
 
 if [ -f "$PIDFILE" ]; then
     PID=$(cat "$PIDFILE")

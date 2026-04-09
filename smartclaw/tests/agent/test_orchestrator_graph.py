@@ -10,7 +10,7 @@ from langchain_core.tools import BaseTool
 
 from smartclaw.agent.dispatch_policy import DispatchPolicy
 from smartclaw.agent.graph import invoke
-from smartclaw.agent.orchestrator_graph import build_orchestrator_graph
+from smartclaw.agent.orchestrator_graph import _should_attempt_replan, build_orchestrator_graph
 from smartclaw.agent.plan_manager import PlanManager
 from smartclaw.capabilities.models import CapabilityPackDefinition
 from smartclaw.capabilities.registry import CapabilityPackRegistry
@@ -188,6 +188,81 @@ class TestPlanManager:
         assert statuses["inspect"] == "completed"
         assert statuses["remediate"] == "ready"
         assert statuses["report"] == "pending"
+
+    def test_registry_replan_skips_unregistered_fallback_remediation(self, tmp_path) -> None:
+        steps_dir = tmp_path / "steps_registry_only"
+        steps_dir.mkdir(parents=True)
+        (steps_dir / "inspect.yaml").write_text(
+            "\n".join(
+                [
+                    "id: inspect",
+                    "domain: security",
+                    "description: 执行代码安全检查",
+                    "outputs:",
+                    "  - inspection_result",
+                    "can_parallel: true",
+                    "risk_level: low",
+                    "completion_signal: inspection_result_ready",
+                    "side_effect_level: read_only",
+                    "kind: inspection",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (steps_dir / "report.yaml").write_text(
+            "\n".join(
+                [
+                    "id: report",
+                    "domain: security",
+                    "description: 汇总检查结果并生成报告",
+                    "consumes_artifact_types:",
+                    "  - inspection_result",
+                    "outputs:",
+                    "  - report_result",
+                    "can_parallel: false",
+                    "risk_level: low",
+                    "completion_signal: report_result_ready",
+                    "side_effect_level: read_only",
+                    "kind: report",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        step_registry = StepRegistry(
+            StepRegistryLoader(workspace_dir=str(steps_dir), global_dir=str(tmp_path / "none"))
+        )
+        step_registry.load_all()
+        manager = PlanManager(step_registry=step_registry)
+        from langchain_core.messages import HumanMessage
+
+        current_plan = {
+            "plan_version": "v1",
+            "objective": "先检查再报告",
+            "strategy": "test",
+            "todos": [
+                {
+                    "todo_id": "inspect",
+                    "step_id": "inspect",
+                    "title": "检查",
+                    "status": "completed",
+                    "depends_on": [],
+                },
+                {
+                    "todo_id": "report",
+                    "step_id": "report",
+                    "title": "报告",
+                    "status": "completed",
+                    "depends_on": ["inspect"],
+                },
+            ],
+        }
+
+        replanned = manager.replan(
+            [HumanMessage(content="根据结果继续整改修复")],
+            current_plan=current_plan,
+        )
+
+        assert replanned["todos"] == []
 
     def test_registry_plan_keeps_only_inspection_for_inspection_only_request(self, tmp_path) -> None:
         steps_dir = tmp_path / "steps_minimal"
@@ -834,7 +909,14 @@ class TestPlanManager:
 
         plan = manager.replan(
             [HumanMessage(content="先做检查，再根据结果加固")],
-            artifacts=[{"artifact_id": "art_001", "artifact_type": "inspection_result", "status": "ready"}],
+            artifacts=[
+                {
+                    "artifact_id": "art_001",
+                    "artifact_type": "inspection_result",
+                    "status": "ready",
+                    "metadata": {"todo_id": "inspect"},
+                }
+            ],
             current_plan={
                 "plan_version": "v1",
                 "objective": "先做检查，再根据结果加固",
@@ -1277,11 +1359,11 @@ class TestOrchestratorGraph:
         statuses = {todo["todo_id"]: todo["status"] for todo in result["plan"]["todos"]}
         assert statuses["inspect"] == "completed"
         assert statuses["remediate"] == "completed"
-        assert statuses["report"] != "completed"
-        assert result["replanning_count"] == 2
-        assert result["guardrail_status"]["reason"] == "budget_exceeded"
-        assert result["guardrail_status"]["limit"] == "max_replanning_rounds"
-        assert "budget was exhausted" in (result["final_answer"] or "")
+        assert statuses["report"] == "completed"
+        assert result["replanning_count"] == 0
+        assert result["guardrail_status"] is None
+        assert result["phase_status"] == "completed"
+        assert result["final_answer"] == "预算用尽后收敛"
 
     @pytest.mark.asyncio
     async def test_orchestrator_graph_pauses_todos_that_require_approval(self, tmp_path) -> None:
@@ -1392,7 +1474,87 @@ class TestOrchestratorGraph:
         statuses = {todo["todo_id"]: todo["status"] for todo in result["plan"]["todos"]}
         assert statuses == {"inspect": "completed", "remediate": "cancelled", "report": "completed"}
         assert len(spawn_tool.seen_tasks) == 2
+        report_prompt = spawn_tool.seen_tasks[-1]
+        assert "Execution plan status:" in report_prompt
+        assert "[cancelled] remediate (remediate): 根据检查结果执行整改" in report_prompt
+        assert "Do not claim completed remediation" in report_prompt
+        assert "report it as skipped or not executed" in report_prompt
         assert result["clarification_request"] is None
+
+    def test_finalize_successful_synthesis_completes_terminal_todo_without_rewriting_cancelled(self) -> None:
+        manager = PlanManager()
+        for report_status in ("pending", "ready", "in_progress"):
+            plan = {
+                "plan_version": "v1",
+                "objective": "report only",
+                "strategy": "test",
+                "todos": [
+                    {
+                        "todo_id": "inspect",
+                        "step_id": "inspect",
+                        "title": "执行检查",
+                        "status": "completed",
+                        "plan_role": "core",
+                    },
+                    {
+                        "todo_id": "remediate",
+                        "step_id": "remediate",
+                        "title": "执行修复",
+                        "status": "cancelled",
+                        "plan_role": "conditional",
+                    },
+                    {
+                        "todo_id": "report",
+                        "step_id": "report",
+                        "title": "输出报告",
+                        "status": report_status,
+                        "plan_role": "terminal",
+                    },
+                ],
+            }
+
+            finalized = manager.finalize_successful_synthesis(plan)
+
+            assert finalized is not None
+            statuses = {todo["todo_id"]: todo["status"] for todo in finalized["todos"]}
+            assert statuses == {
+                "inspect": "completed",
+                "remediate": "cancelled",
+                "report": "completed",
+            }
+            assert manager.is_plan_completed(finalized) is True
+
+
+    def test_should_not_replan_when_plan_already_completed(self) -> None:
+        manager = PlanManager()
+        plan = {
+            "plan_version": "v1",
+            "objective": "report only",
+            "strategy": "test",
+            "todos": [
+                {
+                    "todo_id": "inspect",
+                    "step_id": "inspect",
+                    "title": "检查",
+                    "status": "completed",
+                },
+                {
+                    "todo_id": "remediate",
+                    "step_id": "remediate",
+                    "title": "整改",
+                    "status": "cancelled",
+                },
+                {
+                    "todo_id": "report",
+                    "step_id": "report",
+                    "title": "报告",
+                    "status": "completed",
+                },
+            ],
+        }
+
+        assert manager.is_plan_completed(plan) is True
+        assert _should_attempt_replan(manager, plan, ready_todos=[]) is False
 
     @pytest.mark.asyncio
     async def test_orchestrator_graph_stops_on_repeated_error_pattern(self) -> None:

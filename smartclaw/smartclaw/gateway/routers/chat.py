@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import suppress
@@ -23,6 +24,8 @@ from smartclaw.uploads.models import AttachmentRecord
 from smartclaw.uploads.service import UploadService
 
 logger = structlog.get_logger(component="gateway.chat")
+_TRUTHY = {"1", "true", "yes", "on"}
+_TRACE_APPROVAL = os.environ.get("SMARTCLAW_TRACE_APPROVAL", "").strip().lower() in _TRUTHY
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -35,6 +38,39 @@ STREAM_HOOK_POINTS = [
     "agent:start",
     "agent:end",
 ]
+
+
+def _todo_status_snapshot(todos: list[dict[str, Any]] | None) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for todo in todos or []:
+        if not isinstance(todo, dict):
+            continue
+        status = str(todo.get("status", "unknown") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _log_request_trace(
+    *,
+    endpoint: str,
+    session_key: str,
+    request_body: ChatRequest,
+) -> None:
+    if not _TRACE_APPROVAL:
+        return
+    logger.info(
+        "chat_request_trace",
+        endpoint=endpoint,
+        session_key=session_key,
+        mode=request_body.mode,
+        scenario_type=request_body.scenario_type,
+        task_profile=request_body.task_profile,
+        capability_pack=request_body.capability_pack,
+        approved=request_body.approved,
+        approval_action=request_body.approval_action,
+        model=request_body.model,
+        message_preview=(request_body.message or "")[:160],
+    )
 
 
 def _resolve_execution(request_body: ChatRequest, runtime: Any) -> tuple[str, Any, str, str | None, dict | None]:
@@ -475,6 +511,7 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
         session_key=session_key,
         memory_store=memory_store,
     )
+    _log_request_trace(endpoint="chat", session_key=session_key, request_body=request_body)
 
     try:
         resolved_mode, graph, system_prompt, capability_pack, capability_policy = _resolve_execution(
@@ -489,6 +526,15 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
         )
 
     if capability_policy and capability_policy.get("approval_required") and not request_body.approved:
+        if _TRACE_APPROVAL:
+            logger.info(
+                "chat_request_approval_blocked",
+                endpoint="chat",
+                session_key=session_key,
+                approval_required=bool(capability_policy.get("approval_required")),
+                approved=request_body.approved,
+                approval_action=request_body.approval_action,
+            )
         runtime.decrement_requests()
         return _build_approval_response(capability_policy, session_key=session_key)
 
@@ -546,6 +592,17 @@ async def chat(request_body: ChatRequest, request: Request) -> ChatResponse:
                 approved=request_body.approved,
                 approval_action=request_body.approval_action,
             )
+        if _TRACE_APPROVAL:
+            logger.info(
+                "chat_result_trace",
+                endpoint="chat",
+                session_key=session_key,
+                phase_status=result.get("phase_status"),
+                current_phase=result.get("current_phase"),
+                error=result.get("error"),
+                todo_status_counts=_todo_status_snapshot(result.get("todos") or []),
+                todo_count=len(result.get("todos") or []),
+            )
         clarification = None
         cr = result.get("clarification_request")
         if cr:
@@ -602,6 +659,7 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
         session_key=session_key,
         memory_store=memory_store,
     )
+    _log_request_trace(endpoint="chat_stream", session_key=session_key, request_body=request_body)
 
     try:
         resolved_mode, graph, system_prompt, capability_pack, capability_policy = _resolve_execution(
@@ -616,6 +674,15 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
         )
 
     if capability_policy and capability_policy.get("approval_required") and not request_body.approved:
+        if _TRACE_APPROVAL:
+            logger.info(
+                "chat_request_approval_blocked",
+                endpoint="chat_stream",
+                session_key=session_key,
+                approval_required=bool(capability_policy.get("approval_required")),
+                approved=request_body.approved,
+                approval_action=request_body.approval_action,
+            )
         async def approval_generator() -> AsyncGenerator[dict, None]:  # type: ignore[type-arg]
             from smartclaw.capabilities.governance import build_approval_request
 
@@ -738,6 +805,9 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                             "response": result.get("final_answer") or "",
                             "iterations": result.get("iteration", 0),
                             "token_stats": result.get("token_stats"),
+                            "phase_status": result.get("phase_status"),
+                            "current_phase": result.get("current_phase"),
+                            "todos": result.get("todos") or [],
                         },
                         ensure_ascii=False,
                     ),
@@ -789,6 +859,17 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
 
             # Final event
             result = task.result()
+            if _TRACE_APPROVAL:
+                logger.info(
+                    "chat_result_trace",
+                    endpoint="chat_stream",
+                    session_key=session_key,
+                    phase_status=result.get("phase_status"),
+                    current_phase=result.get("current_phase"),
+                    error=result.get("error"),
+                    todo_status_counts=_todo_status_snapshot(result.get("todos") or []),
+                    todo_count=len(result.get("todos") or []),
+                )
             cr = result.get("clarification_request")
             if cr:
                 yield {
@@ -808,6 +889,9 @@ async def chat_stream(request_body: ChatRequest, request: Request) -> EventSourc
                         "response": result.get("final_answer") or "",
                         "iterations": result.get("iteration", 0),
                         "token_stats": result.get("token_stats"),
+                        "phase_status": result.get("phase_status"),
+                        "current_phase": result.get("current_phase"),
+                        "todos": result.get("todos") or [],
                     },
                     ensure_ascii=False,
                 ),

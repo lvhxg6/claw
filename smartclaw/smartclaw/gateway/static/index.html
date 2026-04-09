@@ -3511,10 +3511,33 @@ async function removeAttachment(assetId) {
   updateSettingsHint();
 }
 
+function approvalTraceEnabled() {
+  try {
+    return localStorage.getItem("smartclaw.debug.approval") === "1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function approvalTraceLog(eventName, payload) {
+  if (!approvalTraceEnabled()) return;
+  try {
+    console.info("[SmartClawTrace]", eventName, payload || {});
+  } catch (error) {}
+}
+
 async function sendRequest(body, options) {
   const opts = options || {};
   const requestBody = { ...(body || {}) };
   if (sessionKey && !requestBody.session_key) requestBody.session_key = sessionKey;
+  approvalTraceLog("send_request", {
+    session_key: requestBody.session_key || null,
+    approved: requestBody.approved,
+    approval_action: requestBody.approval_action || null,
+    mode: requestBody.mode || null,
+    capability_pack: requestBody.capability_pack || null,
+    message_preview: String(requestBody.message || "").slice(0, 120),
+  });
   const text = requestBody.message || "";
   let doneReceived = false;
   awaitingClarificationDone = false;
@@ -3646,6 +3669,20 @@ function handleEvent(type, data) {
   }
   if (type === "done") {
     const answer = data.response || data.final_answer || "";
+    if (Array.isArray(data.todos) && data.todos.length) {
+      replaceExecutionTodos(data.todos);
+    }
+    if (data.phase_status) {
+      executionState.status = String(data.phase_status);
+    } else if (Array.isArray(data.todos) && data.todos.length) {
+      const summary = summarizeExecutionProgress();
+      executionState.status = summary.running ? "running" : (summary.pendingApproval ? "awaiting_clarification" : "completed");
+    }
+    if (data.current_phase) {
+      executionState.phase = String(data.current_phase);
+    }
+    renderExecutionState();
+    renderExecutionPanels();
     if (data.token_stats) {
       sessionStats = {
         ...(sessionStats || {}),
@@ -3802,6 +3839,10 @@ async function handleClarificationAction(value) {
     (lastRequestBody && lastRequestBody.session_key) ||
     null;
   if (normalized === "cancel") {
+    approvalTraceLog("approval_cancel_local_only", {
+      session_key: continuationSessionKey,
+      note: "UI canceled locally; no continuation request is sent.",
+    });
     resolveClarificationCard("已取消本次执行");
     pendingClarification = null;
     awaitingClarificationDone = false;
@@ -3812,6 +3853,11 @@ async function handleClarificationAction(value) {
     return;
   }
   if (isApprovalClarification(pendingClarification || { options: [] }) && normalized === "approve" && lastRequestBody) {
+    approvalTraceLog("approval_approve_continue", {
+      session_key: continuationSessionKey,
+      approved: true,
+      approval_action: normalized,
+    });
     resolveClarificationCard("已批准，继续执行…");
     awaitingClarificationDone = false;
     executionState.status = "resuming";
@@ -3825,6 +3871,11 @@ async function handleClarificationAction(value) {
     return;
   }
   if (isApprovalClarification(pendingClarification || { options: [] }) && normalized === "report_only" && lastRequestBody) {
+    approvalTraceLog("approval_report_only_continue", {
+      session_key: continuationSessionKey,
+      approved: false,
+      approval_action: normalized,
+    });
     resolveClarificationCard("已选择跳过整改，继续生成报告…");
     awaitingClarificationDone = false;
     executionState.status = "resuming";

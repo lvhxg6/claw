@@ -9,6 +9,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Runtime paths (sandbox-friendly defaults)
+RUNTIME_DIR="${SMARTCLAW_RUNTIME_DIR:-${SCRIPT_DIR}/.smartclaw}"
+PIDFILE="${SMARTCLAW_PIDFILE:-${RUNTIME_DIR}/smartclaw.pid}"
+
+# uv cache path (avoid ~/.cache permission issues in restricted envs)
+if [ -z "${UV_CACHE_DIR:-}" ]; then
+    export UV_CACHE_DIR="${SCRIPT_DIR}/.uv-cache"
+fi
+mkdir -p "${UV_CACHE_DIR}" "${RUNTIME_DIR}"
+
 # 加载 .env
 if [ -f .env ]; then
     set -a
@@ -18,9 +28,20 @@ fi
 
 MODE="${1:-gateway}"
 
+# 日志路径（默认按天写入 smartclaw/logs）
+LOG_DIR="${SMARTCLAW_LOG_DIR:-${SCRIPT_DIR}/logs}"
+LOG_DATE="$(date +%Y-%m-%d)"
+LOG_FILE="${SMARTCLAW_LOG_FILE:-${LOG_DIR}/smartclaw-${LOG_DATE}.log}"
+mkdir -p "$LOG_DIR"
+touch "$LOG_FILE"
+
+# 将 start.sh 与服务输出统一写入日志文件（同时保留终端输出）
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 echo ""
 echo "🦀 SmartClaw"
 echo "================================"
+echo "日志:    $LOG_FILE"
 
 # 检查 uv
 if ! command -v uv &>/dev/null; then
@@ -38,14 +59,11 @@ case "$MODE" in
         echo "Swagger: http://localhost:8000/docs"
         echo "================================"
         echo ""
-        # 使用用户目录存储PID文件，避免/tmp安全风险
-        PIDFILE="${HOME}/.smartclaw/smartclaw.pid"
-        mkdir -p "${HOME}/.smartclaw"
         uv run python -m smartclaw.serve &
         echo $! > "$PIDFILE"
         echo "PID:     $(cat "$PIDFILE")"
         wait
-        rm -f "${HOME}/.smartclaw/smartclaw.pid"
+        rm -f "$PIDFILE"
         ;;
     cli)
         echo "模式:    交互式 CLI"

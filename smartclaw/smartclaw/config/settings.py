@@ -201,6 +201,10 @@ class GatewaySettings(BaseSettings):
     )
     shutdown_timeout: int = 30
     reload_interval: int = 5
+    
+    # Security: Enforce safe defaults for production
+    # - host defaults to 127.0.0.1 (localhost only) to prevent accidental public exposure
+    # - cors_origins defaults to localhost only, not wildcard "*"
 
 
 class ObservabilitySettings(BaseSettings):

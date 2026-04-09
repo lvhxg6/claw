@@ -51,7 +51,7 @@ class SubAgentConfig:
         tools: Tools available to the sub-agent.
         system_prompt: Optional custom system prompt.
         max_iterations: Max reasoning-action loop iterations (default 25).
-        timeout_seconds: Execution timeout in seconds (default 300).
+        timeout_seconds: Execution timeout in seconds (default 1000).
         max_depth: Maximum nesting depth for recursive sub-agents (default 3).
         fallbacks: Fallback model references inherited from parent (default empty).
     """
@@ -61,7 +61,7 @@ class SubAgentConfig:
     tools: list[BaseTool] = field(default_factory=list)
     system_prompt: str | None = None
     max_iterations: int = 25
-    timeout_seconds: int = 300
+    timeout_seconds: int = 1000
     max_depth: int = 3
     fallbacks: list[str] = field(default_factory=list)
 
@@ -338,7 +338,7 @@ class SpawnSubAgentTool(BaseTool):
     concurrency_timeout: float = 30.0
     max_depth: int = 3
     max_iterations: int = 25
-    timeout_seconds: int = 300
+    timeout_seconds: int = 1000
     available_tools: list[BaseTool] = Field(default_factory=list)
     parent_model_config: Any | None = Field(
         default=None,

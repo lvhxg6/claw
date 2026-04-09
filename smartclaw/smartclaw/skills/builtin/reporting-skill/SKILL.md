@@ -19,6 +19,8 @@ Use this skill when the current step is report generation, audit summary, or fin
 - Preserve important evidence, but compress raw details into short summaries.
 - Call out blocked items, approvals, skipped remediation, and residual risk.
 - Do not invent completion if remediation was only planned, skipped, or blocked.
+- Never report "completed remediation", "auto-fix completed", or counts of completed fixes unless the execution context explicitly shows a remediation/apply step succeeded.
+- If remediation was skipped, cancelled, blocked, or still pending approval, state that clearly and describe any listed fixes as proposed or planned only.
 
 ## Output Shape
 
